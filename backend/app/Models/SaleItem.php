@@ -5,14 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Category extends Model
+class SaleItem extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'tenant_id',
-        'name',
-        'description',
+        'sale_id',
+        'product_id',
+        'quantity',
+        'price',
+        'subtotal',
     ];
 
     // Relationships
@@ -21,8 +24,13 @@ class Category extends Model
         return $this->belongsTo(Tenant::class);
     }
 
-    public function products()
+    public function sale()
     {
-        return $this->hasMany(Product::class);
+        return $this->belongsTo(Sale::class);
+    }
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
     }
 }

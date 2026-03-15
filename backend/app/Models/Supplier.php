@@ -22,4 +22,14 @@ class Supplier extends Model
     {
         return $this->belongsTo(Tenant::class);
     }
+
+    public function purchases()
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
 }

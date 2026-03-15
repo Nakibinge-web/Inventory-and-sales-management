@@ -97,12 +97,156 @@ Stores supplier/vendor information for each tenant.
 
 ---
 
+### 5. PURCHASES
+Stores purchase orders from suppliers for each tenant.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT UNSIGNED | PRIMARY KEY, AUTO_INCREMENT | Unique purchase identifier |
+| tenant_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References tenants(id) |
+| supplier_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References suppliers(id) |
+| total_amount | DECIMAL(10,2) | NOT NULL | Total amount of purchase |
+| purchase_date | DATE | NOT NULL | Date of purchase |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | Last update timestamp |
+
+**Foreign Keys:**
+- `tenant_id` → `tenants(id)` ON DELETE CASCADE
+- `supplier_id` → `suppliers(id)` ON DELETE CASCADE
+
+**Purpose:** Tracks purchase transactions from suppliers for inventory restocking.
+
+---
+
+### 6. PRODUCTS
+Stores the product inventory for each tenant.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT UNSIGNED | PRIMARY KEY, AUTO_INCREMENT | Unique product identifier |
+| tenant_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References tenants(id) |
+| name | VARCHAR(255) | NOT NULL | Product name |
+| category_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References categories(id) |
+| supplier_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References suppliers(id) |
+| stock | INT | DEFAULT 0 | Current stock level |
+| price | DECIMAL(10,2) | NOT NULL | Selling price |
+| reorder_level | INT | DEFAULT 0 | Level at which to reorder |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | Last update timestamp |
+
+**Foreign Keys:**
+- `tenant_id` → `tenants(id)` ON DELETE CASCADE
+- `category_id` → `categories(id)` ON DELETE CASCADE
+- `supplier_id` → `suppliers(id)` ON DELETE CASCADE
+
+**Purpose:** Manages product catalog, pricing, and current stock quantity.
+
+---
+
+### 7. SALES
+Stores sales transactions by users for each tenant.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT UNSIGNED | PRIMARY KEY, AUTO_INCREMENT | Unique sale identifier |
+| tenant_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References tenants(id) |
+| user_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References users(id) |
+| total_amount | DECIMAL(10,2) | NOT NULL | Total amount of sale |
+| payment_method | VARCHAR(255) | NULLABLE | Payment method used |
+| sale_date | DATE | NOT NULL | Date of sale |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | Last update timestamp |
+
+**Foreign Keys:**
+- `tenant_id` → `tenants(id)` ON DELETE CASCADE
+- `user_id` → `users(id)` ON DELETE CASCADE
+
+**Purpose:** Tracks sales records made by cashiers or managers.
+
+---
+
+### 8. SALE_ITEMS
+Pivot table tracking the specific products sold in a sale.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT UNSIGNED | PRIMARY KEY, AUTO_INCREMENT | Unique item identifier |
+| tenant_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References tenants(id) |
+| sale_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References sales(id) |
+| product_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References products(id) |
+| quantity | INT | NOT NULL | Quantity sold |
+| price | DECIMAL(10,2) | NOT NULL | Price at time of sale |
+| subtotal | DECIMAL(10,2) | NOT NULL | quantity * price |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | Last update timestamp |
+
+**Foreign Keys:**
+- `tenant_id` → `tenants(id)` ON DELETE CASCADE
+- `sale_id` → `sales(id)` ON DELETE CASCADE
+- `product_id` → `products(id)` ON DELETE CASCADE
+
+**Purpose:** Connects sales to products (M:N) and records specific sale prices.
+
+---
+
+### 9. PURCHASE_ITEMS
+Pivot table tracking the specific products bought in a purchase.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT UNSIGNED | PRIMARY KEY, AUTO_INCREMENT | Unique item identifier |
+| tenant_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References tenants(id) |
+| purchase_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References purchases(id) |
+| product_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References products(id) |
+| quantity | INT | NOT NULL | Quantity purchased |
+| cost_price | DECIMAL(10,2) | NOT NULL | Cost price per unit |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | Last update timestamp |
+
+**Foreign Keys:**
+- `tenant_id` → `tenants(id)` ON DELETE CASCADE
+- `purchase_id` → `purchases(id)` ON DELETE CASCADE
+- `product_id` → `products(id)` ON DELETE CASCADE
+
+**Purpose:** Connects purchases to products (M:N) and records stock intake.
+
+---
+
+### 10. STOCK_MOVEMENTS
+Tracks individual stock adjustments over time.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT UNSIGNED | PRIMARY KEY, AUTO_INCREMENT | Unique movement identifier |
+| tenant_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References tenants(id) |
+| product_id | BIGINT UNSIGNED | FOREIGN KEY, NOT NULL | References products(id) |
+| type | ENUM | 'IN' or 'OUT' | Direction of stock movement |
+| quantity | INT | NOT NULL | Quantity changed |
+| reference_id | VARCHAR(255) | NULLABLE | Associated sale/purchase/reason |
+| date | DATE | NOT NULL | Date of movement |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | Last update timestamp |
+
+**Foreign Keys:**
+- `tenant_id` → `tenants(id)` ON DELETE CASCADE
+- `product_id` → `products(id)` ON DELETE CASCADE
+
+**Purpose:** Audits every inventory change (purchases, sales, adjustments).
+
+---
+
 ## Relationships
 
 ```
-TENANTS (1) ──────< (Many) USERS
-TENANTS (1) ──────< (Many) CATEGORIES
-TENANTS (1) ──────< (Many) SUPPLIERS
+TENANTS (1) ──────< (Many) USERS, CATEGORIES, SUPPLIERS, PRODUCTS, SALES, PURCHASES, STOCK_MOVEMENTS
+
+CATEGORIES (1) ───< (Many) PRODUCTS
+SUPPLIERS (1) ────< (Many) PRODUCTS, PURCHASES
+USERS (1) ────────< (Many) SALES
+PRODUCTS (1) ─────< (Many) STOCK_MOVEMENTS
+
+SALES (M) ────────< (Pivot) >──────── (N) PRODUCTS (via sale_items)
+PURCHASES (M) ────< (Pivot) >──────── (N) PRODUCTS (via purchase_items)
 ```
 
 ---
@@ -129,13 +273,7 @@ Each tenant's data is isolated using the `tenant_id` column:
 
 ## Future Tables (Not Yet Implemented)
 
-The following tables will be added in future phases:
-- products
-- sales
-- sale_items
-- purchases
-- purchase_items
-- stock_movements
+*No major core tables currently pending. Future phases may introduce reporting, logs or configuration tables.*
 
 ---
 
@@ -147,6 +285,12 @@ Located in: `database/migrations/`
 2. `2024_01_01_000002_create_users_table.php`
 3. `2024_01_01_000003_create_categories_table.php`
 4. `2024_01_01_000004_create_suppliers_table.php`
+5. `2026_03_11_000005_create_purchases_table.php`
+6. `2026_03_15_005124_create_products_table.php`
+7. `2026_03_15_005745_create_sales_table.php`
+8. `2026_03_15_010337_create_sale_items_table.php`
+9. `2026_03_15_010710_create_purchase_items_table.php`
+10. `2026_03_15_011148_create_stock_movements_table.php`
 
 Run migrations with: `php artisan migrate`
 
@@ -165,6 +309,6 @@ USE inventory_and_sales_management;
 
 ---
 
-**Last Updated:** March 10, 2026
-**Database Version:** 1.0
-**Status:** Initial Setup - 4 Core Tables Implemented
+**Last Updated:** March 15, 2026
+**Database Version:** 1.1
+**Status:** Core, Inventory, and Sales Tables Implemented

@@ -20,6 +20,12 @@ The system uses a multi-tenant architecture with the following tables:
 2. **users** - User accounts with role-based access (admin, manager, cashier)
 3. **categories** - Product categories
 4. **suppliers** - Supplier information
+5. **purchases** - Purchase orders from suppliers
+6. **products** - Inventory product details
+7. **sales** - Sales transactions
+8. **sale_items** - Pivot table for products sold in a sale
+9. **purchase_items** - Pivot table for products bought in a purchase
+10. **stock_movements** - Audit logs for inventory stock changes (IN/OUT)
 
 ## Setup Instructions
 
@@ -70,8 +76,9 @@ php artisan serve
 ## Development Status
 
 Currently implemented:
-- Database structure (4 core tables)
+- Database structure (10 core, sales and inventory tables)
 - Multi-tenant architecture foundation
+- Product, Sale, and Purchase implementations with M:N pivot relationships
 
 ## License
 

@@ -5,14 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Category extends Model
+class PurchaseItem extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'tenant_id',
-        'name',
-        'description',
+        'purchase_id',
+        'product_id',
+        'quantity',
+        'cost_price',
     ];
 
     // Relationships
@@ -21,8 +23,13 @@ class Category extends Model
         return $this->belongsTo(Tenant::class);
     }
 
-    public function products()
+    public function purchase()
     {
-        return $this->hasMany(Product::class);
+        return $this->belongsTo(Purchase::class);
+    }
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
     }
 }
