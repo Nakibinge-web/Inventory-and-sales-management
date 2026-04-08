@@ -73,8 +73,14 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
         ]);
-        Auth::login($user);
-        return redirect('/');
+        $token = $user->createToken('api-token')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'user' => $user,
+            'token' => $token,
+            'message' => 'Registration successful.',
+        ], 201);
     }
 
     public function logout(Request $request)
