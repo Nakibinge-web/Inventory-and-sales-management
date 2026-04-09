@@ -1,196 +1,94 @@
-# Inventory and Sales Management System
+# Inventory & Sales Management System
 
-A comprehensive multi-tenant web application for managing inventory, sales, suppliers, and business operations for small and medium enterprises.
+A modern, full-stack inventory and sales management system built with Laravel (backend) and React (frontend). Perfect for small to medium businesses to manage their inventory, sales, purchases, and generate reports.
 
-## 🚀 Project Overview
+## 🚀 Features
 
-This system provides a complete solution for businesses to:
-- Manage inventory with real-time stock tracking
-- Process sales transactions with automatic stock updates
-- Handle supplier relationships and purchase orders
-- Generate comprehensive reports and analytics
-- Support multiple businesses (multi-tenant architecture)
+### Backend (Laravel 12)
+- **Multi-tenant Architecture** - Multiple businesses on one platform
+- **RESTful API** - Complete API with 35+ endpoints
+- **Authentication** - Laravel Sanctum token-based auth
+- **Role-based Access** - Admin, Manager, Cashier roles
+- **Database** - MySQL with proper relationships and constraints
+- **Inventory Management** - Products, categories, suppliers
+- **Sales Processing** - Complete POS transaction handling
+- **Purchase Management** - Supplier order tracking
+- **Stock Movements** - Complete audit trail
+- **Reports** - Daily sales, monthly purchases
 
-## 🏗️ Architecture
+### Frontend (React 19)
+- **Modern Dashboard** - Clean, responsive UI
+- **Authentication** - Login/Register with persistent sessions
+- **Real-time Data** - Live inventory and sales data
+- **Interactive Forms** - Add products, process sales
+- **Responsive Design** - Works on desktop and mobile
+- **Data Visualization** - Stats cards, tables, reports
+- **Low Stock Alerts** - Automatic reorder notifications
 
-- **Frontend:** React.js (In Development)
-- **Backend:** Laravel 12 (Complete)
-- **Database:** MySQL with multi-tenant architecture
-- **API:** RESTful API with 35+ endpoints
+## 📋 Requirements
 
-## 📁 Project Structure
+- **PHP** 8.2+
+- **Composer** 2.0+
+- **Node.js** 16+
+- **MySQL** 8.0+
+- **Web Server** (Apache/Nginx)
 
-```
-Inventory-and-sales-management/
-├── backend/                    # Laravel API Backend
-│   ├── app/
-│   │   ├── Http/Controllers/   # 8 Complete Controllers
-│   │   └── Models/            # 10 Eloquent Models
-│   ├── database/
-│   │   └── migrations/        # Database Schema
-│   ├── routes/
-│   │   └── api.php           # API Endpoints
-│   ├── API_ENDPOINTS.md      # Complete API Documentation
-│   └── CONTROLLERS.md        # Controllers Documentation
-├── frontend/                  # React.js Frontend (Basic Setup)
-└── docs/                     # Project Documentation
-```
-
-## 🗄️ Database Schema
-
-### Multi-Tenant Architecture
-- **tenants** - Business organizations
-- **users** - Employee accounts with roles
-- **categories** - Product categories
-- **suppliers** - Vendor information
-- **products** - Inventory items
-- **sales** - Sales transactions
-- **sale_items** - Individual sale line items
-- **purchases** - Purchase orders
-- **purchase_items** - Purchase line items
-- **stock_movements** - Complete audit trail
-
-## 🔧 Backend Features (Complete)
-
-### ✅ Implemented Controllers
-1. **TenantController** - Business management
-2. **UserController** - Employee management with roles
-3. **CategoryController** - Product categorization
-4. **SupplierController** - Vendor management
-5. **ProductController** - Inventory management
-6. **SaleController** - Sales transaction processing
-7. **PurchaseController** - Purchase order management
-8. **StockMovementController** - Inventory tracking
-
-### ✅ Key Features
-- **Multi-tenant data isolation** - Each business has separate data
-- **Role-based access control** - Admin, Manager, Cashier roles
-- **Automatic stock management** - Real-time inventory updates
-- **Complex transaction processing** - Sales and purchases with validation
-- **Comprehensive API** - 35+ RESTful endpoints
-- **Database transactions** - Data consistency guaranteed
-- **Input validation** - Security and data integrity
-- **Relationship management** - Proper foreign key constraints
-
-## 🌐 API Endpoints
-
-### Base URL: `http://localhost:8000/api`
-
-#### Business Management
-- `GET /tenants` - List all businesses
-- `POST /tenants` - Register new business
-- `GET /tenants/{id}` - Get business details
-- `PUT /tenants/{id}` - Update business info
-- `DELETE /tenants/{id}` - Delete business
-
-#### User Management
-- `GET /users?tenant_id=1` - List users for business
-- `POST /users` - Create new employee
-- `GET /users/by-role?tenant_id=1&role=cashier` - Filter by role
-- `PUT /users/{id}` - Update user info
-- `DELETE /users/{id}` - Remove employee
-
-#### Inventory Management
-- `GET /products?tenant_id=1` - List products
-- `POST /products` - Add new product
-- `GET /products/low-stock?tenant_id=1` - Low stock alerts
-- `PUT /products/{id}` - Update product/stock
-- `DELETE /products/{id}` - Remove product
-
-#### Sales Processing
-- `POST /sales` - Process sale transaction
-- `GET /sales?tenant_id=1` - List sales
-- `GET /sales/daily-report?tenant_id=1&date=2026-03-18` - Daily reports
-- `GET /sales/{id}` - Sale details
-
-#### Purchase Management
-- `POST /purchases` - Record purchase
-- `GET /purchases?tenant_id=1` - List purchases
-- `GET /purchases/monthly-report?tenant_id=1&month=2026-03` - Monthly reports
-- `GET /purchases/{id}` - Purchase details
-
-#### Stock Tracking
-- `GET /stock-movements?tenant_id=1` - All movements
-- `GET /stock-movements/product/{id}?tenant_id=1` - Product history
-- `GET /stock-movements/by-type?tenant_id=1&type=IN` - Filter by type
-- `GET /stock-movements/date-range?tenant_id=1&start_date=2026-03-01&end_date=2026-03-31` - Date range
-
-## 🚀 Getting Started
-
-### Prerequisites
-- PHP 8.2+
-- Composer
-- MySQL (XAMPP recommended)
-- Node.js & npm
+## 🛠️ Installation
 
 ### Backend Setup
-1. **Clone the repository:**
+
+1. **Navigate to backend directory**
    ```bash
-   git clone https://github.com/Nakibinge-web/Inventory-and-sales-management.git
-   cd Inventory-and-sales-management/backend
+   cd backend
    ```
 
-2. **Install dependencies:**
+2. **Install PHP dependencies**
    ```bash
    composer install
-   npm install
    ```
 
-3. **Environment setup:**
+3. **Configure environment**
    ```bash
-   cp .env.example .env
+   # create your .env file from .env example and change the database settings 
+   # Update database credentials if needed
+   ```
+
+4. **Generate application key**
+   ```bash
    php artisan key:generate
    ```
 
-4. **Database configuration:**
-   ```env
-   DB_CONNECTION=mysql
-   DB_HOST=127.0.0.1
-   DB_PORT=3306
-   DB_DATABASE=inventory_and_sales_management
-   DB_USERNAME=root
-   DB_PASSWORD=
+5. **Create database**
+   ```sql
+   CREATE DATABASE inventory_and_sales_management;
    ```
 
-5. **Run migrations:**
+6. **Run migrations**
    ```bash
    php artisan migrate
    ```
 
-6. **Start development server:**
+7. **Start Laravel server**
    ```bash
    php artisan serve
-   ```
-
-7. **Test API:**
-   ```bash
-   curl http://127.0.0.1:8000/api/health
+   # Runs on http://localhost:8000
    ```
 
 ### Frontend Setup
-1. **Navigate to the frontend folder:**
+
+1. **Navigate to frontend directory**
    ```bash
    cd frontend
    ```
-
-2. **Install dependencies:**
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-3. **Start the development server:**
+3. **Start development server**
    ```bash
-   npm start
-   ```
-   The app runs at `http://localhost:3000`
-
-4. **What's available:**
-   - Login form — hits `POST /api/login`, returns a Sanctum token on success
-   - Register form — hits `POST /api/register`, creates a tenant + user and returns a token
-   - Toggle between login and register with the link at the bottom of the form
-   - Raw JSON response is displayed on screen for easy testing
-
-> Make sure the backend is running on `http://localhost:8000` before using the frontend.
+   npm start.....usually runs at http://localhost:3001/ OR  http://localhost:3000/
+   ```   
 
 ## 📖 Documentation
 
@@ -263,8 +161,7 @@ curl "http://localhost:8000/api/products?tenant_id=1"
 - Git repository with proper commits
 
 ### 🚧 In Progress (Frontend)
-- React.js application setup ✅
-- Login & Register UI with API integration ✅
+- React.js application setup
 - Component development
 - API integration
 - User interface design
@@ -295,13 +192,14 @@ MIT License - See LICENSE file for details
 4. Push to branch (`git push origin feature/AmazingFeature`)
 5. Open Pull Request
 
-## 📞 Support
+## 📄 License
 
-For support and questions:
-- Create an issue in this repository
-- Check the documentation in `/docs`
-- Review API documentation in `backend/API_ENDPOINTS.md`
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For support, email support@inventory-system.com or create an issue in the repository.
 
 ---
 
-**Status:** Backend Complete ✅ | Frontend In Development 🚧 | Ready for Production 🚀
+**Built with ❤️ for small businesses worldwide**

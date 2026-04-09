@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Dashboard from './Dashboard';
 
-const API = 'http://localhost:8000/api';
+const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 function getStrength(pwd) {
   let score = 0;
@@ -21,6 +22,8 @@ export default function AuthPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
 
   const handle = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -49,6 +52,14 @@ export default function AuthPage() {
         setError(data?.message || `Error ${res.status}`);
       } else {
         setResult(data);
+        // If login/register successful and we have user data and token
+        if (data.success && data.user && data.token) {
+          setUser(data.user);
+          setToken(data.token);
+          // Store in localStorage for persistence
+          localStorage.setItem('user', JSON.stringify(data.user));
+          localStorage.setItem('token', data.token);
+        }
       }
     } catch (err) {
       setError('Could not reach the server. Is the backend running?');
@@ -57,23 +68,53 @@ export default function AuthPage() {
     }
   };
 
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    setResult(null);
+    setError(null);
+    setForm({ name: '', email: '', password: '', password_confirmation: '' });
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  };
+
   const toggle = () => {
     setMode(mode === 'login' ? 'register' : 'login');
     setResult(null);
     setError(null);
   };
 
+  // Check for stored authentication on component mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem('token');
+    if (storedUser && storedToken) {
+      try {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+      } catch (err) {
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
+    }
+  }, []);
+
+  // If user is authenticated, show dashboard
+  if (user && token) {
+    return <Dashboard user={user} token={token} onLogout={logout} />;
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <h2 style={styles.title}>{mode === 'login' ? 'Login' : 'Register'}</h2>
+        <h2 style={styles.title}>{mode === 'login' ? 'Login' : 'Register Business'}</h2>
 
         <form onSubmit={submit} style={styles.form}>
           {mode === 'register' && (
             <input
               style={styles.input}
               name="name"
-              placeholder="Full name"
+              placeholder="Business name"
               value={form.name}
               onChange={handle}
               required
@@ -150,14 +191,14 @@ export default function AuthPage() {
           )}
 
           <button style={styles.btn} type="submit" disabled={loading}>
-            {loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Register'}
+            {loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Register Business'}
           </button>
         </form>
 
         <p style={styles.toggle}>
-          {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+          {mode === 'login' ? "Don't have a business account?" : 'Already have an account?'}{' '}
           <span style={styles.link} onClick={toggle}>
-            {mode === 'login' ? 'Register' : 'Login'}
+            {mode === 'login' ? 'Register Business' : 'Login'}
           </span>
         </p>
 
@@ -167,7 +208,7 @@ export default function AuthPage() {
           </div>
         )}
 
-        {result && (
+        {result && !user && (
           <div style={styles.success}>
             <strong>Response:</strong>
             <pre style={styles.pre}>{JSON.stringify(result, null, 2)}</pre>
