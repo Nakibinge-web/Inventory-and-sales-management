@@ -2,9 +2,22 @@ import { useState } from 'react';
 
 const API = 'http://localhost:8000/api';
 
+function getStrength(pwd) {
+  let score = 0;
+  if (pwd.length >= 8) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[a-z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[^A-Za-z0-9]/.test(pwd)) score++;
+  return score;
+}
+
+const strengthLabel = ['', 'Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
+const strengthColor = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
+
 export default function AuthPage() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
-  const [form, setForm] = useState({ name: '', email: '', password: '', password_confirmation: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', password_confirmation: '', business_name: '', phone: '', address: '' });
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +32,7 @@ export default function AuthPage() {
 
     const body = mode === 'login'
       ? { email: form.email, password: form.password }
-      : { name: form.name, email: form.email, password: form.password, password_confirmation: form.password_confirmation };
+      : { name: form.name, email: form.email, password: form.password, password_confirmation: form.password_confirmation, business_name: form.business_name, phone: form.phone, address: form.address };
 
     try {
       const res = await fetch(`${API}/${mode}`, {
@@ -84,16 +97,56 @@ export default function AuthPage() {
             onChange={handle}
             required
           />
+          {mode === 'register' && form.password && (
+            <div>
+              <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} style={{
+                    flex: 1, height: '4px', borderRadius: '2px',
+                    background: i <= getStrength(form.password) ? strengthColor[getStrength(form.password)] : '#e5e7eb'
+                  }} />
+                ))}
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: strengthColor[getStrength(form.password)] }}>
+                {strengthLabel[getStrength(form.password)]}
+              </p>
+            </div>
+          )}
           {mode === 'register' && (
-            <input
-              style={styles.input}
-              name="password_confirmation"
-              type="password"
-              placeholder="Confirm password"
-              value={form.password_confirmation}
-              onChange={handle}
-              required
-            />
+            <>
+              <input
+                style={styles.input}
+                name="password_confirmation"
+                type="password"
+                placeholder="Confirm password"
+                value={form.password_confirmation}
+                onChange={handle}
+                required
+              />
+              <input
+                style={styles.input}
+                name="business_name"
+                placeholder="Business name"
+                value={form.business_name}
+                onChange={handle}
+                required
+              />
+              <input
+                style={styles.input}
+                name="phone"
+                type="tel"
+                placeholder="Phone number"
+                value={form.phone}
+                onChange={handle}
+              />
+              <textarea
+                style={{ ...styles.input, resize: 'vertical', minHeight: '70px' }}
+                name="address"
+                placeholder="Business address"
+                value={form.address}
+                onChange={handle}
+              />
+            </>
           )}
 
           <button style={styles.btn} type="submit" disabled={loading}>

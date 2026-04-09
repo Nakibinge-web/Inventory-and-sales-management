@@ -167,12 +167,30 @@ Inventory-and-sales-management/
    curl http://127.0.0.1:8000/api/health
    ```
 
-### Frontend Setup (Coming Soon)
-```bash
-cd frontend
-npm install
-npm start
-```
+### Frontend Setup
+1. **Navigate to the frontend folder:**
+   ```bash
+   cd frontend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the development server:**
+   ```bash
+   npm start
+   ```
+   The app runs at `http://localhost:3000`
+
+4. **What's available:**
+   - Login form — hits `POST /api/login`, returns a Sanctum token on success
+   - Register form — hits `POST /api/register`, creates a tenant + user and returns a token
+   - Toggle between login and register with the link at the bottom of the form
+   - Raw JSON response is displayed on screen for easy testing
+
+> Make sure the backend is running on `http://localhost:8000` before using the frontend.
 
 ## 📖 Documentation
 
@@ -245,7 +263,8 @@ curl "http://localhost:8000/api/products?tenant_id=1"
 - Git repository with proper commits
 
 ### 🚧 In Progress (Frontend)
-- React.js application setup
+- React.js application setup ✅
+- Login & Register UI with API integration ✅
 - Component development
 - API integration
 - User interface design
