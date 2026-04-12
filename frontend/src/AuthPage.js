@@ -114,7 +114,7 @@ export default function AuthPage() {
             <input
               style={styles.input}
               name="name"
-              placeholder="Business name"
+              placeholder="Name"
               value={form.name}
               onChange={handle}
               required

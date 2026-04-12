@@ -15,8 +15,8 @@ use App\Http\Controllers\StockMovementController;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
-// All other routes require a valid Sanctum token
-Route::middleware('auth:sanctum')->group(function () {
+// All other routes require a valid Sanctum token + tenant resolution
+Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
