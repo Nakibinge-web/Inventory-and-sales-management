@@ -83,12 +83,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Users
     Route::prefix('users')->group(function () {
-        Route::get('/', [UserController::class, 'index']);
-        Route::post('/', [UserController::class, 'store']);
-        Route::get('/by-role', [UserController::class, 'getUsersByRole']);
-        Route::get('/{user}', [UserController::class, 'show']);
-        Route::put('/{user}', [UserController::class, 'update']);
-        Route::delete('/{user}', [UserController::class, 'destroy']);
+        Route::get('/',         [UserController::class, 'index']);
+        Route::get('/me',       [UserController::class, 'me']);
+        Route::get('/by-role',  [UserController::class, 'getUsersByRole']);
+        Route::get('/{user}',   [UserController::class, 'show']);
+
+        // Only owners and admins can create, update, or delete users
+        Route::middleware('role:owner,admin')->group(function () {
+            Route::post('/',          [UserController::class, 'store']);
+            Route::put('/{user}',     [UserController::class, 'update']);
+            Route::delete('/{user}',  [UserController::class, 'destroy']);
+        });
     });
 
     // Categories
