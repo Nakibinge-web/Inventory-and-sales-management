@@ -22,7 +22,6 @@ class User extends Authenticatable
         'tenant_id',
         'name',
         'email',
-        'role',
         'password',
     ];
 
@@ -52,6 +51,16 @@ class User extends Authenticatable
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'role_user')->withTimestamps();
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return $this->roles()->where('name', $role)->exists();
     }
 
     public function sales()

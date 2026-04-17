@@ -102,11 +102,16 @@ class AuthController extends Controller
 
         $user = User::create([
             'tenant_id' => $tenant->id,
-            'name' => $request->name,
-            'email' => $request->email,
-            'role' => 'owner',
-            'password' => Hash::make($request->password),
+            'name'      => $request->name,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->password),
         ]);
+
+        // Assign the default 'owner' role
+        $ownerRole = \App\Models\Role::where('name', 'owner')->whereNull('tenant_id')->first();
+        if ($ownerRole) {
+            $user->roles()->attach($ownerRole->id);
+        }
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([

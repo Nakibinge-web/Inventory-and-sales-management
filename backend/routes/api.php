@@ -11,6 +11,9 @@ use App\Http\Controllers\SaleController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\StockMovementController;
 
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\PermissionController;
+
 // Public auth routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
@@ -45,6 +48,28 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
                 'stock-movements' => '/api/stock-movements',
             ],
         ]);
+    });
+
+    // Roles
+    Route::prefix('roles')->group(function () {
+        Route::get('/', [RoleController::class, 'index']);
+        Route::post('/', [RoleController::class, 'store']);
+        Route::post('/assign', [RoleController::class, 'assign']);
+        Route::delete('/revoke', [RoleController::class, 'revoke']);
+        Route::get('/{role}', [RoleController::class, 'show']);
+        Route::put('/{role}', [RoleController::class, 'update']);
+        Route::delete('/{role}', [RoleController::class, 'destroy']);
+    });
+
+    // Permissions
+    Route::prefix('permissions')->group(function () {
+        Route::get('/', [PermissionController::class, 'index']);
+        Route::post('/', [PermissionController::class, 'store']);
+        Route::post('/assign', [PermissionController::class, 'assign']);
+        Route::delete('/revoke', [PermissionController::class, 'revoke']);
+        Route::get('/{permission}', [PermissionController::class, 'show']);
+        Route::put('/{permission}', [PermissionController::class, 'update']);
+        Route::delete('/{permission}', [PermissionController::class, 'destroy']);
     });
 
     // Tenants

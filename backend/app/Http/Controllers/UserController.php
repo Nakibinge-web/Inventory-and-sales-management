@@ -11,7 +11,7 @@ class UserController extends Controller
 {
     public function index(): JsonResponse
     {
-        $users = User::select('id', 'name', 'email', 'role', 'created_at')->get();
+        $users = User::with('roles:id,name')->select('id', 'name', 'email', 'created_at')->get();
 
         return response()->json(['success' => true, 'data' => $users]);
     }
@@ -21,23 +21,32 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|max:255|unique:users,email',
-            'role'     => 'required|in:owner,admin,manager,cashier',
+            'role_ids' => 'required|array|min:1',
+            'role_ids.*' => 'exists:roles,id',
             'password' => 'required|string|min:8',
         ]);
 
-        $validated['password'] = Hash::make($validated['password']);
-        $user = User::create($validated);
+        $user = User::create([
+            'name'     => $validated['name'],
+            'email'    => $validated['email'],
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        $user->roles()->attach($validated['role_ids']);
 
         return response()->json(['success' => true, 'message' => 'User created successfully', 'data' => [
-            'id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $user->role,
+            'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
+            'roles' => $user->roles()->get(['id', 'name']),
         ]], 201);
     }
 
     public function show(User $user): JsonResponse
     {
+        $user->load('roles:id,name');
+
         return response()->json(['success' => true, 'data' => [
             'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
-            'role' => $user->role, 'tenant' => $user->tenant->name, 'created_at' => $user->created_at,
+            'roles' => $user->roles, 'tenant' => $user->tenant->name, 'created_at' => $user->created_at,
         ]]);
     }
 
@@ -46,7 +55,6 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'     => 'sometimes|required|string|max:255',
             'email'    => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
-            'role'     => 'sometimes|required|in:owner,admin,manager,cashier',
             'password' => 'sometimes|nullable|string|min:8',
         ]);
 
@@ -57,7 +65,7 @@ class UserController extends Controller
         $user->update($validated);
 
         return response()->json(['success' => true, 'message' => 'User updated successfully', 'data' => [
-            'id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $user->role,
+            'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
         ]]);
     }
 
@@ -71,11 +79,12 @@ class UserController extends Controller
     public function getUsersByRole(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'role' => 'required|in:owner,admin,manager,cashier',
+            'role' => 'required|string',
         ]);
 
-        $users = User::where('role', $validated['role'])
-                     ->select('id', 'name', 'email', 'role')
+        $users = User::whereHas('roles', fn($q) => $q->where('name', $validated['role']))
+                     ->with('roles:id,name')
+                     ->select('id', 'name', 'email')
                      ->get();
 
         return response()->json(['success' => true, 'data' => $users]);
