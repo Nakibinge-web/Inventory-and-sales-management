@@ -102,6 +102,9 @@ export default function Dashboard({ user, token, onLogout }) {
     { id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' },
     { id: 'sales', label: 'Sales', icon: '💰', color: 'success' },
     { id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' },
+    { id: 'stock', label: 'Stock Management', icon: '📋', color: 'warning' },
+    { id: 'users', label: 'User Management', icon: '👥', color: 'primary' },
+    { id: 'settings', label: 'Settings', icon: '⚙️', color: 'neutral' },
     { id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }
   ];
 
@@ -132,6 +135,7 @@ export default function Dashboard({ user, token, onLogout }) {
           <div style={styles.searchContainer}>
             <span style={styles.searchIcon}>🔍</span>
             <input
+              className="search-input"
               style={styles.searchInput}
               type="text"
               placeholder="Search products, sales, suppliers..."
@@ -142,7 +146,7 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
         
         <div style={styles.headerRight}>
-          <div style={styles.notificationIcon}>🔔</div>
+          <div className="notification-icon" style={styles.notificationIcon}>🔔</div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
               {user.name.charAt(0).toUpperCase()}
@@ -165,6 +169,7 @@ export default function Dashboard({ user, token, onLogout }) {
             {menuItems.map(item => (
               <button
                 key={item.id}
+                className={`menu-item ${activeTab === item.id ? 'active' : ''}`}
                 style={{
                   ...styles.menuItem,
                   ...(activeTab === item.id ? styles.menuItemActive : {})
@@ -197,6 +202,9 @@ export default function Dashboard({ user, token, onLogout }) {
           {activeTab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} loading={loading} />}
           {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} />}
           {activeTab === 'purchases' && <PurchasesTab purchases={data.purchases} loading={loading} />}
+          {activeTab === 'stock' && <StockManagementTab data={data} loading={loading} />}
+          {activeTab === 'users' && <UserManagementTab user={user} token={token} loading={loading} />}
+          {activeTab === 'settings' && <SettingsTab user={user} token={token} loading={loading} />}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} />}
         </main>
       </div>
@@ -710,6 +718,432 @@ function ReportsTab({ data, loading }) {
   );
 }
 
+// Stock Management Tab Component
+function StockManagementTab({ data, loading }) {
+  const [stockMovements, setStockMovements] = useState([]);
+  const [loadingMovements, setLoadingMovements] = useState(false);
+
+  const stockColumns = [
+    { key: 'name', title: 'Product Name' },
+    { 
+      key: 'stock', 
+      title: 'Current Stock', 
+      render: (value, row) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ 
+            color: value <= row.reorder_level ? theme.colors.danger[600] : 
+                   value <= row.reorder_level * 2 ? theme.colors.warning[600] : 
+                   theme.colors.success[600],
+            fontWeight: 'bold'
+          }}>
+            {value}
+          </span>
+          {value <= row.reorder_level && <Badge variant="danger" size="sm">Critical</Badge>}
+          {value > row.reorder_level && value <= row.reorder_level * 2 && <Badge variant="warning" size="sm">Low</Badge>}
+        </div>
+      )
+    },
+    { key: 'reorder_level', title: 'Reorder Level', type: 'number' },
+    { 
+      key: 'category', 
+      title: 'Category', 
+      render: (value) => value?.name ? <Badge variant="neutral" size="sm">{value.name}</Badge> : 'N/A'
+    },
+    { key: 'price', title: 'Unit Price', type: 'currency' }
+  ];
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>Stock Management</h1>
+          <p style={styles.pageSubtitle}>Monitor inventory levels and stock movements</p>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Button variant="warning" icon="📊" iconPosition="left">
+            Stock Report
+          </Button>
+          <Button variant="primary" icon="📦" iconPosition="left">
+            Adjust Stock
+          </Button>
+        </div>
+      </div>
+
+      {/* Stock Level Summary Cards */}
+      <div style={styles.kpiGrid}>
+        <DashboardCard
+          title="Critical Stock"
+          value={data.products.filter(p => p.stock <= p.reorder_level).length}
+          subtitle="Items need immediate reorder"
+          icon="🚨"
+          color="danger"
+          trend="up"
+          trendValue="Requires attention"
+          loading={loading}
+        />
+        <DashboardCard
+          title="Low Stock"
+          value={data.products.filter(p => p.stock > p.reorder_level && p.stock <= p.reorder_level * 2).length}
+          subtitle="Items running low"
+          icon="⚠️"
+          color="warning"
+          trend="neutral"
+          trendValue="Monitor closely"
+          loading={loading}
+        />
+        <DashboardCard
+          title="Healthy Stock"
+          value={data.products.filter(p => p.stock > p.reorder_level * 2).length}
+          subtitle="Items with good levels"
+          icon="✅"
+          color="success"
+          trend="up"
+          trendValue="All good"
+          loading={loading}
+        />
+        <DashboardCard
+          title="Total Value"
+          value={`$${data.products.reduce((sum, p) => sum + (p.stock * p.price), 0).toFixed(2)}`}
+          subtitle="Current inventory value"
+          icon="💰"
+          color="primary"
+          trend="up"
+          trendValue="Asset value"
+          loading={loading}
+        />
+      </div>
+
+      {/* Stock Levels Table */}
+      <div style={styles.contentCard}>
+        <h3 style={styles.cardTitle}>Current Stock Levels</h3>
+        <DataTable
+          columns={stockColumns}
+          data={data.products}
+          loading={loading}
+          emptyStateProps={{
+            icon: '📦',
+            title: 'No products in inventory',
+            description: 'Add products to start tracking stock levels.',
+            actionLabel: 'Add First Product',
+            onAction: () => console.log('Add Product')
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// User Management Tab Component
+function UserManagementTab({ user, token, loading }) {
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const userColumns = [
+    { key: 'name', title: 'Name' },
+    { key: 'email', title: 'Email' },
+    { 
+      key: 'roles', 
+      title: 'Role', 
+      render: (value) => value && value.length > 0 ? 
+        <Badge variant="primary" size="sm">{value[0].name}</Badge> : 
+        <Badge variant="neutral" size="sm">No Role</Badge>
+    },
+    { 
+      key: 'created_at', 
+      title: 'Joined', 
+      type: 'date',
+      render: (value) => new Date(value).toLocaleDateString()
+    },
+    {
+      key: 'actions',
+      title: 'Actions',
+      render: (value, row) => (
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" size="sm">Edit</Button>
+          {row.id !== user.id && <Button variant="danger" size="sm">Remove</Button>}
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>User Management</h1>
+          <p style={styles.pageSubtitle}>Manage team members and their permissions</p>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Button variant="secondary" icon="🔑" iconPosition="left">
+            Manage Roles
+          </Button>
+          <Button variant="primary" icon="+" iconPosition="left">
+            Add User
+          </Button>
+        </div>
+      </div>
+
+      {/* User Stats */}
+      <div style={styles.kpiGrid}>
+        <DashboardCard
+          title="Total Users"
+          value={users.length || 1}
+          subtitle="Active team members"
+          icon="👥"
+          color="primary"
+          trend="up"
+          trendValue="Growing team"
+          loading={loadingUsers}
+        />
+        <DashboardCard
+          title="Roles Defined"
+          value={roles.length || 3}
+          subtitle="Permission levels"
+          icon="🔑"
+          color="warning"
+          trend="neutral"
+          trendValue="Well organized"
+          loading={loadingUsers}
+        />
+        <DashboardCard
+          title="Active Sessions"
+          value="1"
+          subtitle="Currently online"
+          icon="🟢"
+          color="success"
+          trend="up"
+          trendValue="Users active"
+          loading={loadingUsers}
+        />
+        <DashboardCard
+          title="Last Login"
+          value="Now"
+          subtitle="Most recent activity"
+          icon="⏰"
+          color="neutral"
+          trend="neutral"
+          trendValue="Real-time"
+          loading={loadingUsers}
+        />
+      </div>
+
+      {/* Users Table */}
+      <div style={styles.contentCard}>
+        <h3 style={styles.cardTitle}>Team Members</h3>
+        <DataTable
+          columns={userColumns}
+          data={users.length > 0 ? users : [user]}
+          loading={loadingUsers}
+          emptyStateProps={{
+            icon: '👥',
+            title: 'No team members yet',
+            description: 'Invite team members to collaborate on your inventory.',
+            actionLabel: 'Invite First Member',
+            onAction: () => console.log('Add User')
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Settings Tab Component
+function SettingsTab({ user, token, loading }) {
+  const [settings, setSettings] = useState({
+    businessName: user.tenant?.name || '',
+    email: user.email || '',
+    phone: '',
+    address: '',
+    currency: 'USD',
+    timezone: 'UTC',
+    lowStockAlert: true,
+    emailNotifications: true,
+    autoBackup: false
+  });
+
+  const handleSettingChange = (key, value) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>Settings</h1>
+          <p style={styles.pageSubtitle}>Configure your business preferences and system settings</p>
+        </div>
+        <Button variant="primary" icon="💾" iconPosition="left">
+          Save Changes
+        </Button>
+      </div>
+
+      <div style={styles.settingsGrid}>
+        {/* Business Information */}
+        <div style={styles.settingsCard}>
+          <h3 style={styles.settingsCardTitle}>Business Information</h3>
+          <div style={styles.settingsForm}>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Business Name</label>
+              <input
+                className="form-input"
+                style={styles.formInput}
+                type="text"
+                value={settings.businessName}
+                onChange={(e) => handleSettingChange('businessName', e.target.value)}
+                placeholder="Enter business name"
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Email Address</label>
+              <input
+                style={styles.formInput}
+                type="email"
+                value={settings.email}
+                onChange={(e) => handleSettingChange('email', e.target.value)}
+                placeholder="Enter email address"
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Phone Number</label>
+              <input
+                style={styles.formInput}
+                type="tel"
+                value={settings.phone}
+                onChange={(e) => handleSettingChange('phone', e.target.value)}
+                placeholder="Enter phone number"
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Business Address</label>
+              <textarea
+                style={{ ...styles.formInput, minHeight: '80px', resize: 'vertical' }}
+                value={settings.address}
+                onChange={(e) => handleSettingChange('address', e.target.value)}
+                placeholder="Enter business address"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* System Preferences */}
+        <div style={styles.settingsCard}>
+          <h3 style={styles.settingsCardTitle}>System Preferences</h3>
+          <div style={styles.settingsForm}>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Currency</label>
+              <select
+                style={styles.formInput}
+                value={settings.currency}
+                onChange={(e) => handleSettingChange('currency', e.target.value)}
+              >
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="CAD">CAD - Canadian Dollar</option>
+              </select>
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Timezone</label>
+              <select
+                style={styles.formInput}
+                value={settings.timezone}
+                onChange={(e) => handleSettingChange('timezone', e.target.value)}
+              >
+                <option value="UTC">UTC - Coordinated Universal Time</option>
+                <option value="EST">EST - Eastern Standard Time</option>
+                <option value="PST">PST - Pacific Standard Time</option>
+                <option value="GMT">GMT - Greenwich Mean Time</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div style={styles.settingsCard}>
+          <h3 style={styles.settingsCardTitle}>Notifications</h3>
+          <div style={styles.settingsForm}>
+            <div style={styles.toggleGroup}>
+              <div style={styles.toggleItem}>
+                <div>
+                  <span style={styles.toggleLabel}>Low Stock Alerts</span>
+                  <span style={styles.toggleDescription}>Get notified when products are running low</span>
+                </div>
+                <label style={styles.toggle}>
+                  <input
+                    type="checkbox"
+                    checked={settings.lowStockAlert}
+                    onChange={(e) => handleSettingChange('lowStockAlert', e.target.checked)}
+                  />
+                  <span className="toggle-slider" style={styles.toggleSlider}></span>
+                </label>
+              </div>
+              <div style={styles.toggleItem}>
+                <div>
+                  <span style={styles.toggleLabel}>Email Notifications</span>
+                  <span style={styles.toggleDescription}>Receive important updates via email</span>
+                </div>
+                <label style={styles.toggle}>
+                  <input
+                    type="checkbox"
+                    checked={settings.emailNotifications}
+                    onChange={(e) => handleSettingChange('emailNotifications', e.target.checked)}
+                  />
+                  <span className="toggle-slider" style={styles.toggleSlider}></span>
+                </label>
+              </div>
+              <div style={styles.toggleItem}>
+                <div>
+                  <span style={styles.toggleLabel}>Auto Backup</span>
+                  <span style={styles.toggleDescription}>Automatically backup your data daily</span>
+                </div>
+                <label style={styles.toggle}>
+                  <input
+                    type="checkbox"
+                    checked={settings.autoBackup}
+                    onChange={(e) => handleSettingChange('autoBackup', e.target.checked)}
+                  />
+                  <span className="toggle-slider" style={styles.toggleSlider}></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Security */}
+        <div style={styles.settingsCard}>
+          <h3 style={styles.settingsCardTitle}>Security</h3>
+          <div style={styles.settingsForm}>
+            <div style={styles.securityActions}>
+              <div style={styles.securityAction}>
+                <div>
+                  <span style={styles.securityActionTitle}>Change Password</span>
+                  <span style={styles.securityActionDescription}>Update your account password</span>
+                </div>
+                <Button variant="secondary" size="sm">Change</Button>
+              </div>
+              <div style={styles.securityAction}>
+                <div>
+                  <span style={styles.securityActionTitle}>Two-Factor Authentication</span>
+                  <span style={styles.securityActionDescription}>Add an extra layer of security</span>
+                </div>
+                <Button variant="primary" size="sm">Enable</Button>
+              </div>
+              <div style={styles.securityAction}>
+                <div>
+                  <span style={styles.securityActionTitle}>Active Sessions</span>
+                  <span style={styles.securityActionDescription}>Manage your active login sessions</span>
+                </div>
+                <Button variant="neutral" size="sm">View</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const styles = {
   // Layout Styles
   dashboard: {
@@ -748,13 +1182,13 @@ const styles = {
 
   // Header Styles
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.neutral[800],
     padding: `${theme.spacing.lg} ${theme.spacing['2xl']}`,
-    borderBottom: `1px solid ${theme.colors.neutral[200]}`,
+    borderBottom: `1px solid ${theme.colors.neutral[700]}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: theme.shadows.sm,
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
     position: 'sticky',
     top: 0,
     zIndex: 100
@@ -780,11 +1214,7 @@ const styles = {
     margin: 0,
     fontSize: theme.typography.fontSize['2xl'],
     fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.neutral[900],
-    background: `linear-gradient(135deg, ${theme.colors.primary[600]}, ${theme.colors.primary[700]})`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text'
+    color: '#ffffff'
   },
 
   headerCenter: {
@@ -806,16 +1236,17 @@ const styles = {
     top: '50%',
     transform: 'translateY(-50%)',
     fontSize: '16px',
-    color: theme.colors.neutral[400]
+    color: theme.colors.neutral[300]
   },
 
   searchInput: {
     width: '100%',
     padding: `${theme.spacing.sm} ${theme.spacing.md} ${theme.spacing.sm} ${theme.spacing['2xl']}`,
-    border: `1px solid ${theme.colors.neutral[300]}`,
+    border: `1px solid ${theme.colors.neutral[600]}`,
     borderRadius: theme.borderRadius.lg,
     fontSize: theme.typography.fontSize.sm,
-    backgroundColor: theme.colors.neutral[50],
+    backgroundColor: theme.colors.neutral[700],
+    color: '#ffffff',
     transition: theme.transitions.default,
     outline: 'none'
   },
@@ -831,7 +1262,8 @@ const styles = {
     cursor: 'pointer',
     padding: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
-    transition: theme.transitions.default
+    transition: theme.transitions.default,
+    color: theme.colors.neutral[300]
   },
 
   userInfo: {
@@ -862,7 +1294,7 @@ const styles = {
   userName: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[900]
+    color: '#ffffff'
   },
 
   // Container & Layout
@@ -875,8 +1307,8 @@ const styles = {
   // Sidebar Styles
   sidebar: {
     width: '280px',
-    backgroundColor: '#ffffff',
-    borderRight: `1px solid ${theme.colors.neutral[200]}`,
+    backgroundColor: theme.colors.neutral[800],
+    borderRight: `1px solid ${theme.colors.neutral[700]}`,
     display: 'flex',
     flexDirection: 'column',
     position: 'sticky',
@@ -902,7 +1334,7 @@ const styles = {
     cursor: 'pointer',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[600],
+    color: theme.colors.neutral[300],
     textAlign: 'left',
     borderRadius: theme.borderRadius.lg,
     transition: theme.transitions.default,
@@ -911,8 +1343,8 @@ const styles = {
   },
 
   menuItemActive: {
-    backgroundColor: theme.colors.primary[50],
-    color: theme.colors.primary[700],
+    backgroundColor: theme.colors.primary[600],
+    color: '#ffffff',
     fontWeight: theme.typography.fontWeight.semibold
   },
 
@@ -1235,6 +1667,135 @@ const styles = {
     borderRadius: theme.borderRadius.xl,
     height: '200px',
     animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+  },
+
+  // Settings Styles
+  settingsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+    gap: theme.spacing.xl
+  },
+
+  settingsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.xl,
+    boxShadow: theme.shadows.md,
+    border: `1px solid ${theme.colors.neutral[200]}`
+  },
+
+  settingsCardTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.neutral[900],
+    margin: `0 0 ${theme.spacing.lg} 0`
+  },
+
+  settingsForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing.lg
+  },
+
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing.sm
+  },
+
+  formLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.neutral[700]
+  },
+
+  formInput: {
+    padding: theme.spacing.md,
+    border: `1px solid ${theme.colors.neutral[300]}`,
+    borderRadius: theme.borderRadius.lg,
+    fontSize: theme.typography.fontSize.sm,
+    backgroundColor: '#ffffff',
+    transition: theme.transitions.default,
+    outline: 'none'
+  },
+
+  toggleGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing.lg
+  },
+
+  toggleItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.neutral[50],
+    borderRadius: theme.borderRadius.lg,
+    border: `1px solid ${theme.colors.neutral[200]}`
+  },
+
+  toggleLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.neutral[900],
+    display: 'block'
+  },
+
+  toggleDescription: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.neutral[500],
+    display: 'block',
+    marginTop: theme.spacing.xs
+  },
+
+  toggle: {
+    position: 'relative',
+    display: 'inline-block',
+    width: '44px',
+    height: '24px'
+  },
+
+  toggleSlider: {
+    position: 'absolute',
+    cursor: 'pointer',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: theme.colors.neutral[300],
+    transition: theme.transitions.default,
+    borderRadius: '24px'
+  },
+
+  securityActions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing.lg
+  },
+
+  securityAction: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.neutral[50],
+    borderRadius: theme.borderRadius.lg,
+    border: `1px solid ${theme.colors.neutral[200]}`
+  },
+
+  securityActionTitle: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.neutral[900],
+    display: 'block'
+  },
+
+  securityActionDescription: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.neutral[500],
+    display: 'block',
+    marginTop: theme.spacing.xs
   }
 };
 
@@ -1244,6 +1805,65 @@ styleSheet.textContent = `
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  
+  /* Toggle Switch Styles */
+  input[type="checkbox"] {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  input:checked + .toggle-slider {
+    background-color: #4f46e5 !important;
+  }
+  
+  input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+  }
+  
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+  
+  /* Hover effects for menu items */
+  .menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+  }
+  
+  .menu-item.active:hover {
+    background-color: #4338ca !important;
+  }
+  
+  /* Form input focus styles */
+  .form-input:focus {
+    border-color: #4f46e5 !important;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+  }
+  
+  /* Search input placeholder */
+  .search-input::placeholder {
+    color: #9ca3af;
+  }
+  
+  /* Notification icon hover */
+  .notification-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
   }
   
   @media (max-width: 768px) {
