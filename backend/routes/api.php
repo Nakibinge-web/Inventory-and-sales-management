@@ -126,10 +126,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Sales
     Route::prefix('sales')->group(function () {
-        Route::get('/', [SaleController::class, 'index']);
-        Route::post('/', [SaleController::class, 'store']);
-        Route::get('/daily-report', [SaleController::class, 'getDailyReport']);
-        Route::get('/{sale}', [SaleController::class, 'show']);
+        // Cashiers and above can view and record sales
+        Route::middleware('role:owner,admin,manager,cashier')->group(function () {
+            Route::get('/',        [SaleController::class, 'index']);
+            Route::post('/',       [SaleController::class, 'store']);
+            Route::get('/{sale}',  [SaleController::class, 'show']);
+        });
+
+        // Reports restricted to managers and above
+        Route::middleware('role:owner,admin,manager')->group(function () {
+            Route::get('/daily-report', [SaleController::class, 'getDailyReport']);
+        });
     });
 
     // Purchases

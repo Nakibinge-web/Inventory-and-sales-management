@@ -30,47 +30,52 @@ class SaleController extends Controller
             'items.*.price'          => 'required|numeric|min:0',
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
+        try {
+            return DB::transaction(function () use ($validated) {
+                $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
 
-            $sale = Sale::create([
-                'user_id'        => Auth::id(),
-                'total_amount'   => $totalAmount,
-                'payment_method' => $validated['payment_method'],
-                'sale_date'      => now(),
-            ]);
+                $sale = Sale::create([
+                    'user_id'        => Auth::id(),
+                    'total_amount'   => $totalAmount,
+                    'payment_method' => $validated['payment_method'],
+                    'sale_date'      => now(),
+                ]);
 
-            foreach ($validated['items'] as $item) {
-                $product = Product::findOrFail($item['product_id']);
+                foreach ($validated['items'] as $item) {
+                    // findOrFail scoped by tenant via BelongsToTenant global scope
+                    $product = Product::findOrFail($item['product_id']);
 
-                if ($product->stock < $item['quantity']) {
-                    throw new \Exception("Insufficient stock for product: {$product->name}");
+                    if ($product->stock < $item['quantity']) {
+                        throw new \Exception("Insufficient stock for \"{$product->name}\". Available: {$product->stock}, requested: {$item['quantity']}.");
+                    }
+
+                    SaleItem::create([
+                        'sale_id'    => $sale->id,
+                        'product_id' => $item['product_id'],
+                        'quantity'   => $item['quantity'],
+                        'price'      => $item['price'],
+                        'subtotal'   => $item['quantity'] * $item['price'],
+                    ]);
+
+                    $product->decrement('stock', $item['quantity']);
+
+                    StockMovement::create([
+                        'product_id'     => $item['product_id'],
+                        'type'           => 'OUT',
+                        'quantity'       => $item['quantity'],
+                        'reference_id'   => $sale->id,
+                        'reference_type' => 'sale',
+                        'date'           => now(),
+                    ]);
                 }
 
-                SaleItem::create([
-                    'sale_id'    => $sale->id,
-                    'product_id' => $item['product_id'],
-                    'quantity'   => $item['quantity'],
-                    'price'      => $item['price'],
-                    'subtotal'   => $item['quantity'] * $item['price'],
-                ]);
+                $sale->load(['user:id,name,email', 'saleItems.product:id,name,price']);
 
-                $product->decrement('stock', $item['quantity']);
-
-                StockMovement::create([
-                    'product_id'     => $item['product_id'],
-                    'type'           => 'OUT',
-                    'quantity'       => $item['quantity'],
-                    'reference_id'   => $sale->id,
-                    'reference_type' => 'sale',
-                    'date'           => now(),
-                ]);
-            }
-
-            $sale->load(['user', 'saleItems.product']);
-
-            return response()->json(['success' => true, 'message' => 'Sale completed successfully', 'data' => $sale], 201);
-        });
+                return response()->json(['success' => true, 'message' => 'Sale completed successfully.', 'data' => $sale], 201);
+            });
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
     }
 
     public function show(Sale $sale): JsonResponse
