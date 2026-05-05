@@ -8,6 +8,7 @@ import Button from './components/ui/Button';
 import Modal from './components/ui/Modal';
 import QuickActions from './components/ui/QuickActions';
 import AddProductForm from './components/AddProductForm';
+import EditProductForm from './components/EditProductForm';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -102,9 +103,6 @@ export default function Dashboard({ user, token, onLogout }) {
     { id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' },
     { id: 'sales', label: 'Sales', icon: '💰', color: 'success' },
     { id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' },
-    { id: 'stock', label: 'Stock Management', icon: '📋', color: 'warning' },
-    { id: 'users', label: 'User Management', icon: '👥', color: 'primary' },
-    { id: 'settings', label: 'Settings', icon: '⚙️', color: 'neutral' },
     { id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }
   ];
 
@@ -135,7 +133,6 @@ export default function Dashboard({ user, token, onLogout }) {
           <div style={styles.searchContainer}>
             <span style={styles.searchIcon}>🔍</span>
             <input
-              className="search-input"
               style={styles.searchInput}
               type="text"
               placeholder="Search products, sales, suppliers..."
@@ -146,7 +143,7 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
         
         <div style={styles.headerRight}>
-          <div className="notification-icon" style={styles.notificationIcon}>🔔</div>
+          <div style={styles.notificationIcon}>🔔</div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
               {user.name.charAt(0).toUpperCase()}
@@ -169,7 +166,6 @@ export default function Dashboard({ user, token, onLogout }) {
             {menuItems.map(item => (
               <button
                 key={item.id}
-                className={`menu-item ${activeTab === item.id ? 'active' : ''}`}
                 style={{
                   ...styles.menuItem,
                   ...(activeTab === item.id ? styles.menuItemActive : {})
@@ -197,14 +193,33 @@ export default function Dashboard({ user, token, onLogout }) {
           )}
 
           {activeTab === 'overview' && <OverviewTab data={data} loading={loading} />}
-          {activeTab === 'products' && <ProductsTab products={data.products} onAddProduct={() => setShowAddProduct(true)} loading={loading} />}
-          {activeTab === 'categories' && <CategoriesTab categories={data.categories} loading={loading} />}
+          {activeTab === 'products' && (
+            <ProductsTab
+              products={data.products}
+              onAddProduct={() => setShowAddProduct(true)}
+              loading={loading}
+              token={token}
+              user={user}
+              categories={data.categories}
+              suppliers={data.suppliers}
+              onProductDeleted={(id) => setData(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }))}
+              onProductUpdated={(updated) => setData(prev => ({
+                ...prev,
+                products: prev.products.map(p => p.id === updated.id ? updated : p)
+              }))}
+            />
+          )}
+          {activeTab === 'categories' && (
+            <CategoriesTab
+              categories={data.categories}
+              loading={loading}
+              token={token}
+              onCategoryAdded={cat => setData(prev => ({ ...prev, categories: [...prev.categories, cat] }))}
+            />
+          )}
           {activeTab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} loading={loading} />}
           {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} />}
           {activeTab === 'purchases' && <PurchasesTab purchases={data.purchases} loading={loading} />}
-          {activeTab === 'stock' && <StockManagementTab data={data} loading={loading} />}
-          {activeTab === 'users' && <UserManagementTab user={user} token={token} loading={loading} />}
-          {activeTab === 'settings' && <SettingsTab user={user} token={token} loading={loading} />}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} />}
         </main>
       </div>
@@ -295,7 +310,7 @@ function OverviewTab({ data, loading }) {
         />
         <DashboardCard
           title="Total Sales"
-          value={`$${data.stats.totalSales.toFixed(2)}`}
+          value={`UGX ${data.stats.totalSales.toLocaleString()}`}
           subtitle="Revenue generated"
           icon="💰"
           color="success"
@@ -305,7 +320,7 @@ function OverviewTab({ data, loading }) {
         />
         <DashboardCard
           title="Total Purchases"
-          value={`$${data.stats.totalPurchases.toFixed(2)}`}
+          value={`UGX ${data.stats.totalPurchases.toLocaleString()}`}
           subtitle="Money invested"
           icon="🛒"
           color="warning"
@@ -377,32 +392,170 @@ function OverviewTab({ data, loading }) {
 }
 
 // Products Tab Component
-function ProductsTab({ products, onAddProduct, loading }) {
+function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated }) {
+  const API_BASE = process.env.REACT_APP_API_URL
+    ? process.env.REACT_APP_API_URL.replace('/api', '')
+    : 'http://localhost:8000';
+
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deletingProduct, setDeletingProduct] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [showExpiry, setShowExpiry] = useState(false);
+  const [filters, setFilters] = useState({ search: '', category: '', status: '' });
+
+  const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value }));
+
+  const getStockStatus = (stock, reorder) => {
+    const s = Number(stock ?? 0), r = Number(reorder ?? 0);
+    if (s === 0)  return 'out';
+    if (s <= r)   return 'low';
+    return 'in';
+  };
+
+  const filteredProducts = products.filter(p => {
+    const search = filters.search.toLowerCase();
+    if (search && !p.name?.toLowerCase().includes(search) && !p.sku?.toLowerCase().includes(search)) return false;
+    if (filters.category && String(p.category_id) !== String(filters.category)) return false;
+    if (filters.status && getStockStatus(p.stock, p.reorder_level) !== filters.status) return false;
+    return true;
+  });
+
+  const handleDelete = async () => {
+    if (!deletingProduct) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`${API}/products/${deletingProduct.id}?tenant_id=${user.tenant_id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      if (res.ok) {
+        onProductDeleted(deletingProduct.id);
+        setDeletingProduct(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data?.message || 'Failed to delete product.');
+      }
+    } catch {
+      setDeleteError('Error deleting product. Check your connection.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const columns = [
+    {
+      key: 'image_path',
+      title: 'Image',
+      render: (value) => value
+        ? <img src={`${API_BASE}/storage/${value}`} alt="product"
+            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
+        : <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
+    },
     { key: 'name', title: 'Product Name' },
-    { 
-      key: 'category', 
-      title: 'Category', 
+    { key: 'sku', title: 'SKU', render: (value) => value || <span style={{ color: '#94a3b8' }}>—</span> },
+    {
+      key: 'category',
+      title: 'Category',
       render: (value) => value?.name ? <Badge variant="neutral" size="sm">{value.name}</Badge> : 'N/A'
     },
-    { 
-      key: 'stock', 
-      title: 'Stock', 
-      type: 'number',
+    {
+      key: 'stock',
+      title: 'Stock',
       render: (value, row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: value <= row.reorder_level ? theme.colors.danger[600] : 'inherit' }}>
-            {value}
-          </span>
-          {value <= row.reorder_level && <Badge variant="danger" size="sm">Low</Badge>}
+        <span>{value}{row.unit ? ` ${row.unit}` : ''}</span>
+      )
+    },
+    {
+      key: 'reorder_level',
+      title: 'Reorder Level',
+      render: (value) => value ?? '—'
+    },
+    {
+      key: 'price',
+      title: 'Price',
+      render: (value, row) => (
+        <div>
+          <div style={{ fontWeight: 600, color: '#0f172a' }}>UGX {parseFloat(value || 0).toLocaleString()}</div>
+          {row.cost_price != null && (
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+              Cost: UGX {parseFloat(row.cost_price).toLocaleString()}
+            </div>
+          )}
         </div>
       )
     },
-    { key: 'price', title: 'Price', type: 'currency' },
-    { 
-      key: 'supplier', 
-      title: 'Supplier', 
-      render: (value) => value?.name || 'N/A'
+    {
+      key: 'status',
+      title: 'Status',
+      render: (_, row) => {
+        const stock = Number(row.stock ?? 0);
+        const reorder = Number(row.reorder_level ?? 0);
+        if (stock === 0) {
+          return (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca'
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+              Out of Stock
+            </span>
+          );
+        }
+        if (stock <= reorder) {
+          return (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a'
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+              Low Stock
+            </span>
+          );
+        }
+        return (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+            background: '#f0fdf4', color: '#065f46', border: '1px solid #bbf7d0'
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+            In Stock
+          </span>
+        );
+      }
+    },
+    {
+      key: 'actions',
+      title: 'Actions',
+      render: (_, row) => (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setEditingProduct(row)}
+            style={{
+              padding: '4px 12px', borderRadius: 6, border: '1px solid #3b82f6',
+              background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500
+            }}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => { setDeleteError(null); setDeletingProduct(row); }}
+            style={{
+              padding: '4px 12px', borderRadius: 6, border: '1px solid #ef4444',
+              background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )
     }
   ];
 
@@ -413,31 +566,315 @@ function ProductsTab({ products, onAddProduct, loading }) {
           <h1 style={styles.pageTitle}>Products</h1>
           <p style={styles.pageSubtitle}>Manage your inventory and track stock levels</p>
         </div>
-        <Button variant="success" onClick={onAddProduct} icon="+" iconPosition="left">
-          Add Product
-        </Button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button variant="primary" onClick={() => setShowExpiry(true)} icon="⏳" iconPosition="left">
+            View Expiry Goods
+          </Button>
+          <Button variant="success" onClick={onAddProduct} icon="+" iconPosition="left">
+            Add Product
+          </Button>
+        </div>
       </div>
 
       <div style={styles.contentCard}>
+        {/* Filter bar */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+          <input
+            style={fS.input}
+            placeholder="🔍  Search by name or SKU…"
+            value={filters.search}
+            onChange={e => setFilter('search', e.target.value)}
+          />
+          <select style={fS.select} value={filters.category} onChange={e => setFilter('category', e.target.value)}>
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select style={fS.select} value={filters.status} onChange={e => setFilter('status', e.target.value)}>
+            <option value="">All Statuses</option>
+            <option value="in">🟢 In Stock</option>
+            <option value="low">🟡 Low Stock</option>
+            <option value="out">🔴 Out of Stock</option>
+          </select>
+          {(filters.search || filters.category || filters.status) && (
+            <button style={fS.clear} onClick={() => setFilters({ search: '', category: '', status: '' })}>
+              ✕ Clear filters
+            </button>
+          )}
+        </div>
+
         <DataTable
           columns={columns}
-          data={products}
+          data={filteredProducts}
           loading={loading}
           emptyStateProps={{
             icon: '📦',
-            title: 'No products yet',
-            description: 'Start building your inventory by adding your first product.',
-            actionLabel: 'Add First Product',
-            onAction: onAddProduct
+            title: filters.search || filters.category || filters.status ? 'No products match your filters' : 'No products yet',
+            description: filters.search || filters.category || filters.status ? 'Try adjusting or clearing your filters.' : 'Start building your inventory by adding your first product.',
+            actionLabel: filters.search || filters.category || filters.status ? 'Clear Filters' : 'Add First Product',
+            onAction: filters.search || filters.category || filters.status ? () => setFilters({ search: '', category: '', status: '' }) : onAddProduct
           }}
         />
+      </div>
+
+      {/* Edit Product Modal */}
+      <Modal
+        isOpen={!!editingProduct}
+        onClose={() => setEditingProduct(null)}
+        title="Edit Product"
+        size="lg"
+      >
+        {editingProduct && (
+          <EditProductForm
+            token={token}
+            product={editingProduct}
+            categories={categories}
+            suppliers={suppliers}
+            onSuccess={(updated) => {
+              onProductUpdated(updated);
+              setEditingProduct(null);
+            }}
+            onCancel={() => setEditingProduct(null)}
+          />
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deletingProduct}
+        onClose={() => { setDeletingProduct(null); setDeleteError(null); }}
+        title="Delete Product"
+        size="sm"
+      >
+        {deletingProduct && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '14px 16px', background: '#fef2f2',
+              border: '1px solid #fecaca', borderRadius: 10
+            }}>
+              <span style={{ fontSize: 28 }}>🗑️</span>
+              <div>
+                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 15 }}>
+                  {deletingProduct.name}
+                </div>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                  This action cannot be undone. The product and all its data will be permanently removed.
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div style={{
+                padding: '10px 14px', background: '#fef2f2',
+                border: '1px solid #fecaca', borderRadius: 8,
+                color: '#b91c1c', fontSize: 13
+              }}>
+                ⚠️ {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => { setDeletingProduct(null); setDeleteError(null); }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                loading={deleteLoading}
+                onClick={handleDelete}
+                style={{ flex: 1 }}
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete Product'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Expiry Goods Modal */}
+      <Modal
+        isOpen={showExpiry}
+        onClose={() => setShowExpiry(false)}
+        title="⏳ Expiry Goods Tracker"
+        size="lg"
+      >
+        <ExpiryGoodsView products={products} />
+      </Modal>
+    </div>
+  );
+}
+
+// Expiry Goods View Component
+function ExpiryGoodsView({ products }) {
+  const now = new Date();
+
+  const expiryProducts = products
+    .filter(p => p.track_expiry && p.expiry_date)
+    .map(p => {
+      const expiry = new Date(p.expiry_date);
+      const diffMs = expiry - now;
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      return { ...p, diffDays, expiry };
+    })
+    .sort((a, b) => a.diffDays - b.diffDays);
+
+  const getStatus = (days) => {
+    if (days < 0)   return { label: 'Expired',        variant: 'danger',  color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' };
+    if (days <= 7)  return { label: 'Critical',       variant: 'danger',  color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' };
+    if (days <= 30) return { label: 'Expiring Soon',  variant: 'warning', color: '#92400e', bg: '#fffbeb', border: '#fde68a' };
+    return              { label: 'Good',              variant: 'success', color: '#065f46', bg: '#f0fdf4', border: '#bbf7d0' };
+  };
+
+  const getTimeLabel = (days) => {
+    if (days < 0)  return `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''} ago`;
+    if (days === 0) return 'Expires today!';
+    if (days === 1) return '1 day remaining';
+    if (days < 30)  return `${days} days remaining`;
+    const months = Math.floor(days / 30);
+    const rem    = days % 30;
+    return rem > 0 ? `${months}mo ${rem}d remaining` : `${months} month${months !== 1 ? 's' : ''} remaining`;
+  };
+
+  if (expiryProducts.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+        <div style={{ fontWeight: 600, fontSize: 16, color: '#0f172a' }}>No expiry-tracked products</div>
+        <div style={{ fontSize: 13, marginTop: 6 }}>
+          Enable "Track Expiry" on a product to monitor it here.
+        </div>
+      </div>
+    );
+  }
+
+  const expired  = expiryProducts.filter(p => p.diffDays < 0).length;
+  const critical = expiryProducts.filter(p => p.diffDays >= 0 && p.diffDays <= 7).length;
+  const soon     = expiryProducts.filter(p => p.diffDays > 7 && p.diffDays <= 30).length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Summary pills */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {expired  > 0 && <span style={exS.pill('#fef2f2','#fecaca','#b91c1c')}>🚫 {expired} Expired</span>}
+        {critical > 0 && <span style={exS.pill('#fef2f2','#fecaca','#dc2626')}>🔴 {critical} Critical (≤7 days)</span>}
+        {soon     > 0 && <span style={exS.pill('#fffbeb','#fde68a','#92400e')}>🟡 {soon} Expiring Soon (≤30 days)</span>}
+        <span style={exS.pill('#f0fdf4','#bbf7d0','#065f46')}>
+          ✅ {expiryProducts.length - expired - critical - soon} Good
+        </span>
+      </div>
+
+      {/* Product rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+        {expiryProducts.map(p => {
+          const st = getStatus(p.diffDays);
+          return (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '12px 14px', borderRadius: 10,
+              background: st.bg, border: `1px solid ${st.border}`,
+            }}>
+              {/* Status bar */}
+              <div style={{
+                width: 4, alignSelf: 'stretch', borderRadius: 4,
+                background: st.color, flexShrink: 0,
+              }} />
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.name}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {p.sku ? `SKU: ${p.sku} · ` : ''}
+                  Stock: {p.stock}{p.unit ? ` ${p.unit}` : ''} ·{' '}
+                  Expires: {new Date(p.expiry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {p.manufacture_date && ` · Mfg: ${new Date(p.manufacture_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                </div>
+              </div>
+
+              {/* Time remaining badge */}
+              <div style={{
+                flexShrink: 0, padding: '4px 12px', borderRadius: 20,
+                background: st.color, color: '#fff',
+                fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+              }}>
+                {getTimeLabel(p.diffDays)}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
+const exS = {
+  pill: (bg, border, color) => ({
+    padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+    background: bg, border: `1px solid ${border}`, color,
+  }),
+};
+
+const fS = {
+  input: {
+    flex: '1 1 200px', padding: '8px 12px', border: '1.5px solid #e2e8f0',
+    borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+    background: '#fff', color: '#0f172a', minWidth: 0,
+  },
+  select: {
+    flex: '0 0 auto', padding: '8px 12px', border: '1.5px solid #e2e8f0',
+    borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+    background: '#fff', color: '#0f172a', cursor: 'pointer',
+  },
+  clear: {
+    padding: '8px 14px', border: '1.5px solid #e2e8f0', borderRadius: 8,
+    background: '#f8fafc', color: '#64748b', fontSize: 13, cursor: 'pointer',
+    fontWeight: 500, whiteSpace: 'nowrap',
+  },
+};
+
 // Categories Tab Component
-function CategoriesTab({ categories, loading }) {
+function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm]           = useState({ name: '', description: '' });
+  const [saving, setSaving]       = useState(false);
+  const [formError, setFormError] = useState(null);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`${API}/categories`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) { setFormError(data?.message || `Error ${res.status}`); }
+      else {
+        onCategoryAdded(data.data);
+        setForm({ name: '', description: '' });
+        setShowModal(false);
+      }
+    } catch {
+      setFormError('Failed to save. Check your connection.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openModal = () => { setForm({ name: '', description: '' }); setFormError(null); setShowModal(true); };
+
   return (
     <div style={styles.pageContainer}>
       <div style={styles.pageHeader}>
@@ -445,7 +882,7 @@ function CategoriesTab({ categories, loading }) {
           <h1 style={styles.pageTitle}>Categories</h1>
           <p style={styles.pageSubtitle}>Organize your products into logical groups</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left">
+        <Button variant="primary" icon="+" iconPosition="left" onClick={openModal}>
           Add Category
         </Button>
       </div>
@@ -463,7 +900,7 @@ function CategoriesTab({ categories, loading }) {
             title="No categories yet"
             description="Create categories to organize your products better."
             actionLabel="Add First Category"
-            onAction={() => console.log('Add Category')}
+            onAction={openModal}
           />
         </div>
       ) : (
@@ -484,9 +921,56 @@ function CategoriesTab({ categories, loading }) {
           ))}
         </div>
       )}
+
+      {/* Add Category Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add New Category" size="sm">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={catS.label}>Category Name *</label>
+            <input
+              style={catS.input}
+              placeholder="e.g. Electronics"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={catS.label}>Description (optional)</label>
+            <textarea
+              style={{ ...catS.input, minHeight: 80, resize: 'vertical' }}
+              placeholder="Brief description of this category…"
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+          {formError && <div style={catS.error}>⚠️ {formError}</div>}
+          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving…' : 'Add Category'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
+
+const catS = {
+  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.03em', textTransform: 'uppercase' },
+  input: {
+    padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8,
+    fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
+    boxSizing: 'border-box', background: '#fff', color: '#0f172a',
+  },
+  error: {
+    padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+    borderRadius: 8, color: '#b91c1c', fontSize: 13,
+  },
+};
 
 // Suppliers Tab Component
 function SuppliersTab({ suppliers, loading }) {
@@ -669,11 +1153,11 @@ function ReportsTab({ data, loading }) {
           <div style={styles.reportMetrics}>
             <div style={styles.reportMetric}>
               <span style={styles.reportLabel}>Total Sales</span>
-              <span style={styles.reportValue}>${data.stats.totalSales.toFixed(2)}</span>
+              <span style={styles.reportValue}>UGX {data.stats.totalSales.toLocaleString()}</span>
             </div>
             <div style={styles.reportMetric}>
               <span style={styles.reportLabel}>Total Purchases</span>
-              <span style={styles.reportValue}>${data.stats.totalPurchases.toFixed(2)}</span>
+              <span style={styles.reportValue}>UGX {data.stats.totalPurchases.toLocaleString()}</span>
             </div>
             <div style={styles.reportMetric}>
               <span style={styles.reportLabel}>Net Revenue</span>
@@ -681,7 +1165,7 @@ function ReportsTab({ data, loading }) {
                 ...styles.reportValue,
                 color: totalRevenue >= 0 ? theme.colors.success[600] : theme.colors.danger[600]
               }}>
-                ${totalRevenue.toFixed(2)}
+                UGX {totalRevenue.toLocaleString()}
               </span>
             </div>
           </div>
@@ -710,432 +1194,6 @@ function ReportsTab({ data, loading }) {
               }}>
                 {data.stats.lowStockCount}
               </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Stock Management Tab Component
-function StockManagementTab({ data, loading }) {
-  const [stockMovements, setStockMovements] = useState([]);
-  const [loadingMovements, setLoadingMovements] = useState(false);
-
-  const stockColumns = [
-    { key: 'name', title: 'Product Name' },
-    { 
-      key: 'stock', 
-      title: 'Current Stock', 
-      render: (value, row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ 
-            color: value <= row.reorder_level ? theme.colors.danger[600] : 
-                   value <= row.reorder_level * 2 ? theme.colors.warning[600] : 
-                   theme.colors.success[600],
-            fontWeight: 'bold'
-          }}>
-            {value}
-          </span>
-          {value <= row.reorder_level && <Badge variant="danger" size="sm">Critical</Badge>}
-          {value > row.reorder_level && value <= row.reorder_level * 2 && <Badge variant="warning" size="sm">Low</Badge>}
-        </div>
-      )
-    },
-    { key: 'reorder_level', title: 'Reorder Level', type: 'number' },
-    { 
-      key: 'category', 
-      title: 'Category', 
-      render: (value) => value?.name ? <Badge variant="neutral" size="sm">{value.name}</Badge> : 'N/A'
-    },
-    { key: 'price', title: 'Unit Price', type: 'currency' }
-  ];
-
-  return (
-    <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>Stock Management</h1>
-          <p style={styles.pageSubtitle}>Monitor inventory levels and stock movements</p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Button variant="warning" icon="📊" iconPosition="left">
-            Stock Report
-          </Button>
-          <Button variant="primary" icon="📦" iconPosition="left">
-            Adjust Stock
-          </Button>
-        </div>
-      </div>
-
-      {/* Stock Level Summary Cards */}
-      <div style={styles.kpiGrid}>
-        <DashboardCard
-          title="Critical Stock"
-          value={data.products.filter(p => p.stock <= p.reorder_level).length}
-          subtitle="Items need immediate reorder"
-          icon="🚨"
-          color="danger"
-          trend="up"
-          trendValue="Requires attention"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Low Stock"
-          value={data.products.filter(p => p.stock > p.reorder_level && p.stock <= p.reorder_level * 2).length}
-          subtitle="Items running low"
-          icon="⚠️"
-          color="warning"
-          trend="neutral"
-          trendValue="Monitor closely"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Healthy Stock"
-          value={data.products.filter(p => p.stock > p.reorder_level * 2).length}
-          subtitle="Items with good levels"
-          icon="✅"
-          color="success"
-          trend="up"
-          trendValue="All good"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Total Value"
-          value={`$${data.products.reduce((sum, p) => sum + (p.stock * p.price), 0).toFixed(2)}`}
-          subtitle="Current inventory value"
-          icon="💰"
-          color="primary"
-          trend="up"
-          trendValue="Asset value"
-          loading={loading}
-        />
-      </div>
-
-      {/* Stock Levels Table */}
-      <div style={styles.contentCard}>
-        <h3 style={styles.cardTitle}>Current Stock Levels</h3>
-        <DataTable
-          columns={stockColumns}
-          data={data.products}
-          loading={loading}
-          emptyStateProps={{
-            icon: '📦',
-            title: 'No products in inventory',
-            description: 'Add products to start tracking stock levels.',
-            actionLabel: 'Add First Product',
-            onAction: () => console.log('Add Product')
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// User Management Tab Component
-function UserManagementTab({ user, token, loading }) {
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-
-  const userColumns = [
-    { key: 'name', title: 'Name' },
-    { key: 'email', title: 'Email' },
-    { 
-      key: 'roles', 
-      title: 'Role', 
-      render: (value) => value && value.length > 0 ? 
-        <Badge variant="primary" size="sm">{value[0].name}</Badge> : 
-        <Badge variant="neutral" size="sm">No Role</Badge>
-    },
-    { 
-      key: 'created_at', 
-      title: 'Joined', 
-      type: 'date',
-      render: (value) => new Date(value).toLocaleDateString()
-    },
-    {
-      key: 'actions',
-      title: 'Actions',
-      render: (value, row) => (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" size="sm">Edit</Button>
-          {row.id !== user.id && <Button variant="danger" size="sm">Remove</Button>}
-        </div>
-      )
-    }
-  ];
-
-  return (
-    <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>User Management</h1>
-          <p style={styles.pageSubtitle}>Manage team members and their permissions</p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Button variant="secondary" icon="🔑" iconPosition="left">
-            Manage Roles
-          </Button>
-          <Button variant="primary" icon="+" iconPosition="left">
-            Add User
-          </Button>
-        </div>
-      </div>
-
-      {/* User Stats */}
-      <div style={styles.kpiGrid}>
-        <DashboardCard
-          title="Total Users"
-          value={users.length || 1}
-          subtitle="Active team members"
-          icon="👥"
-          color="primary"
-          trend="up"
-          trendValue="Growing team"
-          loading={loadingUsers}
-        />
-        <DashboardCard
-          title="Roles Defined"
-          value={roles.length || 3}
-          subtitle="Permission levels"
-          icon="🔑"
-          color="warning"
-          trend="neutral"
-          trendValue="Well organized"
-          loading={loadingUsers}
-        />
-        <DashboardCard
-          title="Active Sessions"
-          value="1"
-          subtitle="Currently online"
-          icon="🟢"
-          color="success"
-          trend="up"
-          trendValue="Users active"
-          loading={loadingUsers}
-        />
-        <DashboardCard
-          title="Last Login"
-          value="Now"
-          subtitle="Most recent activity"
-          icon="⏰"
-          color="neutral"
-          trend="neutral"
-          trendValue="Real-time"
-          loading={loadingUsers}
-        />
-      </div>
-
-      {/* Users Table */}
-      <div style={styles.contentCard}>
-        <h3 style={styles.cardTitle}>Team Members</h3>
-        <DataTable
-          columns={userColumns}
-          data={users.length > 0 ? users : [user]}
-          loading={loadingUsers}
-          emptyStateProps={{
-            icon: '👥',
-            title: 'No team members yet',
-            description: 'Invite team members to collaborate on your inventory.',
-            actionLabel: 'Invite First Member',
-            onAction: () => console.log('Add User')
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// Settings Tab Component
-function SettingsTab({ user, token, loading }) {
-  const [settings, setSettings] = useState({
-    businessName: user.tenant?.name || '',
-    email: user.email || '',
-    phone: '',
-    address: '',
-    currency: 'USD',
-    timezone: 'UTC',
-    lowStockAlert: true,
-    emailNotifications: true,
-    autoBackup: false
-  });
-
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-  };
-
-  return (
-    <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>Settings</h1>
-          <p style={styles.pageSubtitle}>Configure your business preferences and system settings</p>
-        </div>
-        <Button variant="primary" icon="💾" iconPosition="left">
-          Save Changes
-        </Button>
-      </div>
-
-      <div style={styles.settingsGrid}>
-        {/* Business Information */}
-        <div style={styles.settingsCard}>
-          <h3 style={styles.settingsCardTitle}>Business Information</h3>
-          <div style={styles.settingsForm}>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Business Name</label>
-              <input
-                className="form-input"
-                style={styles.formInput}
-                type="text"
-                value={settings.businessName}
-                onChange={(e) => handleSettingChange('businessName', e.target.value)}
-                placeholder="Enter business name"
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Email Address</label>
-              <input
-                style={styles.formInput}
-                type="email"
-                value={settings.email}
-                onChange={(e) => handleSettingChange('email', e.target.value)}
-                placeholder="Enter email address"
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Phone Number</label>
-              <input
-                style={styles.formInput}
-                type="tel"
-                value={settings.phone}
-                onChange={(e) => handleSettingChange('phone', e.target.value)}
-                placeholder="Enter phone number"
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Business Address</label>
-              <textarea
-                style={{ ...styles.formInput, minHeight: '80px', resize: 'vertical' }}
-                value={settings.address}
-                onChange={(e) => handleSettingChange('address', e.target.value)}
-                placeholder="Enter business address"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* System Preferences */}
-        <div style={styles.settingsCard}>
-          <h3 style={styles.settingsCardTitle}>System Preferences</h3>
-          <div style={styles.settingsForm}>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Currency</label>
-              <select
-                style={styles.formInput}
-                value={settings.currency}
-                onChange={(e) => handleSettingChange('currency', e.target.value)}
-              >
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-                <option value="GBP">GBP - British Pound</option>
-                <option value="CAD">CAD - Canadian Dollar</option>
-              </select>
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Timezone</label>
-              <select
-                style={styles.formInput}
-                value={settings.timezone}
-                onChange={(e) => handleSettingChange('timezone', e.target.value)}
-              >
-                <option value="UTC">UTC - Coordinated Universal Time</option>
-                <option value="EST">EST - Eastern Standard Time</option>
-                <option value="PST">PST - Pacific Standard Time</option>
-                <option value="GMT">GMT - Greenwich Mean Time</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Notifications */}
-        <div style={styles.settingsCard}>
-          <h3 style={styles.settingsCardTitle}>Notifications</h3>
-          <div style={styles.settingsForm}>
-            <div style={styles.toggleGroup}>
-              <div style={styles.toggleItem}>
-                <div>
-                  <span style={styles.toggleLabel}>Low Stock Alerts</span>
-                  <span style={styles.toggleDescription}>Get notified when products are running low</span>
-                </div>
-                <label style={styles.toggle}>
-                  <input
-                    type="checkbox"
-                    checked={settings.lowStockAlert}
-                    onChange={(e) => handleSettingChange('lowStockAlert', e.target.checked)}
-                  />
-                  <span className="toggle-slider" style={styles.toggleSlider}></span>
-                </label>
-              </div>
-              <div style={styles.toggleItem}>
-                <div>
-                  <span style={styles.toggleLabel}>Email Notifications</span>
-                  <span style={styles.toggleDescription}>Receive important updates via email</span>
-                </div>
-                <label style={styles.toggle}>
-                  <input
-                    type="checkbox"
-                    checked={settings.emailNotifications}
-                    onChange={(e) => handleSettingChange('emailNotifications', e.target.checked)}
-                  />
-                  <span className="toggle-slider" style={styles.toggleSlider}></span>
-                </label>
-              </div>
-              <div style={styles.toggleItem}>
-                <div>
-                  <span style={styles.toggleLabel}>Auto Backup</span>
-                  <span style={styles.toggleDescription}>Automatically backup your data daily</span>
-                </div>
-                <label style={styles.toggle}>
-                  <input
-                    type="checkbox"
-                    checked={settings.autoBackup}
-                    onChange={(e) => handleSettingChange('autoBackup', e.target.checked)}
-                  />
-                  <span className="toggle-slider" style={styles.toggleSlider}></span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Security */}
-        <div style={styles.settingsCard}>
-          <h3 style={styles.settingsCardTitle}>Security</h3>
-          <div style={styles.settingsForm}>
-            <div style={styles.securityActions}>
-              <div style={styles.securityAction}>
-                <div>
-                  <span style={styles.securityActionTitle}>Change Password</span>
-                  <span style={styles.securityActionDescription}>Update your account password</span>
-                </div>
-                <Button variant="secondary" size="sm">Change</Button>
-              </div>
-              <div style={styles.securityAction}>
-                <div>
-                  <span style={styles.securityActionTitle}>Two-Factor Authentication</span>
-                  <span style={styles.securityActionDescription}>Add an extra layer of security</span>
-                </div>
-                <Button variant="primary" size="sm">Enable</Button>
-              </div>
-              <div style={styles.securityAction}>
-                <div>
-                  <span style={styles.securityActionTitle}>Active Sessions</span>
-                  <span style={styles.securityActionDescription}>Manage your active login sessions</span>
-                </div>
-                <Button variant="neutral" size="sm">View</Button>
-              </div>
             </div>
           </div>
         </div>
@@ -1182,13 +1240,13 @@ const styles = {
 
   // Header Styles
   header: {
-    backgroundColor: theme.colors.neutral[800],
+    backgroundColor: '#ffffff',
     padding: `${theme.spacing.lg} ${theme.spacing['2xl']}`,
-    borderBottom: `1px solid ${theme.colors.neutral[700]}`,
+    borderBottom: `1px solid ${theme.colors.neutral[200]}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+    boxShadow: theme.shadows.sm,
     position: 'sticky',
     top: 0,
     zIndex: 100
@@ -1214,7 +1272,11 @@ const styles = {
     margin: 0,
     fontSize: theme.typography.fontSize['2xl'],
     fontWeight: theme.typography.fontWeight.bold,
-    color: '#ffffff'
+    color: theme.colors.neutral[900],
+    background: `linear-gradient(135deg, ${theme.colors.primary[600]}, ${theme.colors.primary[700]})`,
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text'
   },
 
   headerCenter: {
@@ -1236,17 +1298,16 @@ const styles = {
     top: '50%',
     transform: 'translateY(-50%)',
     fontSize: '16px',
-    color: theme.colors.neutral[300]
+    color: theme.colors.neutral[400]
   },
 
   searchInput: {
     width: '100%',
     padding: `${theme.spacing.sm} ${theme.spacing.md} ${theme.spacing.sm} ${theme.spacing['2xl']}`,
-    border: `1px solid ${theme.colors.neutral[600]}`,
+    border: `1px solid ${theme.colors.neutral[300]}`,
     borderRadius: theme.borderRadius.lg,
     fontSize: theme.typography.fontSize.sm,
-    backgroundColor: theme.colors.neutral[700],
-    color: '#ffffff',
+    backgroundColor: theme.colors.neutral[50],
     transition: theme.transitions.default,
     outline: 'none'
   },
@@ -1262,8 +1323,7 @@ const styles = {
     cursor: 'pointer',
     padding: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
-    transition: theme.transitions.default,
-    color: theme.colors.neutral[300]
+    transition: theme.transitions.default
   },
 
   userInfo: {
@@ -1294,7 +1354,7 @@ const styles = {
   userName: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: '#ffffff'
+    color: theme.colors.neutral[900]
   },
 
   // Container & Layout
@@ -1307,8 +1367,8 @@ const styles = {
   // Sidebar Styles
   sidebar: {
     width: '280px',
-    backgroundColor: theme.colors.neutral[800],
-    borderRight: `1px solid ${theme.colors.neutral[700]}`,
+    backgroundColor: '#ffffff',
+    borderRight: `1px solid ${theme.colors.neutral[200]}`,
     display: 'flex',
     flexDirection: 'column',
     position: 'sticky',
@@ -1334,7 +1394,7 @@ const styles = {
     cursor: 'pointer',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[300],
+    color: theme.colors.neutral[600],
     textAlign: 'left',
     borderRadius: theme.borderRadius.lg,
     transition: theme.transitions.default,
@@ -1343,8 +1403,8 @@ const styles = {
   },
 
   menuItemActive: {
-    backgroundColor: theme.colors.primary[600],
-    color: '#ffffff',
+    backgroundColor: theme.colors.primary[50],
+    color: theme.colors.primary[700],
     fontWeight: theme.typography.fontWeight.semibold
   },
 
@@ -1667,135 +1727,6 @@ const styles = {
     borderRadius: theme.borderRadius.xl,
     height: '200px',
     animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-  },
-
-  // Settings Styles
-  settingsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-    gap: theme.spacing.xl
-  },
-
-  settingsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`
-  },
-
-  settingsCardTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.lg} 0`
-  },
-
-  settingsForm: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.spacing.lg
-  },
-
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.spacing.sm
-  },
-
-  formLabel: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[700]
-  },
-
-  formInput: {
-    padding: theme.spacing.md,
-    border: `1px solid ${theme.colors.neutral[300]}`,
-    borderRadius: theme.borderRadius.lg,
-    fontSize: theme.typography.fontSize.sm,
-    backgroundColor: '#ffffff',
-    transition: theme.transitions.default,
-    outline: 'none'
-  },
-
-  toggleGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.spacing.lg
-  },
-
-  toggleItem: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.neutral[50],
-    borderRadius: theme.borderRadius.lg,
-    border: `1px solid ${theme.colors.neutral[200]}`
-  },
-
-  toggleLabel: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[900],
-    display: 'block'
-  },
-
-  toggleDescription: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral[500],
-    display: 'block',
-    marginTop: theme.spacing.xs
-  },
-
-  toggle: {
-    position: 'relative',
-    display: 'inline-block',
-    width: '44px',
-    height: '24px'
-  },
-
-  toggleSlider: {
-    position: 'absolute',
-    cursor: 'pointer',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: theme.colors.neutral[300],
-    transition: theme.transitions.default,
-    borderRadius: '24px'
-  },
-
-  securityActions: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.spacing.lg
-  },
-
-  securityAction: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.neutral[50],
-    borderRadius: theme.borderRadius.lg,
-    border: `1px solid ${theme.colors.neutral[200]}`
-  },
-
-  securityActionTitle: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[900],
-    display: 'block'
-  },
-
-  securityActionDescription: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral[500],
-    display: 'block',
-    marginTop: theme.spacing.xs
   }
 };
 
@@ -1805,65 +1736,6 @@ styleSheet.textContent = `
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-  }
-  
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-  
-  /* Toggle Switch Styles */
-  input[type="checkbox"] {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-  
-  input:checked + .toggle-slider {
-    background-color: #4f46e5 !important;
-  }
-  
-  input:checked + .toggle-slider:before {
-    transform: translateX(20px);
-  }
-  
-  .toggle-slider:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.3s;
-    border-radius: 50%;
-  }
-  
-  /* Hover effects for menu items */
-  .menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
-  }
-  
-  .menu-item.active:hover {
-    background-color: #4338ca !important;
-  }
-  
-  /* Form input focus styles */
-  .form-input:focus {
-    border-color: #4f46e5 !important;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
-  }
-  
-  /* Search input placeholder */
-  .search-input::placeholder {
-    color: #9ca3af;
-  }
-  
-  /* Notification icon hover */
-  .notification-icon:hover {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
   }
   
   @media (max-width: 768px) {

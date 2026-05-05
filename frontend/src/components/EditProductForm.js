@@ -2,6 +2,9 @@ import { useState, useRef } from 'react';
 import Button from './ui/Button';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_BASE = process.env.REACT_APP_API_URL
+  ? process.env.REACT_APP_API_URL.replace('/api', '')
+  : 'http://localhost:8000';
 
 const UNITS = [
   'Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)',
@@ -9,19 +12,25 @@ const UNITS = [
   'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans',
 ];
 
-const EMPTY = {
-  name: '', sku: '', barcode: '', unit: '',
-  category_id: '', new_category: '', category_mode: 'existing',
-  supplier_id: '',
-  stock: '', cost_price: '', price: '', reorder_level: '',
-  description: '', track_expiry: false,
-  manufacture_date: '', expiry_date: '',
-};
-
-export default function AddProductForm({ token, categories, suppliers, onSuccess, onCancel }) {
-  const [form, setForm]       = useState(EMPTY);
+export default function EditProductForm({ token, product, categories, suppliers, onSuccess, onCancel }) {
+  const [form, setForm] = useState({
+    name:             product.name || '',
+    sku:              product.sku || '',
+    barcode:          product.barcode || '',
+    unit:             product.unit || '',
+    category_id:      product.category_id || '',
+    supplier_id:      product.supplier_id || '',
+    stock:            product.stock ?? '',
+    cost_price:       product.cost_price ?? '',
+    price:            product.price ?? '',
+    reorder_level:    product.reorder_level ?? '',
+    description:      product.description || '',
+    track_expiry:     !!product.track_expiry,
+    manufacture_date: product.manufacture_date || '',
+    expiry_date:      product.expiry_date || '',
+  });
   const [image, setImage]     = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(product.image_path ? `${API_BASE}/storage/${product.image_path}` : null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
   const fileRef               = useRef();
@@ -44,10 +53,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     setError(null);
 
     const fd = new FormData();
+    fd.append('_method',       'PUT');
     fd.append('name',          form.name);
     fd.append('sku',           form.sku);
     fd.append('barcode',       form.barcode);
     fd.append('unit',          form.unit);
+    fd.append('category_id',   form.category_id);
     fd.append('supplier_id',   form.supplier_id);
     fd.append('stock',         form.stock);
     fd.append('cost_price',    form.cost_price);
@@ -59,18 +70,11 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       fd.append('manufacture_date', form.manufacture_date);
       fd.append('expiry_date',      form.expiry_date);
     }
-
-    if (form.category_mode === 'existing') {
-      fd.append('category_id', form.category_id);
-    } else {
-      fd.append('new_category', form.new_category);
-    }
-
     if (image) fd.append('image', image);
 
     try {
-      const res = await fetch(`${API}/products`, {
-        method: 'POST',
+      const res = await fetch(`${API}/products/${product.id}`, {
+        method: 'POST', // Laravel requires POST + _method=PUT for multipart
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
         body: fd,
       });
@@ -78,7 +82,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       if (!res.ok) { setError(data?.message || `Error ${res.status}`); }
       else { onSuccess(data.data); }
     } catch {
-      setError('Failed to add product. Check your connection.');
+      setError('Failed to update product. Check your connection.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +91,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
   return (
     <form onSubmit={submit} style={s.form}>
 
-      {/* ── Row 1: Name + SKU ── */}
+      {/* Row 1: Name + SKU */}
       <div style={s.row}>
         <Field label="Product Name *">
           <input style={s.input} name="name" placeholder="e.g. Paracetamol 500mg"
@@ -99,7 +103,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </Field>
       </div>
 
-      {/* ── Row 2: Barcode + Unit ── */}
+      {/* Row 2: Barcode + Unit */}
       <div style={s.row}>
         <Field label="Barcode (optional)">
           <input style={s.input} name="barcode" placeholder="Scan or type barcode"
@@ -113,30 +117,15 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </Field>
       </div>
 
-      {/* ── Category ── */}
+      {/* Category */}
       <Field label="Category">
-        <div style={s.segmented}>
-          {['existing', 'new'].map(m => (
-            <button key={m} type="button"
-              style={{ ...s.seg, ...(form.category_mode === m ? s.segActive : {}) }}
-              onClick={() => setForm(f => ({ ...f, category_mode: m }))}>
-              {m === 'existing' ? '📂 Existing' : '➕ New category'}
-            </button>
-          ))}
-        </div>
-        {form.category_mode === 'existing' ? (
-          <select style={{ ...s.input, marginTop: 8 }} name="category_id"
-            value={form.category_id} onChange={handle}>
-            <option value="">— Select category —</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        ) : (
-          <input style={{ ...s.input, marginTop: 8 }} name="new_category"
-            placeholder="Type new category name" value={form.new_category} onChange={handle} />
-        )}
+        <select style={s.input} name="category_id" value={form.category_id} onChange={handle}>
+          <option value="">— Select category —</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
       </Field>
 
-      {/* ── Supplier (optional) ── */}
+      {/* Supplier */}
       <Field label="Supplier (optional)">
         <select style={s.input} name="supplier_id" value={form.supplier_id} onChange={handle}>
           <option value="">— No supplier —</option>
@@ -144,7 +133,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </select>
       </Field>
 
-      {/* ── Row 3: Qty + Reorder ── */}
+      {/* Row 3: Qty + Reorder */}
       <div style={s.row}>
         <Field label="Quantity *">
           <input style={s.input} name="stock" type="number" min="0"
@@ -156,7 +145,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </Field>
       </div>
 
-      {/* ── Row 4: Cost + Selling price ── */}
+      {/* Row 4: Cost + Selling price */}
       <div style={s.row}>
         <Field label="Cost Price">
           <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
@@ -168,14 +157,14 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </Field>
       </div>
 
-      {/* ── Description ── */}
+      {/* Description */}
       <Field label="Description">
         <textarea style={{ ...s.input, minHeight: 72, resize: 'vertical' }}
           name="description" placeholder="Optional product description…"
           value={form.description} onChange={handle} />
       </Field>
 
-      {/* ── Product image ── */}
+      {/* Product image */}
       <Field label="Product Image (optional)">
         <div style={s.imageArea} onClick={() => fileRef.current.click()}>
           {preview
@@ -197,7 +186,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         )}
       </Field>
 
-      {/* ── Track expiry toggle ── */}
+      {/* Track expiry toggle */}
       <label style={s.toggle}>
         <div style={{ ...s.toggleTrack, background: form.track_expiry ? '#4f46e5' : '#e2e8f0' }}>
           <div style={{ ...s.toggleThumb, transform: form.track_expiry ? 'translateX(20px)' : 'translateX(2px)' }} />
@@ -210,7 +199,6 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </div>
       </label>
 
-      {/* ── Expiry date fields (shown when track_expiry is on) ── */}
       {form.track_expiry && (
         <div style={s.expiryBox}>
           <div style={s.row}>
@@ -229,13 +217,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
 
       {error && <div style={s.error}>⚠️ {error}</div>}
 
-      {/* ── Footer ── */}
       <div style={s.footer}>
         <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
           Cancel
         </Button>
-        <Button type="submit" variant="success" loading={loading} style={{ flex: 1 }}>
-          {loading ? 'Saving…' : 'Add Product'}
+        <Button type="submit" variant="primary" loading={loading} style={{ flex: 1 }}>
+          {loading ? 'Saving…' : 'Save Changes'}
         </Button>
       </div>
     </form>
@@ -259,22 +246,11 @@ const s = {
     padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
     boxSizing: 'border-box', background: '#fff', color: '#0f172a',
-    transition: 'border-color 0.2s',
   },
-  // Category segmented control
-  segmented: { display: 'flex', gap: 6 },
-  seg: {
-    flex: 1, padding: '7px 10px', border: '1.5px solid #e2e8f0', borderRadius: 8,
-    background: '#f8fafc', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-    transition: 'all 0.15s', color: '#64748b',
-  },
-  segActive: { background: '#ede9fe', borderColor: '#7c3aed', color: '#4f46e5', fontWeight: 600 },
-  // Image upload
   imageArea: {
     border: '2px dashed #e2e8f0', borderRadius: 10, padding: 16,
-    cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.2s',
-    background: '#f8fafc', minHeight: 100, display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', textAlign: 'center', background: '#f8fafc',
+    minHeight: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   imagePlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
   imageHint:  { fontSize: 13, color: '#64748b', fontWeight: 500 },
@@ -284,7 +260,6 @@ const s = {
     marginTop: 6, background: 'none', border: 'none', color: '#ef4444',
     fontSize: 12, cursor: 'pointer', fontWeight: 500,
   },
-  // Expiry toggle
   toggle: {
     display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
     padding: '12px 14px', background: '#f8fafc', borderRadius: 10,
@@ -301,7 +276,6 @@ const s = {
   },
   toggleLabel: { fontSize: 13, fontWeight: 600, color: '#0f172a' },
   toggleSub:   { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  // Error + footer
   error:  { padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 },
   expiryBox: {
     padding: '14px', background: '#f0fdf4', border: '1.5px solid #bbf7d0',
