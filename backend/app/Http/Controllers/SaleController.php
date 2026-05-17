@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Product;
+use App\Models\Customer;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -28,14 +29,35 @@ class SaleController extends Controller
             'items.*.product_id'     => 'required|exists:products,id',
             'items.*.quantity'       => 'required|integer|min:1',
             'items.*.price'          => 'required|numeric|min:0',
+            'customer_type'          => 'nullable|in:walk_in,existing,new',
+            'customer_id'            => 'nullable|exists:customers,id',
+            'new_customer.name'      => 'required_if:customer_type,new|nullable|string|max:255',
+            'new_customer.phone'     => 'nullable|string|max:20',
+            'new_customer.email'     => 'nullable|email|max:255',
         ]);
 
         try {
-            return DB::transaction(function () use ($validated) {
+            return DB::transaction(function () use ($validated, $request) {
+                $customerId = null;
+
+                if (($validated['customer_type'] ?? null) === 'new' && !empty($validated['new_customer']['name'])) {
+                    $customer = Customer::create([
+                        'tenant_id' => Auth::user()->tenant_id,
+                        'name'      => $validated['new_customer']['name'],
+                        'phone'     => $validated['new_customer']['phone'] ?? null,
+                        'email'     => $validated['new_customer']['email'] ?? null,
+                        'status'    => 'active',
+                    ]);
+                    $customerId = $customer->id;
+                } elseif (($validated['customer_type'] ?? null) === 'existing') {
+                    $customerId = $validated['customer_id'] ?? null;
+                }
+
                 $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
 
                 $sale = Sale::create([
                     'user_id'        => Auth::id(),
+                    'customer_id'    => $customerId,
                     'total_amount'   => $totalAmount,
                     'payment_method' => $validated['payment_method'],
                     'sale_date'      => now(),

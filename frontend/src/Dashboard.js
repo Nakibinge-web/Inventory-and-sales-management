@@ -18,6 +18,7 @@ export default function Dashboard({ user, token, onLogout }) {
     products: [],
     categories: [],
     suppliers: [],
+    customers: [],
     sales: [],
     purchases: [],
     lowStock: [],
@@ -42,10 +43,11 @@ export default function Dashboard({ user, token, onLogout }) {
         'Accept': 'application/json'
       };
 
-      const [productsRes, categoriesRes, suppliersRes, salesRes, purchasesRes, lowStockRes] = await Promise.all([
+      const [productsRes, categoriesRes, suppliersRes, customersRes, salesRes, purchasesRes, lowStockRes] = await Promise.all([
         fetch(`${API}/products?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/categories?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/suppliers?tenant_id=${user.tenant_id}`, { headers }),
+        fetch(`${API}/customers?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/sales?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/purchases?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/products/low-stock?tenant_id=${user.tenant_id}`, { headers })
@@ -54,6 +56,7 @@ export default function Dashboard({ user, token, onLogout }) {
       const products = await productsRes.json();
       const categories = await categoriesRes.json();
       const suppliers = await suppliersRes.json();
+      const customers = await customersRes.json();
       const sales = await salesRes.json();
       const purchases = await purchasesRes.json();
       const lowStock = await lowStockRes.json();
@@ -62,6 +65,7 @@ export default function Dashboard({ user, token, onLogout }) {
         products: products.data || [],
         categories: categories.data || [],
         suppliers: suppliers.data || [],
+        customers: customers.data || [],
         sales: sales.data || [],
         purchases: purchases.data || [],
         lowStock: lowStock.data || [],
@@ -97,13 +101,15 @@ export default function Dashboard({ user, token, onLogout }) {
   }, [fetchData]);
 
   const menuItems = [
-    { id: 'overview', label: 'Overview', icon: '📊', color: 'primary' },
-    { id: 'products', label: 'Products', icon: '📦', color: 'success' },
-    { id: 'categories', label: 'Categories', icon: '🏷️', color: 'warning' },
-    { id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' },
-    { id: 'sales', label: 'Sales', icon: '💰', color: 'success' },
-    { id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' },
-    { id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }
+    { id: 'overview',    label: 'Overview',    icon: '📊', color: 'primary' },
+    { id: 'pos',         label: 'POS',         icon: '🖥️', color: 'success' },
+    { id: 'products',    label: 'Products',    icon: '📦', color: 'success' },
+    { id: 'categories',  label: 'Categories',  icon: '🏷️', color: 'warning' },
+    { id: 'suppliers',   label: 'Suppliers',   icon: '🏭', color: 'neutral' },
+    { id: 'customers',   label: 'Customers',   icon: '👥', color: 'primary' },
+    { id: 'sales',       label: 'Sales',       icon: '💰', color: 'success' },
+    { id: 'purchases',   label: 'Purchases',   icon: '🛒', color: 'primary' },
+    { id: 'reports',     label: 'Reports',     icon: '📈', color: 'danger' }
   ];
 
   if (loading) {
@@ -150,7 +156,11 @@ export default function Dashboard({ user, token, onLogout }) {
             </div>
             <div style={styles.userDetails}>
               <span style={styles.userName}>{user.name}</span>
-              <Badge variant="neutral" size="sm">{user.role}</Badge>
+              <span style={styles.userRole}>
+                {user.roles && user.roles.length > 0 
+                  ? user.roles.map(r => r.name).join(', ')
+                  : 'No role'}
+              </span>
             </div>
           </div>
           <Button variant="danger" size="sm" onClick={onLogout}>
@@ -193,6 +203,27 @@ export default function Dashboard({ user, token, onLogout }) {
           )}
 
           {activeTab === 'overview' && <OverviewTab data={data} loading={loading} />}
+          {activeTab === 'pos' && (
+            <POSTab
+              products={data.products}
+              customers={data.customers}
+              token={token}
+              user={user}
+              onSaleCompleted={(sale) => {
+                setData(prev => ({
+                  ...prev,
+                  sales: [sale, ...prev.sales],
+                  stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
+                  // update stock levels from the completed sale
+                  products: prev.products.map(p => {
+                    const item = sale.sale_items?.find(i => i.product_id === p.id)
+                               || sale.saleItems?.find(i => i.product_id === p.id);
+                    return item ? { ...p, stock: p.stock - item.quantity } : p;
+                  })
+                }));
+              }}
+            />
+          )}
           {activeTab === 'products' && (
             <ProductsTab
               products={data.products}
@@ -215,10 +246,23 @@ export default function Dashboard({ user, token, onLogout }) {
               loading={loading}
               token={token}
               onCategoryAdded={cat => setData(prev => ({ ...prev, categories: [...prev.categories, cat] }))}
+              onCategoryUpdated={cat => setData(prev => ({ ...prev, categories: prev.categories.map(c => c.id === cat.id ? cat : c) }))}
+              onCategoryDeleted={id => setData(prev => ({ ...prev, categories: prev.categories.filter(c => c.id !== id) }))}
             />
           )}
           {activeTab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} loading={loading} />}
-          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} />}
+          {activeTab === 'customers' && (
+            <CustomersTab
+              customers={data.customers}
+              loading={loading}
+              token={token}
+              user={user}
+              onCustomerAdded={customer => setData(prev => ({ ...prev, customers: [...prev.customers, customer] }))}
+              onCustomerUpdated={customer => setData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === customer.id ? customer : c) }))}
+              onCustomerDeleted={id => setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }))}
+            />
+          )}
+          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} />}
           {activeTab === 'purchases' && <PurchasesTab purchases={data.purchases} loading={loading} />}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} />}
         </main>
@@ -839,32 +883,39 @@ const fS = {
 };
 
 // Categories Tab Component
-function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm]           = useState({ name: '', description: '' });
-  const [saving, setSaving]       = useState(false);
-  const [formError, setFormError] = useState(null);
+function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategoryUpdated, onCategoryDeleted }) {
+  const [showAddModal, setShowAddModal]       = useState(false);
+  const [editingCat, setEditingCat]           = useState(null);
+  const [deletingCat, setDeletingCat]         = useState(null);
+  const [form, setForm]                       = useState({ name: '', description: '' });
+  const [saving, setSaving]                   = useState(false);
+  const [deleteLoading, setDeleteLoading]     = useState(false);
+  const [formError, setFormError]             = useState(null);
+  const [deleteError, setDeleteError]         = useState(null);
+
+  const openAdd  = () => { setForm({ name: '', description: '' }); setFormError(null); setShowAddModal(true); };
+  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setEditingCat(cat); };
 
   const handleSubmit = async e => {
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+    const isEdit = !!editingCat;
     try {
-      const res = await fetch(`${API}/categories`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(form),
-      });
+      const res = await fetch(
+        isEdit ? `${API}/categories/${editingCat.id}` : `${API}/categories`,
+        {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(form),
+        }
+      );
       const data = await res.json();
       if (!res.ok) { setFormError(data?.message || `Error ${res.status}`); }
       else {
-        onCategoryAdded(data.data);
+        if (isEdit) { onCategoryUpdated(data.data); setEditingCat(null); }
+        else        { onCategoryAdded(data.data);   setShowAddModal(false); }
         setForm({ name: '', description: '' });
-        setShowModal(false);
       }
     } catch {
       setFormError('Failed to save. Check your connection.');
@@ -873,7 +924,62 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
     }
   };
 
-  const openModal = () => { setForm({ name: '', description: '' }); setFormError(null); setShowModal(true); };
+  const handleDelete = async () => {
+    if (!deletingCat) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`${API}/categories/${deletingCat.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+      });
+      if (res.ok) {
+        onCategoryDeleted(deletingCat.id);
+        setDeletingCat(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data?.message || 'Failed to delete category.');
+      }
+    } catch {
+      setDeleteError('Error deleting category. Check your connection.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const categoryFormJsx = (onCancel) => (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label style={catS.label}>Category Name *</label>
+        <input
+          style={catS.input}
+          placeholder="e.g. Electronics"
+          value={form.name}
+          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          required
+          autoFocus
+        />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label style={catS.label}>Description (optional)</label>
+        <textarea
+          style={{ ...catS.input, minHeight: 80, resize: 'vertical' }}
+          placeholder="Brief description of this category…"
+          value={form.description}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+        />
+      </div>
+      {formError && <div style={catS.error}>⚠️ {formError}</div>}
+      <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+        <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+          {saving ? 'Saving…' : editingCat ? 'Save Changes' : 'Add Category'}
+        </Button>
+      </div>
+    </form>
+  );
 
   return (
     <div style={styles.pageContainer}>
@@ -882,7 +988,7 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
           <h1 style={styles.pageTitle}>Categories</h1>
           <p style={styles.pageSubtitle}>Organize your products into logical groups</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openModal}>
+        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
           Add Category
         </Button>
       </div>
@@ -900,7 +1006,7 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
             title="No categories yet"
             description="Create categories to organize your products better."
             actionLabel="Add First Category"
-            onAction={openModal}
+            onAction={openAdd}
           />
         </div>
       ) : (
@@ -912,10 +1018,24 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
               <p style={styles.categoryDescription}>
                 {category.description || 'No description provided'}
               </p>
-              <div style={styles.categoryFooter}>
+              <div style={{ ...styles.categoryFooter, justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={styles.categoryDate}>
                   Created {new Date(category.created_at).toLocaleDateString()}
                 </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => openEdit(category)}
+                    style={catS.editBtn}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => { setDeleteError(null); setDeletingCat(category); }}
+                    style={catS.deleteBtn}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -923,37 +1043,54 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded }) {
       )}
 
       {/* Add Category Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add New Category" size="sm">
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={catS.label}>Category Name *</label>
-            <input
-              style={catS.input}
-              placeholder="e.g. Electronics"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required
-            />
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Category" size="sm">
+        {categoryFormJsx(() => setShowAddModal(false))}
+      </Modal>
+
+      {/* Edit Category Modal */}
+      <Modal isOpen={!!editingCat} onClose={() => setEditingCat(null)} title="Edit Category" size="sm">
+        {categoryFormJsx(() => setEditingCat(null))}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deletingCat}
+        onClose={() => { setDeletingCat(null); setDeleteError(null); }}
+        title="Delete Category"
+        size="sm"
+      >
+        {deletingCat && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '14px 16px', background: '#fef2f2',
+              border: '1px solid #fecaca', borderRadius: 10
+            }}>
+              <span style={{ fontSize: 28 }}>🗑️</span>
+              <div>
+                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 15 }}>{deletingCat.name}</div>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                  This will permanently delete the category. Products in this category will not be deleted.
+                </div>
+              </div>
+            </div>
+            {deleteError && (
+              <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                ⚠️ {deleteError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Button type="button" variant="secondary"
+                onClick={() => { setDeletingCat(null); setDeleteError(null); }}
+                style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button type="button" variant="danger" loading={deleteLoading} onClick={handleDelete} style={{ flex: 1 }}>
+                {deleteLoading ? 'Deleting…' : 'Delete Category'}
+              </Button>
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={catS.label}>Description (optional)</label>
-            <textarea
-              style={{ ...catS.input, minHeight: 80, resize: 'vertical' }}
-              placeholder="Brief description of this category…"
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-          {formError && <div style={catS.error}>⚠️ {formError}</div>}
-          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
-              {saving ? 'Saving…' : 'Add Category'}
-            </Button>
-          </div>
-        </form>
+        )}
       </Modal>
     </div>
   );
@@ -969,6 +1106,14 @@ const catS = {
   error: {
     padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
     borderRadius: 8, color: '#b91c1c', fontSize: 13,
+  },
+  editBtn: {
+    padding: '4px 10px', borderRadius: 6, border: '1px solid #3b82f6',
+    background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+  },
+  deleteBtn: {
+    padding: '4px 10px', borderRadius: 6, border: '1px solid #ef4444',
+    background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontWeight: 500,
   },
 };
 
@@ -1032,24 +1177,617 @@ function SuppliersTab({ suppliers, loading }) {
   );
 }
 
+// Customers Tab Component
+function CustomersTab({ customers, loading, token, user, onCustomerAdded, onCustomerUpdated, onCustomerDeleted }) {
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  const [showModal, setShowModal]   = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm]             = useState({ name: '', phone: '', email: '', status: 'active' });
+  const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState(null);
+
+  const openAdd = () => {
+    setEditTarget(null);
+    setForm({ name: '', phone: '', email: '', status: 'active' });
+    setError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (customer) => {
+    setEditTarget(customer);
+    setForm({ name: customer.name, phone: customer.phone || '', email: customer.email || '', status: customer.status });
+    setError(null);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (customer) => {
+    if (!window.confirm(`Delete customer "${customer.name}"?`)) return;
+    try {
+      const res = await fetch(`${API}/customers/${customer.id}?tenant_id=${user.tenant_id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete customer');
+      onCustomerDeleted(customer.id);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const isEdit = !!editTarget;
+      const url    = isEdit ? `${API}/customers/${editTarget.id}` : `${API}/customers`;
+      const res    = await fetch(url, {
+        method:  isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to save customer');
+      isEdit ? onCustomerUpdated(json.data) : onCustomerAdded(json.data);
+      setShowModal(false);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>Customers</h1>
+          <p style={styles.pageSubtitle}>Manage your customer records and contacts</p>
+        </div>
+        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
+          Add Customer
+        </Button>
+      </div>
+
+      {loading ? (
+        <div style={styles.cardsGrid}>
+          {[...Array(6)].map((_, i) => <div key={i} style={styles.skeletonCard}></div>)}
+        </div>
+      ) : customers.length === 0 ? (
+        <div style={styles.contentCard}>
+          <EmptyState
+            icon="👥"
+            title="No customers yet"
+            description="Add customers to keep track of who you sell to."
+            actionLabel="Add First Customer"
+            onAction={openAdd}
+          />
+        </div>
+      ) : (
+        <div style={styles.cardsGrid}>
+          {customers.map(customer => (
+            <div key={customer.id} style={styles.supplierCard}>
+              <div style={styles.supplierHeader}>
+                <div style={styles.supplierIcon}>👤</div>
+                <h3 style={styles.supplierName}>{customer.name}</h3>
+              </div>
+              <div style={styles.supplierDetails}>
+                <div style={styles.supplierDetail}>
+                  <span style={styles.supplierDetailIcon}>📞</span>
+                  <span>{customer.phone || 'No phone'}</span>
+                </div>
+                <div style={styles.supplierDetail}>
+                  <span style={styles.supplierDetailIcon}>📧</span>
+                  <span>{customer.email || 'No email'}</span>
+                </div>
+                <div style={styles.supplierDetail}>
+                  <span style={styles.supplierDetailIcon}>🔖</span>
+                  <span style={{ textTransform: 'capitalize' }}>{customer.status}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <Button variant="secondary" onClick={() => openEdit(customer)}>Edit</Button>
+                <Button variant="danger" onClick={() => handleDelete(customer)}>Delete</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit Customer Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editTarget ? 'Edit Customer' : 'Add Customer'}
+        size="sm"
+      >
+        <form onSubmit={handleSubmit}>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Name *</label>
+            <input
+              style={styles.formInput}
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Phone</label>
+            <input
+              style={styles.formInput}
+              value={form.phone}
+              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Email</label>
+            <input
+              type="email"
+              style={styles.formInput}
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Status</label>
+            <select
+              style={styles.formInput}
+              value={form.status}
+              onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          {error && <p style={{ color: 'red', marginBottom: '12px' }}>{error}</p>}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+// POS Tab Component
+function POSTab({ products, customers, token, user, onSaleCompleted }) {
+  const [search, setSearch]           = useState('');
+  const [cart, setCart]               = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [submitting, setSubmitting]   = useState(false);
+  const [saleError, setSaleError]     = useState(null);
+  const [lastReceipt, setLastReceipt] = useState(null);
+
+  // Customer selection state
+  const [customerType, setCustomerType]         = useState('walk_in');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [customerSearch, setCustomerSearch]     = useState('');
+  const [newCustomer, setNewCustomer]           = useState({ name: '', phone: '', email: '' });
+
+  const inStockProducts = products.filter(p => Number(p.stock) > 0);
+
+  const filtered = inStockProducts.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    (p.sku || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const addToCart = (product) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.product_id === product.id);
+      if (existing) {
+        if (existing.quantity >= product.stock) return prev; // cap at available stock
+        return prev.map(i => i.product_id === product.id
+          ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.price }
+          : i
+        );
+      }
+      return [...prev, {
+        product_id: product.id,
+        name: product.name,
+        price: parseFloat(product.price),
+        quantity: 1,
+        subtotal: parseFloat(product.price),
+        maxStock: product.stock,
+      }];
+    });
+  };
+
+  const updateQty = (product_id, qty) => {
+    const n = parseInt(qty, 10);
+    if (isNaN(n) || n < 1) return;
+    setCart(prev => prev.map(i => i.product_id === product_id
+      ? { ...i, quantity: Math.min(n, i.maxStock), subtotal: Math.min(n, i.maxStock) * i.price }
+      : i
+    ));
+  };
+
+  const removeFromCart = (product_id) => setCart(prev => prev.filter(i => i.product_id !== product_id));
+
+  const cartTotal = cart.reduce((sum, i) => sum + i.subtotal, 0);
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    setSubmitting(true);
+    setSaleError(null);
+    try {
+      const res = await fetch(`${API}/sales`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          payment_method: paymentMethod,
+          items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, price: i.price })),
+          customer_type: customerType,
+          ...(customerType === 'existing' && selectedCustomerId ? { customer_id: parseInt(selectedCustomerId) } : {}),
+          ...(customerType === 'new' ? { new_customer: newCustomer } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSaleError(data?.message || 'Checkout failed.'); return; }
+      setLastReceipt({ ...data.data, cartSnapshot: cart, paymentMethod });
+      onSaleCompleted(data.data);
+      setCart([]);
+      setSearch('');
+      setCustomerType('walk_in');
+      setSelectedCustomerId('');
+      setNewCustomer({ name: '', phone: '', email: '' });
+      setCustomerSearch('');
+    } catch {
+      setSaleError('Network error. Check your connection.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (lastReceipt) {
+    return (
+      <div style={styles.pageContainer}>
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 52 }}>✅</div>
+            <h2 style={{ margin: '8px 0 4px', color: '#065f46', fontSize: 22 }}>Sale Complete!</h2>
+            <p style={{ color: '#64748b', fontSize: 14 }}>Transaction recorded successfully</p>
+          </div>
+
+          {/* Receipt */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 12, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{user.tenant?.name || 'InventoryPro'}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>{new Date().toLocaleString()}</div>
+            </div>
+            {lastReceipt.cartSnapshot.map(item => (
+              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '4px 0' }}>
+                <span>{item.name} × {item.quantity}</span>
+                <span style={{ fontWeight: 600 }}>UGX {item.subtotal.toLocaleString()}</span>
+              </div>
+            ))}
+            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
+              <span>Total</span>
+              <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right' }}>
+              Payment: <strong>{lastReceipt.paymentMethod.replace('_', ' ')}</strong>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button variant="secondary" style={{ flex: 1 }} onClick={() => setLastReceipt(null)}>
+              New Sale
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>Point of Sale</h1>
+          <p style={styles.pageSubtitle}>Search products, build a cart, and process payment</p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, alignItems: 'start' }}>
+
+        {/* Left — product search & grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <input
+            style={posS.searchInput}
+            placeholder="🔍  Search products by name or SKU…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
+              <div style={{ fontSize: 36 }}>📦</div>
+              <div style={{ marginTop: 8 }}>{search ? 'No products match your search' : 'No products in stock'}</div>
+            </div>
+          ) : (
+            <div style={posS.productGrid}>
+              {filtered.map(p => (
+                <button key={p.id} style={posS.productCard} onClick={() => addToCart(p)}>
+                  <div style={posS.productEmoji}>📦</div>
+                  <div style={posS.productName}>{p.name}</div>
+                  {p.sku && <div style={posS.productSku}>{p.sku}</div>}
+                  <div style={posS.productPrice}>UGX {parseFloat(p.price).toLocaleString()}</div>
+                  <div style={posS.productStock}>Stock: {p.stock}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right column — customer card + cart card */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20 }}>
+
+          {/* Customer Card */}
+          <div style={posS.cartPanel}>
+            <div style={posS.cartHeader}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>👤 Customer <span style={{ fontWeight: 400, fontSize: 12, color: '#94a3b8' }}>(Optional)</span></span>
+            </div>
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {['walk_in', 'existing', 'new'].map(type => (
+                <label
+                  key={type}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: `1.5px solid ${customerType === type ? '#16a34a' : '#e2e8f0'}`,
+                    background: customerType === type ? '#f0fdf4' : '#fff',
+                    transition: 'border-color 0.15s, background 0.15s',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="customerType"
+                    value={type}
+                    checked={customerType === type}
+                    onChange={() => { setCustomerType(type); setSelectedCustomerId(''); setCustomerSearch(''); setNewCustomer({ name: '', phone: '', email: '' }); }}
+                    style={{ accentColor: '#16a34a', width: 16, height: 16 }}
+                  />
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
+                    {type === 'walk_in' ? 'Walk-in Customer' : type === 'existing' ? 'Existing Customer' : 'New Customer'}
+                  </span>
+                </label>
+              ))}
+
+              {customerType === 'existing' && (
+                <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input
+                    style={posS.searchInput}
+                    placeholder="Search by name or phone…"
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                  />
+                  <select
+                    style={posS.select}
+                    value={selectedCustomerId}
+                    onChange={e => setSelectedCustomerId(e.target.value)}
+                  >
+                    <option value="">— Select customer —</option>
+                    {(customers || [])
+                      .filter(c => c.status === 'active' && (
+                        !customerSearch ||
+                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                        (c.phone || '').includes(customerSearch)
+                      ))
+                      .map(c => (
+                        <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>
+                      ))
+                    }
+                  </select>
+                </div>
+              )}
+
+              {customerType === 'new' && (
+                <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    style={posS.searchInput}
+                    placeholder="Name *"
+                    value={newCustomer.name}
+                    onChange={e => setNewCustomer(p => ({ ...p, name: e.target.value }))}
+                  />
+                  <input
+                    style={posS.searchInput}
+                    placeholder="Phone"
+                    value={newCustomer.phone}
+                    onChange={e => setNewCustomer(p => ({ ...p, phone: e.target.value }))}
+                  />
+                  <input
+                    style={posS.searchInput}
+                    placeholder="Email"
+                    type="email"
+                    value={newCustomer.email}
+                    onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cart Card */}
+          <div style={posS.cartPanel}>
+            <div style={posS.cartHeader}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>🛒 Cart</span>
+              {cart.length > 0 && (
+                <button style={posS.clearBtn} onClick={() => setCart([])}>Clear all</button>
+              )}
+            </div>
+
+            {cart.length === 0 ? (
+              <div style={posS.emptyCart}>
+                <div style={{ fontSize: 32 }}>🛒</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 8 }}>Tap a product to add it</div>
+              </div>
+            ) : (
+              <div style={posS.cartItems}>
+                {cart.map(item => (
+                  <div key={item.product_id} style={posS.cartItem}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={posS.cartItemName}>{item.name}</div>
+                      <div style={posS.cartItemPrice}>UGX {item.price.toLocaleString()} each</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity - 1)}>−</button>
+                      <input
+                        style={posS.qtyInput}
+                        type="number"
+                        min={1}
+                        max={item.maxStock}
+                        value={item.quantity}
+                        onChange={e => updateQty(item.product_id, e.target.value)}
+                      />
+                      <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity + 1)}>+</button>
+                      <button style={posS.removeBtn} onClick={() => removeFromCart(item.product_id)}>✕</button>
+                    </div>
+                    <div style={posS.cartItemSubtotal}>UGX {item.subtotal.toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={posS.cartFooter}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontWeight: 700, fontSize: 18 }}>Total</span>
+                <span style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>UGX {cartTotal.toLocaleString()}</span>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={posS.label}>Payment Method</label>
+                <select style={posS.select} value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                  <option value="cash">💵 Cash</option>
+                  <option value="card">💳 Card</option>
+                  <option value="mobile_money">📱 Mobile Money</option>
+                  <option value="bank_transfer">🏦 Bank Transfer</option>
+                </select>
+              </div>
+
+              {saleError && (
+                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13, marginBottom: 10 }}>
+                  ⚠️ {saleError}
+                </div>
+              )}
+
+              <Button
+                variant="success"
+                style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px' }}
+                loading={submitting}
+                onClick={handleCheckout}
+                disabled={cart.length === 0}
+              >
+                {submitting ? 'Processing…' : '✅ Complete Sale'}
+              </Button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const posS = {
+  searchInput: {
+    padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
+    fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
+    boxSizing: 'border-box', background: '#fff',
+  },
+  productGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+    gap: 12,
+  },
+  productCard: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+    padding: '14px 10px', border: '1.5px solid #e2e8f0', borderRadius: 12,
+    background: '#fff', cursor: 'pointer', textAlign: 'center',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  },
+  productEmoji: { fontSize: 28 },
+  productName:  { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 },
+  productSku:   { fontSize: 11, color: '#94a3b8' },
+  productPrice: { fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 2 },
+  productStock: { fontSize: 11, color: '#64748b' },
+  cartPanel: {
+    background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14,
+    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+  },
+  cartHeader: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '14px 16px', borderBottom: '1px solid #f1f5f9',
+  },
+  clearBtn: {
+    background: 'none', border: 'none', color: '#ef4444', fontSize: 12,
+    cursor: 'pointer', fontWeight: 500,
+  },
+  emptyCart: {
+    padding: '40px 20px', textAlign: 'center', color: '#94a3b8',
+  },
+  cartItems: {
+    display: 'flex', flexDirection: 'column', gap: 0,
+    maxHeight: 340, overflowY: 'auto',
+  },
+  cartItem: {
+    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+    padding: '10px 16px', borderBottom: '1px solid #f8fafc',
+  },
+  cartItemName:     { fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  cartItemPrice:    { fontSize: 11, color: '#94a3b8' },
+  cartItemSubtotal: { fontSize: 13, fontWeight: 700, color: '#0f172a', marginLeft: 'auto' },
+  qtyBtn: {
+    width: 26, height: 26, borderRadius: 6, border: '1px solid #e2e8f0',
+    background: '#f8fafc', cursor: 'pointer', fontSize: 14, fontWeight: 700,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  qtyInput: {
+    width: 40, textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: 6,
+    padding: '3px 4px', fontSize: 13, fontFamily: 'inherit',
+  },
+  removeBtn: {
+    background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+    fontSize: 13, fontWeight: 700, padding: '2px 4px',
+  },
+  cartFooter: {
+    padding: '14px 16px', borderTop: '1px solid #f1f5f9',
+  },
+  label: {
+    display: 'block', fontSize: 11, fontWeight: 600, color: '#374151',
+    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6,
+  },
+  select: {
+    width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0',
+    borderRadius: 8, fontSize: 14, fontFamily: 'inherit', background: '#fff',
+    boxSizing: 'border-box',
+  },
+};
+
 // Sales Tab Component
-function SalesTab({ sales, loading }) {
+function SalesTab({ sales, loading, onNewSale }) {
   const columns = [
     { key: 'sale_date', title: 'Date', type: 'date' },
     { key: 'total_amount', title: 'Amount', type: 'currency' },
-    { 
-      key: 'payment_method', 
-      title: 'Payment Method', 
+    {
+      key: 'payment_method',
+      title: 'Payment Method',
       render: (value) => <Badge variant="success" size="sm">{value}</Badge>
     },
-    { 
-      key: 'sale_items', 
-      title: 'Items', 
+    {
+      key: 'saleItems',
+      title: 'Items',
       render: (value) => `${value?.length || 0} items`
     },
-    { 
-      key: 'user', 
-      title: 'Cashier', 
+    {
+      key: 'user',
+      title: 'Cashier',
       render: (value) => value?.name || 'N/A'
     }
   ];
@@ -1061,7 +1799,7 @@ function SalesTab({ sales, loading }) {
           <h1 style={styles.pageTitle}>Sales</h1>
           <p style={styles.pageSubtitle}>Track all your sales transactions and revenue</p>
         </div>
-        <Button variant="success" icon="+" iconPosition="left">
+        <Button variant="success" icon="+" iconPosition="left" onClick={onNewSale}>
           New Sale
         </Button>
       </div>
@@ -1076,7 +1814,7 @@ function SalesTab({ sales, loading }) {
             title: 'No sales yet',
             description: 'Start processing sales to see transaction history here.',
             actionLabel: 'Process First Sale',
-            onAction: () => console.log('New Sale')
+            onAction: onNewSale
           }}
         />
       </div>
@@ -1355,6 +2093,12 @@ const styles = {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     color: theme.colors.neutral[900]
+  },
+
+  userRole: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.neutral[600],
+    fontWeight: theme.typography.fontWeight.normal
   },
 
   // Container & Layout
