@@ -36,6 +36,7 @@ class SaleController extends Controller
             'new_customer.email'     => 'nullable|email|max:255',
             'discount_type'          => 'nullable|in:percent,fixed',
             'discount_amount'        => 'nullable|numeric|min:0',
+            'tax_amount'             => 'nullable|numeric|min:0',
         ]);
 
         try {
@@ -58,13 +59,15 @@ class SaleController extends Controller
                 $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
 
                 $discountAmount = $validated['discount_amount'] ?? 0;
-                $finalTotal     = max(0, $totalAmount - $discountAmount);
+                $taxAmount      = $validated['tax_amount'] ?? 0;
+                $finalTotal     = max(0, $totalAmount - $discountAmount + $taxAmount);
 
                 $sale = Sale::create([
                     'user_id'         => Auth::id(),
                     'customer_id'     => $customerId,
                     'discount_type'   => $validated['discount_type'] ?? null,
                     'discount_amount' => $discountAmount ?: null,
+                    'tax_amount'      => $taxAmount ?: null,
                     'total_amount'    => $finalTotal,
                     'payment_method'  => $validated['payment_method'],
                     'sale_date'       => now(),

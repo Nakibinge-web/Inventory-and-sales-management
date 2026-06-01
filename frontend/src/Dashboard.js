@@ -43,6 +43,11 @@ export default function Dashboard({ user, token, onLogout }) {
         'Accept': 'application/json'
       };
 
+      const safeJson = async (res) => {
+        if (!res.ok) return { data: [] };
+        try { return await res.json(); } catch { return { data: [] }; }
+      };
+
       const [productsRes, categoriesRes, suppliersRes, customersRes, salesRes, purchasesRes, lowStockRes] = await Promise.all([
         fetch(`${API}/products?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/categories?tenant_id=${user.tenant_id}`, { headers }),
@@ -53,13 +58,15 @@ export default function Dashboard({ user, token, onLogout }) {
         fetch(`${API}/products/low-stock?tenant_id=${user.tenant_id}`, { headers })
       ]);
 
-      const products = await productsRes.json();
-      const categories = await categoriesRes.json();
-      const suppliers = await suppliersRes.json();
-      const customers = await customersRes.json();
-      const sales = await salesRes.json();
-      const purchases = await purchasesRes.json();
-      const lowStock = await lowStockRes.json();
+      const [products, categories, suppliers, customers, sales, purchases, lowStock] = await Promise.all([
+        safeJson(productsRes),
+        safeJson(categoriesRes),
+        safeJson(suppliersRes),
+        safeJson(customersRes),
+        safeJson(salesRes),
+        safeJson(purchasesRes),
+        safeJson(lowStockRes),
+      ]);
 
       setData({
         products: products.data || [],
@@ -76,6 +83,7 @@ export default function Dashboard({ user, token, onLogout }) {
           lowStockCount: (lowStock.data || []).length
         }
       });
+      setError(null);
     } catch (err) {
       setError('Failed to load dashboard data');
       console.error('Dashboard error:', err);
@@ -206,6 +214,7 @@ export default function Dashboard({ user, token, onLogout }) {
           {activeTab === 'pos' && (
             <POSTab
               products={data.products}
+              categories={data.categories}
               customers={data.customers}
               token={token}
               user={user}
@@ -1352,8 +1361,9 @@ function CustomersTab({ customers, loading, token, user, onCustomerAdded, onCust
 }
 
 // POS Tab Component
-function POSTab({ products, customers, token, user, onSaleCompleted }) {
+function POSTab({ products, categories, customers, token, user, onSaleCompleted }) {
   const [search, setSearch]           = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart, setCart]               = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [submitting, setSubmitting]   = useState(false);
@@ -1366,15 +1376,22 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
   const [customerSearch, setCustomerSearch]     = useState('');
   const [newCustomer, setNewCustomer]           = useState({ name: '', phone: '', email: '' });
 
-  // Discount state
+  // Discount & tax state
   const [discountValue, setDiscountValue] = useState('');
+  const [taxValue, setTaxValue]           = useState('');
+
+  // Cash payment state
+  const [amountPaid, setAmountPaid] = useState('');
+  const [cashNote, setCashNote]     = useState('');
 
   const inStockProducts = products.filter(p => Number(p.stock) > 0);
 
-  const filtered = inStockProducts.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.sku || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = inStockProducts.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.sku || '').toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = selectedCategory === null || p.category_id === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const addToCart = (product) => {
     setCart(prev => {
@@ -1413,7 +1430,11 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
     const v = parseFloat(discountValue) || 0;
     return Math.min(v, cartSubtotal);
   })();
-  const cartTotal = cartSubtotal - discountAmount;
+  const taxAmount  = parseFloat(taxValue) || 0;
+  const cartTotal  = cartSubtotal - discountAmount + taxAmount;
+  const changeAmount = paymentMethod === 'cash'
+    ? Math.max(0, (parseFloat(amountPaid) || 0) - cartTotal)
+    : 0;
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -1435,11 +1456,12 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
           ...(customerType === 'new' ? { new_customer: newCustomer } : {}),
           discount_type:   discountAmount > 0 ? 'fixed' : null,
           discount_amount: discountAmount > 0 ? discountAmount : null,
+          tax_amount:      taxAmount > 0 ? taxAmount : null,
         }),
       });
       const data = await res.json();
       if (!res.ok) { setSaleError(data?.message || 'Checkout failed.'); return; }
-      setLastReceipt({ ...data.data, cartSnapshot: cart, paymentMethod });
+      setLastReceipt({ ...data.data, cartSnapshot: cart, paymentMethod, taxAmount, discountAmount, amountPaid: parseFloat(amountPaid) || cartTotal, changeAmount });
       onSaleCompleted(data.data);
       setCart([]);
       setSearch('');
@@ -1448,6 +1470,9 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
       setNewCustomer({ name: '', phone: '', email: '' });
       setCustomerSearch('');
       setDiscountValue('');
+      setTaxValue('');
+      setAmountPaid('');
+      setCashNote('');
     } catch {
       setSaleError('Network error. Check your connection.');
     } finally {
@@ -1477,13 +1502,39 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
                 <span style={{ fontWeight: 600 }}>UGX {item.subtotal.toLocaleString()}</span>
               </div>
             ))}
-            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
-              <span>Total</span>
-              <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
+            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12 }}>
+              {lastReceipt.discountAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginBottom: 4 }}>
+                  <span>Discount</span>
+                  <span>− UGX {lastReceipt.discountAmount.toLocaleString()}</span>
+                </div>
+              )}
+              {lastReceipt.taxAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#b45309', marginBottom: 4 }}>
+                  <span>Tax</span>
+                  <span>+ UGX {lastReceipt.taxAmount.toLocaleString()}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, marginTop: 4 }}>
+                <span>Total</span>
+                <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
+              </div>
             </div>
             <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right' }}>
               Payment: <strong>{lastReceipt.paymentMethod.replace('_', ' ')}</strong>
             </div>
+            {lastReceipt.paymentMethod === 'cash' && (
+              <div style={{ marginTop: 8, borderTop: '1px dashed #e2e8f0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
+                  <span>Amount Paid</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {(lastReceipt.amountPaid || 0).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
+                  <span>Change</span>
+                  <span style={{ fontWeight: 700, color: '#16a34a' }}>UGX {(lastReceipt.changeAmount || 0).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
@@ -1516,10 +1567,49 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
             onChange={e => setSearch(e.target.value)}
           />
 
+          {/* Category filter pills */}
+          {categories && categories.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button
+                style={{
+                  padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer', border: '1.5px solid',
+                  borderColor: selectedCategory === null ? '#16a34a' : '#e2e8f0',
+                  background: selectedCategory === null ? '#f0fdf4' : '#fff',
+                  color: selectedCategory === null ? '#16a34a' : '#64748b',
+                  transition: 'all 0.15s',
+                }}
+                onClick={() => setSelectedCategory(null)}
+              >
+                All
+              </button>
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', border: '1.5px solid',
+                    borderColor: selectedCategory === cat.id ? '#16a34a' : '#e2e8f0',
+                    background: selectedCategory === cat.id ? '#f0fdf4' : '#fff',
+                    color: selectedCategory === cat.id ? '#16a34a' : '#64748b',
+                    transition: 'all 0.15s',
+                  }}
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
               <div style={{ fontSize: 36 }}>📦</div>
-              <div style={{ marginTop: 8 }}>{search ? 'No products match your search' : 'No products in stock'}</div>
+              <div style={{ marginTop: 8 }}>
+                {search || selectedCategory
+                  ? 'No products match your filters'
+                  : 'No products in stock'}
+              </div>
             </div>
           ) : (
             <div style={posS.productGrid}>
@@ -1685,21 +1775,111 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
                 />
               </div>
 
+              {/* Tax */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Tax:</span>
+                <input
+                  style={posS.discountInput}
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={taxValue}
+                  onChange={e => setTaxValue(e.target.value)}
+                />
+              </div>
+
               {/* Total row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
-                <span style={{ fontWeight: 700, fontSize: 18 }}>Total</span>
-                <span style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>UGX {cartTotal.toLocaleString()}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
+                {discountAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#16a34a' }}>
+                    <span>Discount applied</span>
+                    <span>− UGX {discountAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                {taxAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#b45309' }}>
+                    <span>Tax</span>
+                    <span>+ UGX {taxAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                  <span style={{ fontWeight: 700, fontSize: 18 }}>Total</span>
+                  <span style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>UGX {cartTotal.toLocaleString()}</span>
+                </div>
               </div>
 
               <div style={{ marginBottom: 12 }}>
                 <label style={posS.label}>Payment Method</label>
-                <select style={posS.select} value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                <select style={posS.select} value={paymentMethod} onChange={e => { setPaymentMethod(e.target.value); setAmountPaid(''); setCashNote(''); }}>
                   <option value="cash">💵 Cash</option>
                   <option value="card">💳 Card</option>
                   <option value="mobile_money">📱 Mobile Money</option>
                   <option value="bank_transfer">🏦 Bank Transfer</option>
                 </select>
               </div>
+
+              {/* Cash payment panel */}
+              {paymentMethod === 'cash' && (
+                <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    💵 Payment (Cash)
+                  </div>
+
+                  {/* Amount Paid */}
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Amount Paid</label>
+                    <input
+                      style={{ ...posS.searchInput, textAlign: 'right', fontWeight: 700, fontSize: 16 }}
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={amountPaid}
+                      onChange={e => setAmountPaid(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Exact Amount shortcut */}
+                  <button
+                    style={{
+                      width: '100%', padding: '10px', borderRadius: 10, border: '1.5px solid #bfdbfe',
+                      background: '#eff6ff', color: '#1d4ed8', fontWeight: 600, fontSize: 13,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                    onClick={() => setAmountPaid(cartTotal.toString())}
+                  >
+                    ≡ Exact Amount
+                  </button>
+
+                  {/* Change */}
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '10px 14px',
+                  }}>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Change:</span>
+                    <span style={{ fontWeight: 700, fontSize: 16, color: (parseFloat(amountPaid) || 0) < cartTotal ? '#dc2626' : '#16a34a' }}>
+                      UGX {changeAmount.toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Underpayment warning */}
+                  {amountPaid !== '' && (parseFloat(amountPaid) || 0) < cartTotal && (
+                    <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+                      ⚠️ Amount paid is less than total by UGX {(cartTotal - (parseFloat(amountPaid) || 0)).toLocaleString()}
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Notes (Optional)</label>
+                    <textarea
+                      style={{ ...posS.searchInput, resize: 'vertical', minHeight: 64, fontFamily: 'inherit' }}
+                      placeholder="Add any notes…"
+                      value={cashNote}
+                      onChange={e => setCashNote(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
 
               {saleError && (
                 <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13, marginBottom: 10 }}>
