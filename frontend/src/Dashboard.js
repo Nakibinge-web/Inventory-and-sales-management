@@ -1366,6 +1366,9 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
   const [customerSearch, setCustomerSearch]     = useState('');
   const [newCustomer, setNewCustomer]           = useState({ name: '', phone: '', email: '' });
 
+  // Discount state
+  const [discountValue, setDiscountValue] = useState('');
+
   const inStockProducts = products.filter(p => Number(p.stock) > 0);
 
   const filtered = inStockProducts.filter(p =>
@@ -1405,7 +1408,12 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
 
   const removeFromCart = (product_id) => setCart(prev => prev.filter(i => i.product_id !== product_id));
 
-  const cartTotal = cart.reduce((sum, i) => sum + i.subtotal, 0);
+  const cartSubtotal   = cart.reduce((sum, i) => sum + i.subtotal, 0);
+  const discountAmount = (() => {
+    const v = parseFloat(discountValue) || 0;
+    return Math.min(v, cartSubtotal);
+  })();
+  const cartTotal = cartSubtotal - discountAmount;
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -1425,6 +1433,8 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
           customer_type: customerType,
           ...(customerType === 'existing' && selectedCustomerId ? { customer_id: parseInt(selectedCustomerId) } : {}),
           ...(customerType === 'new' ? { new_customer: newCustomer } : {}),
+          discount_type:   discountAmount > 0 ? 'fixed' : null,
+          discount_amount: discountAmount > 0 ? discountAmount : null,
         }),
       });
       const data = await res.json();
@@ -1437,6 +1447,7 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
       setSelectedCustomerId('');
       setNewCustomer({ name: '', phone: '', email: '' });
       setCustomerSearch('');
+      setDiscountValue('');
     } catch {
       setSaleError('Network error. Check your connection.');
     } finally {
@@ -1655,7 +1666,27 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
             )}
 
             <div style={posS.cartFooter}>
+              {/* Subtotal row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+                <span>Subtotal:</span>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {cartSubtotal.toLocaleString()}</span>
+              </div>
+
+              {/* Discount */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Discount:</span>
+                <input
+                  style={posS.discountInput}
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={discountValue}
+                  onChange={e => setDiscountValue(e.target.value)}
+                />
+              </div>
+
+              {/* Total row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
                 <span style={{ fontWeight: 700, fontSize: 18 }}>Total</span>
                 <span style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>UGX {cartTotal.toLocaleString()}</span>
               </div>
@@ -1699,6 +1730,11 @@ const posS = {
     padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
     boxSizing: 'border-box', background: '#fff',
+  },
+  discountInput: {
+    padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
+    fontSize: 14, fontFamily: 'inherit', outline: 'none', width: 120,
+    boxSizing: 'border-box', background: '#fff', textAlign: 'right',
   },
   productGrid: {
     display: 'grid',

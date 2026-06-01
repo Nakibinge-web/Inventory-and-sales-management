@@ -14,6 +14,8 @@ class Sale extends Model
         'tenant_id',
         'user_id',
         'customer_id',
+        'discount_type',
+        'discount_amount',
         'total_amount',
         'payment_method',
         'sale_date',

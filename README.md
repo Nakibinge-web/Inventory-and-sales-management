@@ -1,4 +1,4 @@
-# Inventory & Sales Management System
+php# Inventory & Sales Management System
 
 A modern, full-stack inventory and sales management system built with Laravel (backend) and React (frontend). Perfect for small to medium businesses to manage their inventory, sales, purchases, and generate reports.
 
