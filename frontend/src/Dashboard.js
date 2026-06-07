@@ -9,11 +9,13 @@ import Modal from './components/ui/Modal';
 import QuickActions from './components/ui/QuickActions';
 import AddProductForm from './components/AddProductForm';
 import EditProductForm from './components/EditProductForm';
+import { ToastContainer, useToast } from './components/ui/Toast';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 export default function Dashboard({ user, token, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const { toasts, toast, remove } = useToast();
   const [data, setData] = useState({
     products: [],
     categories: [],
@@ -33,6 +35,8 @@ export default function Dashboard({ user, token, onLogout }) {
   const [error, setError] = useState(null);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -100,16 +104,58 @@ export default function Dashboard({ user, token, onLogout }) {
     fetchData();
   }, [fetchData]);
 
+  // ── Global search ──────────────────────────────────────────────────────────
+  const handleSearch = (q) => {
+    setSearchQuery(q);
+    if (!q.trim()) { setSearchResults([]); setSearchOpen(false); return; }
+    const lower = q.toLowerCase();
+    const results = [];
+    data.products.forEach(p => {
+      if (p.name?.toLowerCase().includes(lower) || p.sku?.toLowerCase().includes(lower))
+        results.push({ type: 'Product', icon: '📦', label: p.name, sub: p.sku ? `SKU: ${p.sku}` : `Stock: ${p.stock}`, tab: 'products' });
+    });
+    data.suppliers.forEach(s => {
+      if (s.name?.toLowerCase().includes(lower) || s.email?.toLowerCase().includes(lower))
+        results.push({ type: 'Supplier', icon: '🏭', label: s.name, sub: s.email || s.contact || '', tab: 'suppliers' });
+    });
+    data.customers.forEach(c => {
+      if (c.name?.toLowerCase().includes(lower) || c.email?.toLowerCase().includes(lower))
+        results.push({ type: 'Customer', icon: '👥', label: c.name, sub: c.email || c.phone || '', tab: 'customers' });
+    });
+    data.categories.forEach(c => {
+      if (c.name?.toLowerCase().includes(lower))
+        results.push({ type: 'Category', icon: '🏷️', label: c.name, sub: '', tab: 'categories' });
+    });
+    data.sales.forEach(s => {
+      const amount = `UGX ${parseFloat(s.total_amount || 0).toLocaleString()}`;
+      if (amount.toLowerCase().includes(lower) || s.payment_method?.toLowerCase().includes(lower))
+        results.push({ type: 'Sale', icon: '💰', label: `Sale — ${amount}`, sub: s.payment_method?.replace('_', ' '), tab: 'sales' });
+    });
+    setSearchResults(results.slice(0, 8));
+    setSearchOpen(results.length > 0);
+  };
+
+  const goToResult = (result) => {
+    setActiveTab(result.tab);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchOpen(false);
+  };
+
+  const isOwnerOrAdmin = user.roles && user.roles.some(r => ['owner', 'admin'].includes(r.name));
+
   const menuItems = [
-    { id: 'overview',    label: 'Overview',    icon: '📊', color: 'primary' },
-    { id: 'pos',         label: 'POS',         icon: '🖥️', color: 'success' },
-    { id: 'products',    label: 'Products',    icon: '📦', color: 'success' },
-    { id: 'categories',  label: 'Categories',  icon: '🏷️', color: 'warning' },
-    { id: 'suppliers',   label: 'Suppliers',   icon: '🏭', color: 'neutral' },
-    { id: 'customers',   label: 'Customers',   icon: '👥', color: 'primary' },
-    { id: 'sales',       label: 'Sales',       icon: '💰', color: 'success' },
-    { id: 'purchases',   label: 'Purchases',   icon: '🛒', color: 'primary' },
-    { id: 'reports',     label: 'Reports',     icon: '📈', color: 'danger' }
+    { id: 'overview',         label: 'Overview',        icon: '📊', color: 'primary' },
+    { id: 'pos',              label: 'POS',             icon: '🖥️', color: 'success' },
+    { id: 'products',         label: 'Products',        icon: '📦', color: 'success' },
+    { id: 'categories',       label: 'Categories',      icon: '🏷️', color: 'warning' },
+    { id: 'suppliers',        label: 'Suppliers',       icon: '🏭', color: 'neutral' },
+    { id: 'customers',        label: 'Customers',       icon: '👥', color: 'primary' },
+    { id: 'sales',            label: 'Sales',           icon: '💰', color: 'success' },
+    { id: 'purchases',        label: 'Purchases',       icon: '🛒', color: 'primary' },
+    { id: 'stock-movements',  label: 'Stock Movements', icon: '🔄', color: 'neutral' },
+    { id: 'reports',          label: 'Reports',         icon: '📈', color: 'danger' },
+    ...(isOwnerOrAdmin ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
   if (loading) {
@@ -136,15 +182,42 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
         
         <div style={styles.headerCenter}>
-          <div style={styles.searchContainer}>
+          <div style={{ ...styles.searchContainer, position: 'relative' }}>
             <span style={styles.searchIcon}>🔍</span>
             <input
               style={styles.searchInput}
               type="text"
-              placeholder="Search products, sales, suppliers..."
+              placeholder="Search products, suppliers, customers..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
             />
+            {searchOpen && searchResults.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 1000,
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden',
+              }}>
+                {searchResults.map((r, i) => (
+                  <div key={i} onMouseDown={() => goToResult(r)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+                    cursor: 'pointer', borderBottom: i < searchResults.length - 1 ? '1px solid #f8fafc' : 'none',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 18 }}>{r.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</div>
+                      {r.sub && <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.sub}</div>}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 8px', borderRadius: 20 }}>{r.type}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         
@@ -202,25 +275,26 @@ export default function Dashboard({ user, token, onLogout }) {
             </div>
           )}
 
-          {activeTab === 'overview' && <OverviewTab data={data} loading={loading} />}
+          {activeTab === 'overview' && <OverviewTab data={data} loading={loading} onNavigate={setActiveTab} onAddProduct={() => setShowAddProduct(true)} />}
           {activeTab === 'pos' && (
             <POSTab
               products={data.products}
               customers={data.customers}
               token={token}
               user={user}
+              toast={toast}
               onSaleCompleted={(sale) => {
                 setData(prev => ({
                   ...prev,
                   sales: [sale, ...prev.sales],
                   stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
-                  // update stock levels from the completed sale
                   products: prev.products.map(p => {
                     const item = sale.sale_items?.find(i => i.product_id === p.id)
                                || sale.saleItems?.find(i => i.product_id === p.id);
                     return item ? { ...p, stock: p.stock - item.quantity } : p;
                   })
                 }));
+                toast.success('Sale completed!', `UGX ${parseFloat(sale.total_amount || 0).toLocaleString()} recorded.`);
               }}
             />
           )}
@@ -233,6 +307,7 @@ export default function Dashboard({ user, token, onLogout }) {
               user={user}
               categories={data.categories}
               suppliers={data.suppliers}
+              toast={toast}
               onProductDeleted={(id) => setData(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }))}
               onProductUpdated={(updated) => setData(prev => ({
                 ...prev,
@@ -250,21 +325,58 @@ export default function Dashboard({ user, token, onLogout }) {
               onCategoryDeleted={id => setData(prev => ({ ...prev, categories: prev.categories.filter(c => c.id !== id) }))}
             />
           )}
-          {activeTab === 'suppliers' && <SuppliersTab suppliers={data.suppliers} loading={loading} />}
+          {activeTab === 'suppliers' && (
+            <SuppliersTab
+              suppliers={data.suppliers}
+              loading={loading}
+              token={token}
+              user={user}
+              toast={toast}
+              onSupplierAdded={s => setData(prev => ({ ...prev, suppliers: [...prev.suppliers, s] }))}
+              onSupplierUpdated={s => setData(prev => ({ ...prev, suppliers: prev.suppliers.map(x => x.id === s.id ? s : x) }))}
+              onSupplierDeleted={id => setData(prev => ({ ...prev, suppliers: prev.suppliers.filter(s => s.id !== id) }))}
+            />
+          )}
           {activeTab === 'customers' && (
             <CustomersTab
               customers={data.customers}
               loading={loading}
               token={token}
               user={user}
+              toast={toast}
               onCustomerAdded={customer => setData(prev => ({ ...prev, customers: [...prev.customers, customer] }))}
               onCustomerUpdated={customer => setData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === customer.id ? customer : c) }))}
               onCustomerDeleted={id => setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }))}
             />
           )}
           {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} />}
-          {activeTab === 'purchases' && <PurchasesTab purchases={data.purchases} loading={loading} />}
-          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} />}
+          {activeTab === 'purchases' && (
+            <PurchasesTab
+              purchases={data.purchases}
+              loading={loading}
+              token={token}
+              user={user}
+              suppliers={data.suppliers}
+              products={data.products}
+              toast={toast}
+              onPurchaseAdded={(p) => {
+                setData(prev => ({
+                  ...prev,
+                  purchases: [p, ...prev.purchases],
+                  stats: { ...prev.stats, totalPurchases: prev.stats.totalPurchases + parseFloat(p.total_amount || 0) },
+                  products: prev.products.map(prod => {
+                    const item = p.purchase_items?.find(i => i.product_id === prod.id);
+                    return item ? { ...prod, stock: prod.stock + item.quantity } : prod;
+                  })
+                }));
+              }}
+            />
+          )}
+          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} />}
+          {activeTab === 'users' && isOwnerOrAdmin && (
+            <UsersTab token={token} user={user} toast={toast} />
+          )}
         </main>
       </div>
 
@@ -280,44 +392,47 @@ export default function Dashboard({ user, token, onLogout }) {
           tenantId={user.tenant_id}
           categories={data.categories}
           suppliers={data.suppliers}
-          onSuccess={handleAddProduct}
+          onSuccess={(p) => { handleAddProduct(p); toast.success('Product added', `"${p.name}" added to inventory.`); }}
           onCancel={() => setShowAddProduct(false)}
         />
       </Modal>
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onRemove={remove} />
     </div>
   );
 }
 
 // Overview Tab Component
-function OverviewTab({ data, loading }) {
+function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
   const quickActions = [
     {
       id: 'new-sale',
       icon: '💰',
       title: 'New Sale',
       description: 'Process a new sale transaction',
-      onClick: () => console.log('New Sale')
+      onClick: () => onNavigate('pos')
     },
     {
       id: 'add-product',
       icon: '📦',
       title: 'Add Product',
       description: 'Add a new product to inventory',
-      onClick: () => console.log('Add Product')
+      onClick: onAddProduct
     },
     {
       id: 'add-supplier',
       icon: '🏭',
       title: 'Add Supplier',
       description: 'Register a new supplier',
-      onClick: () => console.log('Add Supplier')
+      onClick: () => onNavigate('suppliers')
     },
     {
       id: 'record-purchase',
       icon: '🛒',
       title: 'Record Purchase',
       description: 'Record a new purchase order',
-      onClick: () => console.log('Record Purchase')
+      onClick: () => onNavigate('purchases')
     }
   ];
 
@@ -397,7 +512,7 @@ function OverviewTab({ data, loading }) {
               title: 'No sales yet',
               description: 'Start processing sales to see them here.',
               actionLabel: 'Process First Sale',
-              onAction: () => console.log('Process Sale')
+              onAction: () => onNavigate('pos')
             }}
           />
         </div>
@@ -436,7 +551,7 @@ function OverviewTab({ data, loading }) {
 }
 
 // Products Tab Component
-function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated }) {
+function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated, toast }) {
   const API_BASE = process.env.REACT_APP_API_URL
     ? process.env.REACT_APP_API_URL.replace('/api', '')
     : 'http://localhost:8000';
@@ -479,6 +594,7 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
       });
       if (res.ok) {
         onProductDeleted(deletingProduct.id);
+        toast.success('Product deleted', `"${deletingProduct.name}" has been removed.`);
         setDeletingProduct(null);
       } else {
         const data = await res.json().catch(() => ({}));
@@ -882,6 +998,16 @@ const fS = {
   },
 };
 
+const supS = {
+  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6, display: 'block' },
+  input: {
+    padding: '11px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
+    fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
+    boxSizing: 'border-box', background: '#f8fafc', color: '#0f172a',
+    transition: 'border-color 0.2s, background 0.2s',
+  },
+};
+
 // Categories Tab Component
 function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategoryUpdated, onCategoryDeleted }) {
   const [showAddModal, setShowAddModal]       = useState(false);
@@ -1118,7 +1244,80 @@ const catS = {
 };
 
 // Suppliers Tab Component
-function SuppliersTab({ suppliers, loading }) {
+function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded, onSupplierUpdated, onSupplierDeleted }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  const EMPTY_FORM = { name: '', contact: '', email: '', address: '' };
+  const [showModal, setShowModal]   = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm]             = useState(EMPTY_FORM);
+  const [saving, setSaving]         = useState(false);
+  const [formError, setFormError]   = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [search, setSearch]         = useState('');
+
+  const openAdd = () => {
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (supplier) => {
+    setEditTarget(supplier);
+    setForm({ name: supplier.name, contact: supplier.contact || '', email: supplier.email || '', address: supplier.address || '' });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (supplier) => {
+    if (!window.confirm(`Delete supplier "${supplier.name}"? This cannot be undone.`)) return;
+    setDeletingId(supplier.id);
+    try {
+      const res = await fetch(`${API_URL}/suppliers/${supplier.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error('Failed to delete supplier');
+      onSupplierDeleted(supplier.id);
+      toast.success('Supplier deleted', `"${supplier.name}" has been removed.`);
+    } catch (e) {
+      toast.error('Delete failed', e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    try {
+      const isEdit = !!editTarget;
+      const url    = isEdit ? `${API_URL}/suppliers/${editTarget.id}` : `${API_URL}/suppliers`;
+      const res    = await fetch(url, {
+        method:  isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        body:    JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
+      isEdit ? onSupplierUpdated(json.data) : onSupplierAdded(json.data);
+      toast.success(isEdit ? 'Supplier updated' : 'Supplier added', `"${json.data.name}" has been ${isEdit ? 'updated' : 'added'}.`);
+      setShowModal(false);
+    } catch {
+      setFormError('Could not reach the server.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filtered = suppliers.filter(s =>
+    s.name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.email?.toLowerCase().includes(search.toLowerCase()) ||
+    s.contact?.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div style={styles.pageContainer}>
       <div style={styles.pageHeader}>
@@ -1126,16 +1325,26 @@ function SuppliersTab({ suppliers, loading }) {
           <h1 style={styles.pageTitle}>Suppliers</h1>
           <p style={styles.pageSubtitle}>Manage your vendor relationships and contacts</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left">
+        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
           Add Supplier
         </Button>
       </div>
 
+      {/* Search bar */}
+      {suppliers.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <input
+            style={{ ...fS.input, maxWidth: 320 }}
+            placeholder="🔍  Search suppliers…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
       {loading ? (
         <div style={styles.cardsGrid}>
-          {[...Array(6)].map((_, i) => (
-            <div key={i} style={styles.skeletonCard}></div>
-          ))}
+          {[...Array(6)].map((_, i) => <div key={i} style={styles.skeletonCard} />)}
         </div>
       ) : suppliers.length === 0 ? (
         <div style={styles.contentCard}>
@@ -1144,12 +1353,22 @@ function SuppliersTab({ suppliers, loading }) {
             title="No suppliers yet"
             description="Add suppliers to track where you purchase your products."
             actionLabel="Add First Supplier"
-            onAction={() => console.log('Add Supplier')}
+            onAction={openAdd}
+          />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={styles.contentCard}>
+          <EmptyState
+            icon="🔍"
+            title="No suppliers match your search"
+            description="Try a different name, email, or contact."
+            actionLabel="Clear Search"
+            onAction={() => setSearch('')}
           />
         </div>
       ) : (
         <div style={styles.cardsGrid}>
-          {suppliers.map(supplier => (
+          {filtered.map(supplier => (
             <div key={supplier.id} style={styles.supplierCard}>
               <div style={styles.supplierHeader}>
                 <div style={styles.supplierIcon}>🏭</div>
@@ -1158,85 +1377,166 @@ function SuppliersTab({ suppliers, loading }) {
               <div style={styles.supplierDetails}>
                 <div style={styles.supplierDetail}>
                   <span style={styles.supplierDetailIcon}>📞</span>
-                  <span>{supplier.contact || 'No contact'}</span>
+                  <span style={{ color: supplier.contact ? '#0f172a' : '#94a3b8' }}>
+                    {supplier.contact || 'No contact'}
+                  </span>
                 </div>
                 <div style={styles.supplierDetail}>
                   <span style={styles.supplierDetailIcon}>📧</span>
-                  <span>{supplier.email || 'No email'}</span>
+                  <span style={{ color: supplier.email ? '#0f172a' : '#94a3b8' }}>
+                    {supplier.email || 'No email'}
+                  </span>
                 </div>
                 <div style={styles.supplierDetail}>
                   <span style={styles.supplierDetailIcon}>📍</span>
-                  <span>{supplier.address || 'No address'}</span>
+                  <span style={{ color: supplier.address ? '#0f172a' : '#94a3b8' }}>
+                    {supplier.address || 'No address'}
+                  </span>
                 </div>
+              </div>
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+                <button
+                  onClick={() => openEdit(supplier)}
+                  style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(supplier)}
+                  disabled={deletingId === supplier.id}
+                  style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                >
+                  {deletingId === supplier.id ? 'Deleting…' : '🗑️ Delete'}
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Add / Edit Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editTarget ? 'Edit Supplier' : 'Add New Supplier'}
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {/* Row 1: Name (full width) */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label style={supS.label}>Supplier Name *</label>
+            <input style={supS.input} placeholder="e.g. Kampala Distributors" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          </div>
+          {/* Row 2: Contact + Email side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Contact / Phone</label>
+              <input style={supS.input} placeholder="+256 700 000 000" value={form.contact}
+                onChange={e => setForm(f => ({ ...f, contact: e.target.value }))} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Email</label>
+              <input style={supS.input} type="email" placeholder="supplier@example.com" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+          </div>
+          {/* Row 3: Address (full width) */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label style={supS.label}>Address</label>
+            <input style={supS.input} placeholder="Street, City, Country" value={form.address}
+              onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+          </div>
+
+          {formError && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+              ⚠️ {formError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Add Supplier'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
 // Customers Tab Component
-function CustomersTab({ customers, loading, token, user, onCustomerAdded, onCustomerUpdated, onCustomerDeleted }) {
+function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded, onCustomerUpdated, onCustomerDeleted }) {
   const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const [showModal, setShowModal]   = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [form, setForm]             = useState({ name: '', phone: '', email: '', status: 'active' });
   const [saving, setSaving]         = useState(false);
-  const [error, setError]           = useState(null);
+  const [formError, setFormError]   = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [search, setSearch]         = useState('');
 
   const openAdd = () => {
     setEditTarget(null);
     setForm({ name: '', phone: '', email: '', status: 'active' });
-    setError(null);
+    setFormError(null);
     setShowModal(true);
   };
 
   const openEdit = (customer) => {
     setEditTarget(customer);
-    setForm({ name: customer.name, phone: customer.phone || '', email: customer.email || '', status: customer.status });
-    setError(null);
+    setForm({ name: customer.name, phone: customer.phone || '', email: customer.email || '', status: customer.status || 'active' });
+    setFormError(null);
     setShowModal(true);
   };
 
   const handleDelete = async (customer) => {
-    if (!window.confirm(`Delete customer "${customer.name}"?`)) return;
+    if (!window.confirm(`Delete customer "${customer.name}"? This cannot be undone.`)) return;
+    setDeletingId(customer.id);
     try {
-      const res = await fetch(`${API}/customers/${customer.id}?tenant_id=${user.tenant_id}`, {
+      const res = await fetch(`${API}/customers/${customer.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       });
-      if (!res.ok) throw new Error('Failed to delete customer');
+      if (!res.ok) { const j = await res.json(); toast.error('Delete failed', j?.message || 'Failed to delete.'); return; }
       onCustomerDeleted(customer.id);
-    } catch (e) {
-      alert(e.message);
-    }
+      toast.success('Customer deleted', `"${customer.name}" has been removed.`);
+    } catch { toast.error('Delete failed', 'Could not reach the server.'); }
+    finally { setDeletingId(null); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError(null);
+    setFormError(null);
     try {
       const isEdit = !!editTarget;
       const url    = isEdit ? `${API}/customers/${editTarget.id}` : `${API}/customers`;
       const res    = await fetch(url, {
         method:  isEdit ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
         body:    JSON.stringify({ ...form, tenant_id: user.tenant_id }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Failed to save customer');
+      if (!res.ok) { setFormError(json?.message || 'Failed to save customer.'); return; }
       isEdit ? onCustomerUpdated(json.data) : onCustomerAdded(json.data);
+      toast.success(isEdit ? 'Customer updated' : 'Customer added', `"${json.data.name}" has been ${isEdit ? 'updated' : 'added'}.`);
       setShowModal(false);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch { setFormError('Could not reach the server.'); }
+    finally { setSaving(false); }
   };
+
+  const filtered = customers.filter(c =>
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.email?.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone?.toLowerCase().includes(search.toLowerCase())
+  );
+  const { paged: pagedCustomers, page: cPage, setPage: setCPage, totalPages: cTotalPages, total: cTotal, pageSize: cPageSize } = usePagination(filtered);
 
   return (
     <div style={styles.pageContainer}>
@@ -1250,100 +1550,125 @@ function CustomersTab({ customers, loading, token, user, onCustomerAdded, onCust
         </Button>
       </div>
 
-      {loading ? (
-        <div style={styles.cardsGrid}>
-          {[...Array(6)].map((_, i) => <div key={i} style={styles.skeletonCard}></div>)}
-        </div>
-      ) : customers.length === 0 ? (
-        <div style={styles.contentCard}>
-          <EmptyState
-            icon="👥"
-            title="No customers yet"
-            description="Add customers to keep track of who you sell to."
-            actionLabel="Add First Customer"
-            onAction={openAdd}
+      {/* Search */}
+      {customers.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <input
+            style={{ ...supS.input, maxWidth: 320 }}
+            placeholder="🔍  Search by name, email or phone…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
           />
-        </div>
-      ) : (
-        <div style={styles.cardsGrid}>
-          {customers.map(customer => (
-            <div key={customer.id} style={styles.supplierCard}>
-              <div style={styles.supplierHeader}>
-                <div style={styles.supplierIcon}>👤</div>
-                <h3 style={styles.supplierName}>{customer.name}</h3>
-              </div>
-              <div style={styles.supplierDetails}>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📞</span>
-                  <span>{customer.phone || 'No phone'}</span>
-                </div>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📧</span>
-                  <span>{customer.email || 'No email'}</span>
-                </div>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>🔖</span>
-                  <span style={{ textTransform: 'capitalize' }}>{customer.status}</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                <Button variant="secondary" onClick={() => openEdit(customer)}>Edit</Button>
-                <Button variant="danger" onClick={() => handleDelete(customer)}>Delete</Button>
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
-      {/* Add / Edit Customer Modal */}
-      <Modal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        title={editTarget ? 'Edit Customer' : 'Add Customer'}
-        size="sm"
-      >
-        <form onSubmit={handleSubmit}>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Name *</label>
-            <input
-              style={styles.formInput}
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required
-            />
+      {loading ? (
+        <div style={styles.cardsGrid}>
+          {[...Array(6)].map((_, i) => <div key={i} style={styles.skeletonCard} />)}
+        </div>
+      ) : customers.length === 0 ? (
+        <div style={styles.contentCard}>
+          <EmptyState icon="👥" title="No customers yet"
+            description="Add customers to keep track of who you sell to."
+            actionLabel="Add First Customer" onAction={openAdd} />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={styles.contentCard}>
+          <EmptyState icon="🔍" title="No customers match your search"
+            description="Try a different name, email or phone."
+            actionLabel="Clear Search" onAction={() => setSearch('')} />
+        </div>
+      ) : (
+        <div style={styles.contentCard}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                {['Customer', 'Phone', 'Email', 'Status', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pagedCustomers.map(c => (
+                <tr key={c.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                  <td style={{ padding: '14px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e0e7ff', color: '#4f46e5', fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {c.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{c.name}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{c.phone || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                  <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{c.email || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                  <td style={{ padding: '14px 14px' }}>
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      background: c.status === 'active' ? '#f0fdf4' : '#f8fafc',
+                      color: c.status === 'active' ? '#16a34a' : '#64748b',
+                      border: `1px solid ${c.status === 'active' ? '#bbf7d0' : '#e2e8f0'}`,
+                      textTransform: 'capitalize',
+                    }}>{c.status || 'active'}</span>
+                  </td>
+                  <td style={{ padding: '14px 14px' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => openEdit(c)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>Edit</button>
+                      <button onClick={() => handleDelete(c)} disabled={deletingId === c.id} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                        {deletingId === c.id ? '…' : 'Delete'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <InlinePager page={cPage} totalPages={cTotalPages} total={cTotal} pageSize={cPageSize} setPage={setCPage} />
+        </div>
+      )}
+
+      {/* Add / Edit Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)}
+        title={editTarget ? 'Edit Customer' : 'Add New Customer'} size="lg">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {/* Row 1: Name + Phone */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Full Name *</label>
+              <input style={supS.input} placeholder="e.g. John Doe" value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Phone</label>
+              <input style={supS.input} placeholder="+256 700 000 000" value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            </div>
           </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Phone</label>
-            <input
-              style={styles.formInput}
-              value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-            />
+          {/* Row 2: Email + Status */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Email</label>
+              <input style={supS.input} type="email" placeholder="customer@example.com" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Status</label>
+              <select style={supS.input} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Email</label>
-            <input
-              type="email"
-              style={styles.formInput}
-              value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Status</label>
-            <select
-              style={styles.formInput}
-              value={form.status}
-              onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-          {error && <p style={{ color: 'red', marginBottom: '12px' }}>{error}</p>}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button variant="primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+
+          {formError && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+              ⚠️ {formError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>Cancel</Button>
+            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Add Customer'}
+            </Button>
           </div>
         </form>
       </Modal>
@@ -1823,21 +2148,68 @@ function SalesTab({ sales, loading, onNewSale }) {
 }
 
 // Purchases Tab Component
-function PurchasesTab({ purchases, loading }) {
-  const columns = [
-    { key: 'purchase_date', title: 'Date', type: 'date' },
-    { key: 'total_amount', title: 'Amount', type: 'currency' },
-    { 
-      key: 'supplier', 
-      title: 'Supplier', 
-      render: (value) => value?.name ? <Badge variant="primary" size="sm">{value.name}</Badge> : 'N/A'
-    },
-    { 
-      key: 'purchase_items', 
-      title: 'Items', 
-      render: (value) => `${value?.length || 0} items`
-    }
-  ];
+function PurchasesTab({ purchases, loading, token, user, suppliers, products, toast, onPurchaseAdded }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  const EMPTY_LINE = { product_id: '', quantity: '', cost_price: '' };
+  const [showModal, setShowModal]   = useState(false);
+  const [supplierId, setSupplierId] = useState('');
+  const [lines, setLines]           = useState([{ ...EMPTY_LINE }]);
+  const [saving, setSaving]         = useState(false);
+  const [formError, setFormError]   = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [search, setSearch]         = useState('');
+
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+
+  const openModal = () => {
+    setSupplierId('');
+    setLines([{ ...EMPTY_LINE }]);
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const setLine = (i, key, val) => setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+  const addLine    = () => setLines(prev => [...prev, { ...EMPTY_LINE }]);
+  const removeLine = (i) => setLines(prev => prev.filter((_, idx) => idx !== i));
+
+  const lineTotal = (l) => {
+    const q = parseFloat(l.quantity) || 0;
+    const c = parseFloat(l.cost_price) || 0;
+    return q * c;
+  };
+  const grandTotal = lines.reduce((s, l) => s + lineTotal(l), 0);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!supplierId) { setFormError('Please select a supplier.'); return; }
+    const validLines = lines.filter(l => l.product_id && l.quantity && l.cost_price);
+    if (validLines.length === 0) { setFormError('Add at least one complete product line.'); return; }
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      const res  = await fetch(`${API_URL}/purchases`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          supplier_id: supplierId,
+          items: validLines.map(l => ({ product_id: l.product_id, quantity: parseInt(l.quantity), cost_price: parseFloat(l.cost_price) })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
+      onPurchaseAdded(json.data);
+      toast.success('Purchase recorded', `UGX ${parseFloat(json.data.total_amount || 0).toLocaleString()} purchase recorded.`);
+      setShowModal(false);
+    } catch { setFormError('Could not reach the server.'); }
+    finally { setSaving(false); }
+  };
+
+  const filtered = purchases.filter(p =>
+    p.supplier?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    new Date(p.purchase_date).toLocaleDateString().includes(search)
+  );
 
   return (
     <div style={styles.pageContainer}>
@@ -1846,33 +2218,250 @@ function PurchasesTab({ purchases, loading }) {
           <h1 style={styles.pageTitle}>Purchases</h1>
           <p style={styles.pageSubtitle}>Track inventory purchases and supplier orders</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left">
+        <Button variant="primary" icon="+" iconPosition="left" onClick={openModal}>
           Record Purchase
         </Button>
       </div>
 
+      {/* Search */}
+      {purchases.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <input
+            style={{ ...supS.input, maxWidth: 320 }}
+            placeholder="🔍  Search by supplier or date…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
       <div style={styles.contentCard}>
-        <DataTable
-          columns={columns}
-          data={purchases}
-          loading={loading}
-          emptyStateProps={{
-            icon: '🛒',
-            title: 'No purchases yet',
-            description: 'Record purchases from suppliers to track inventory costs.',
-            actionLabel: 'Record First Purchase',
-            onAction: () => console.log('New Purchase')
-          }}
-        />
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading purchases…</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon="🛒"
+            title={search ? 'No purchases match your search' : 'No purchases yet'}
+            description={search ? 'Try a different supplier or date.' : 'Record purchases from suppliers to track inventory costs.'}
+            actionLabel={search ? 'Clear Search' : 'Record First Purchase'}
+            onAction={search ? () => setSearch('') : openModal}
+          />
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                {['Date', 'Supplier', 'Items', 'Total Amount', 'Details'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(p => (
+                <>
+                  <tr key={p.id} style={{ borderBottom: expandedId === p.id ? 'none' : '1px solid #f8fafc', background: expandedId === p.id ? '#fafbff' : 'transparent' }}>
+                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>
+                      {new Date(p.purchase_date).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '14px 14px' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                        {p.supplier?.name || 'N/A'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>
+                      {p.purchase_items?.length || 0} item{(p.purchase_items?.length || 0) !== 1 ? 's' : ''}
+                    </td>
+                    <td style={{ padding: '14px 14px', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
+                      UGX {parseFloat(p.total_amount || 0).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '14px 14px' }}>
+                      <button
+                        onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                        style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                      >
+                        {expandedId === p.id ? '▲ Hide' : '▼ View'}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === p.id && (
+                    <tr key={`${p.id}-exp`}>
+                      <td colSpan={5} style={{ padding: '0 14px 16px 14px', background: '#fafbff' }}>
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                {['Product', 'Qty', 'Cost Price', 'Subtotal'].map(h => (
+                                  <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(p.purchase_items || []).map((item, idx) => (
+                                <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '10px 14px', fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</td>
+                                  <td style={{ padding: '10px 14px', fontSize: 14, color: '#475569' }}>{item.quantity}</td>
+                                  <td style={{ padding: '10px 14px', fontSize: 14, color: '#475569' }}>UGX {parseFloat(item.cost_price || 0).toLocaleString()}</td>
+                                  <td style={{ padding: '10px 14px', fontSize: 14, fontWeight: 600, color: '#0f172a' }}>UGX {(item.quantity * item.cost_price).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
+
+      {/* Record Purchase Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Record New Purchase" size="lg">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+          {/* Supplier */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label style={supS.label}>Supplier *</label>
+            <select style={supS.input} value={supplierId} onChange={e => setSupplierId(e.target.value)} required>
+              <option value="">— Select supplier —</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+
+          {/* Product Lines */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={supS.label}>Products *</label>
+              <button type="button" onClick={addLine} style={{ fontSize: 13, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                + Add Line
+              </button>
+            </div>
+
+            {/* Header row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, padding: '0 4px' }}>
+              {['Product', 'Qty', 'Cost Price (UGX)', ''].map(h => (
+                <span key={h} style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</span>
+              ))}
+            </div>
+
+            {lines.map((line, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'center' }}>
+                <select style={supS.input} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
+                  <option value="">— Select product —</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input style={supS.input} type="number" min="1" placeholder="0" value={line.quantity}
+                  onChange={e => setLine(i, 'quantity', e.target.value)} />
+                <input style={supS.input} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
+                  onChange={e => setLine(i, 'cost_price', e.target.value)} />
+                <button type="button" onClick={() => removeLine(i)} disabled={lines.length === 1}
+                  style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: lines.length === 1 ? 'not-allowed' : 'pointer', opacity: lines.length === 1 ? 0.4 : 1, fontSize: 14 }}>
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            {/* Grand total */}
+            {grandTotal > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                  Total: UGX {grandTotal.toLocaleString()}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {formError && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+              ⚠️ {formError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>Cancel</Button>
+            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+              {saving ? 'Recording…' : 'Record Purchase'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
 // Reports Tab Component
-function ReportsTab({ data, loading }) {
+function ReportsTab({ data, loading, token }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+
+  const [activeReport, setActiveReport] = useState('overview');
+  const [dailyDate, setDailyDate]       = useState(new Date().toISOString().split('T')[0]);
+  const [monthlyMonth, setMonthlyMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [reportData, setReportData]     = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError]   = useState(null);
+
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
-  
+
+  // ── Derived analytics from existing data ──────────────────────────────────
+
+  // Sales by payment method
+  const paymentBreakdown = data.sales.reduce((acc, s) => {
+    const m = s.payment_method || 'unknown';
+    acc[m] = (acc[m] || 0) + parseFloat(s.total_amount || 0);
+    return acc;
+  }, {});
+  const paymentTotal = Object.values(paymentBreakdown).reduce((a, b) => a + b, 0);
+
+  // Top 5 products by revenue (from sale items)
+  const productRevenue = {};
+  data.sales.forEach(s => {
+    (s.sale_items || s.saleItems || []).forEach(item => {
+      const name = item.product?.name || `#${item.product_id}`;
+      productRevenue[name] = (productRevenue[name] || 0) + parseFloat(item.subtotal || 0);
+    });
+  });
+  const topProducts = Object.entries(productRevenue)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const maxProductRev = topProducts[0]?.[1] || 1;
+
+  // Top 5 suppliers by purchase spend
+  const supplierSpend = {};
+  data.purchases.forEach(p => {
+    const name = p.supplier?.name || `#${p.supplier_id}`;
+    supplierSpend[name] = (supplierSpend[name] || 0) + parseFloat(p.total_amount || 0);
+  });
+  const topSuppliers = Object.entries(supplierSpend).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxSupplierSpend = topSuppliers[0]?.[1] || 1;
+
+  // ── Fetch daily / monthly reports ─────────────────────────────────────────
+  const fetchReport = async () => {
+    setReportLoading(true);
+    setReportError(null);
+    setReportData(null);
+    try {
+      const url = activeReport === 'daily'
+        ? `${API_URL}/sales/daily-report?date=${dailyDate}`
+        : `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
+      const res  = await fetch(url, { headers });
+      const json = await res.json();
+      if (!res.ok) { setReportError(json?.message || 'Failed to load report.'); return; }
+      setReportData(json.data);
+    } catch { setReportError('Could not reach the server.'); }
+    finally { setReportLoading(false); }
+  };
+
+  const paymentColors = { cash: '#16a34a', card: '#2563eb', mobile_money: '#7c3aed', bank_transfer: '#0891b2' };
+  const getPayColor = (m) => paymentColors[m] || '#64748b';
+
+  const tabs = [
+    { id: 'overview',  label: '📊 Overview'  },
+    { id: 'daily',     label: '📅 Daily Sales' },
+    { id: 'monthly',   label: '🗓️ Monthly Purchases' },
+  ];
+
   return (
     <div style={styles.pageContainer}>
       <div style={styles.pageHeader}>
@@ -1880,61 +2469,742 @@ function ReportsTab({ data, loading }) {
           <h1 style={styles.pageTitle}>Reports & Analytics</h1>
           <p style={styles.pageSubtitle}>Analyze your business performance and trends</p>
         </div>
-        <Button variant="primary" icon="📊" iconPosition="left">
-          Generate Report
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #f1f5f9', paddingBottom: 0 }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => { setActiveReport(t.id); setReportData(null); setReportError(null); }} style={{
+            padding: '9px 18px', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 14, fontWeight: 600,
+            color: activeReport === t.id ? '#4f46e5' : '#64748b',
+            borderBottom: activeReport === t.id ? '2px solid #4f46e5' : '2px solid transparent',
+            marginBottom: -2, transition: 'all 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── OVERVIEW ── */}
+      {activeReport === 'overview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* KPI row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            {[
+              { label: 'Total Revenue', value: `UGX ${data.stats.totalSales.toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
+              { label: 'Total Costs',   value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
+              { label: 'Net Profit',    value: `UGX ${totalRevenue.toLocaleString()}`, icon: '📈', color: totalRevenue >= 0 ? '#16a34a' : '#dc2626', bg: totalRevenue >= 0 ? '#f0fdf4' : '#fef2f2' },
+              { label: 'Low Stock',     value: data.stats.lowStockCount, icon: '⚠️', color: data.stats.lowStockCount > 0 ? '#dc2626' : '#16a34a', bg: data.stats.lowStockCount > 0 ? '#fef2f2' : '#f0fdf4' },
+            ].map(k => (
+              <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k.label}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</p>
+                  </div>
+                  <div style={{ width: 42, height: 42, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{k.icon}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+            {/* Payment method breakdown */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
+              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales by Payment Method</h3>
+              {Object.keys(paymentBreakdown).length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: 14 }}>No sales data yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {Object.entries(paymentBreakdown).map(([method, amount]) => (
+                    <div key={method}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', textTransform: 'capitalize' }}>{method.replace('_', ' ')}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>UGX {amount.toLocaleString()} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({Math.round(amount / paymentTotal * 100)}%)</span></span>
+                      </div>
+                      <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${(amount / paymentTotal) * 100}%`, background: getPayColor(method), borderRadius: 4, transition: 'width 0.4s ease' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Inventory summary */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
+              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Inventory Summary</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[
+                  { label: 'Total Products',  value: data.stats.totalProducts, icon: '📦' },
+                  { label: 'Categories',      value: data.categories.length,   icon: '🏷️' },
+                  { label: 'Suppliers',       value: data.suppliers.length,    icon: '🏭' },
+                  { label: 'Customers',       value: data.customers.length,    icon: '👥' },
+                  { label: 'Total Sales',     value: data.sales.length,        icon: '💰' },
+                  { label: 'Total Purchases', value: data.purchases.length,    icon: '🛒' },
+                ].map(r => (
+                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>
+                    <span style={{ fontSize: 14, color: '#475569' }}>{r.icon} {r.label}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+            {/* Top products */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
+              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Top Products by Revenue</h3>
+              {topProducts.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: 14 }}>No sales data yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {topProducts.map(([name, rev], i) => (
+                    <div key={name}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>#{i + 1} {name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>UGX {rev.toLocaleString()}</span>
+                      </div>
+                      <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${(rev / maxProductRev) * 100}%`, background: '#4f46e5', borderRadius: 4 }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top suppliers */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
+              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Top Suppliers by Spend</h3>
+              {topSuppliers.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: 14 }}>No purchase data yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {topSuppliers.map(([name, spend], i) => (
+                    <div key={name}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>#{i + 1} {name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>UGX {spend.toLocaleString()}</span>
+                      </div>
+                      <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${(spend / maxSupplierSpend) * 100}%`, background: '#0891b2', borderRadius: 4 }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DAILY SALES REPORT ── */}
+      {activeReport === 'daily' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={supS.label}>Select Date</label>
+              <input style={{ ...supS.input, width: 200 }} type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} />
+            </div>
+            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+          </div>
+
+          {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
+
+          {reportData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                {[
+                  { label: 'Date',         value: reportData.date },
+                  { label: 'Transactions', value: reportData.total_transactions },
+                  { label: 'Total Sales',  value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
+                ].map(k => (
+                  <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
+                </div>
+                {reportData.sales?.length === 0 ? (
+                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales on this date.</p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        {['Time', 'Cashier', 'Payment', 'Items', 'Amount'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.sales?.map(s => (
+                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.created_at).toLocaleTimeString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
+                              {s.payment_method?.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.sale_items?.length || 0}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MONTHLY PURCHASES REPORT ── */}
+      {activeReport === 'monthly' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={supS.label}>Select Month</label>
+              <input style={{ ...supS.input, width: 200 }} type="month" value={monthlyMonth} onChange={e => setMonthlyMonth(e.target.value)} />
+            </div>
+            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+          </div>
+
+          {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
+
+          {reportData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                {[
+                  { label: 'Month',            value: reportData.month },
+                  { label: 'Transactions',     value: reportData.total_transactions },
+                  { label: 'Total Purchases',  value: `UGX ${parseFloat(reportData.total_purchases || 0).toLocaleString()}` },
+                ].map(k => (
+                  <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Purchase Transactions</h3>
+                </div>
+                {reportData.purchases?.length === 0 ? (
+                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No purchases this month.</p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        {['Date', 'Supplier', 'Items', 'Total Amount'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.purchases?.map(p => (
+                        <tr key={p.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(p.purchase_date).toLocaleDateString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{p.supplier?.name || '—'}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{p.purchase_items?.length || 0}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(p.total_amount || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Users Tab Component
+function UsersTab({ token, user: currentUser, toast }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  const EMPTY_FORM = { name: '', email: '', password: '', role_ids: [] };
+  const [users, setUsers]           = useState([]);
+  const [roles, setRoles]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [showModal, setShowModal]   = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm]             = useState(EMPTY_FORM);
+  const [saving, setSaving]         = useState(false);
+  const [formError, setFormError]   = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [search, setSearch]         = useState('');
+
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [uRes, rRes] = await Promise.all([
+          fetch(`${API_URL}/users`, { headers }),
+          fetch(`${API_URL}/roles`, { headers }),
+        ]);
+        const uJson = await uRes.json();
+        const rJson = await rRes.json();
+        setUsers(uJson.data || []);
+        setRoles(rJson.data || []);
+      } catch { /* silent */ }
+      finally { setLoading(false); }
+    };
+    load();
+  }, [token]);
+
+  const openAdd = () => {
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (u) => {
+    setEditTarget(u);
+    setForm({ name: u.name, email: u.email, password: '', role_ids: (u.roles || []).map(r => r.id) });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const toggleRole = (id) => {
+    setForm(f => ({
+      ...f,
+      role_ids: f.role_ids.includes(id) ? f.role_ids.filter(r => r !== id) : [...f.role_ids, id],
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.role_ids.length === 0) { setFormError('Please assign at least one role.'); return; }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const isEdit = !!editTarget;
+      const body   = isEdit
+        ? { name: form.name, email: form.email, role_ids: form.role_ids, ...(form.password ? { password: form.password } : {}) }
+        : { name: form.name, email: form.email, password: form.password, role_ids: form.role_ids };
+
+      const res  = await fetch(`${API_URL}/users${isEdit ? `/${editTarget.id}` : ''}`, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
+
+      if (isEdit) {
+        setUsers(prev => prev.map(u => u.id === editTarget.id ? json.data : u));
+      } else {
+        setUsers(prev => [...prev, json.data]);
+      }
+      toast.success(isEdit ? 'User updated' : 'User added', `"${json.data.name}" has been ${isEdit ? 'updated' : 'added'}.`);
+      setShowModal(false);
+    } catch { setFormError('Could not reach the server.'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (u) => {
+    if (!window.confirm(`Delete user "${u.name}"? This cannot be undone.`)) return;
+    setDeletingId(u.id);
+    try {
+      const res = await fetch(`${API_URL}/users/${u.id}`, { method: 'DELETE', headers });
+      if (!res.ok) { const j = await res.json(); toast.error('Delete failed', j?.message || 'Failed to delete user.'); return; }
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+      toast.success('User deleted', `"${u.name}" has been removed.`);
+    } catch { toast.error('Delete failed', 'Could not reach the server.'); }
+    finally { setDeletingId(null); }
+  };
+
+  const filtered = users.filter(u =>
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
+    u.email?.toLowerCase().includes(search.toLowerCase())
+  );
+  const { paged: pagedUsers, page: uPage, setPage: setUPage, totalPages: uTotalPages, total: uTotal, pageSize: uPageSize } = usePagination(filtered);
+
+  const isOwner = currentUser.roles?.some(r => r.name === 'owner');
+
+  const roleColors = { owner: '#7c3aed', admin: '#2563eb', manager: '#0891b2', cashier: '#16a34a' };
+  const getRoleColor = (name) => roleColors[name] || '#64748b';
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>User Management</h1>
+          <p style={styles.pageSubtitle}>Manage team members and their access roles</p>
+        </div>
+        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
+          Add User
         </Button>
       </div>
 
-      <div style={styles.reportsGrid}>
-        <div style={styles.reportCard}>
-          <h3 style={styles.reportTitle}>Financial Summary</h3>
-          <div style={styles.reportMetrics}>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Total Sales</span>
-              <span style={styles.reportValue}>UGX {data.stats.totalSales.toLocaleString()}</span>
-            </div>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Total Purchases</span>
-              <span style={styles.reportValue}>UGX {data.stats.totalPurchases.toLocaleString()}</span>
-            </div>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Net Revenue</span>
-              <span style={{
-                ...styles.reportValue,
-                color: totalRevenue >= 0 ? theme.colors.success[600] : theme.colors.danger[600]
-              }}>
-                UGX {totalRevenue.toLocaleString()}
-              </span>
-            </div>
-          </div>
+      {/* Search */}
+      {users.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <input
+            style={{ ...supS.input, maxWidth: 320 }}
+            placeholder="🔍  Search by name or email…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
+      )}
 
-        <div style={styles.reportCard}>
-          <h3 style={styles.reportTitle}>Inventory Summary</h3>
-          <div style={styles.reportMetrics}>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Total Products</span>
-              <span style={styles.reportValue}>{data.stats.totalProducts}</span>
+      <div style={styles.contentCard}>
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading users…</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon="👤"
+            title={search ? 'No users match your search' : 'No users yet'}
+            description={search ? 'Try a different name or email.' : 'Add team members to get started.'}
+            actionLabel={search ? 'Clear Search' : 'Add First User'}
+            onAction={search ? () => setSearch('') : openAdd}
+          />
+        ) : (
+          <>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                {['User', 'Email', 'Roles', 'Joined', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pagedUsers.map(u => (
+                <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                  {/* Avatar + Name */}
+                  <td style={{ padding: '14px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{
+                        width: 36, height: 36, borderRadius: '50%', background: '#ede9fe',
+                        color: '#7c3aed', fontWeight: 700, fontSize: 15,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {u.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{u.name}</div>
+                        {u.id === currentUser.id && (
+                          <span style={{ fontSize: 11, color: '#7c3aed', fontWeight: 500 }}>You</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  {/* Email */}
+                  <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{u.email}</td>
+                  {/* Roles */}
+                  <td style={{ padding: '14px 14px' }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {(u.roles || []).length > 0 ? u.roles.map(r => (
+                        <span key={r.id} style={{
+                          padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                          background: getRoleColor(r.name) + '18', color: getRoleColor(r.name),
+                          border: `1px solid ${getRoleColor(r.name)}40`,
+                        }}>{r.name}</span>
+                      )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>No role</span>}
+                    </div>
+                  </td>
+                  {/* Joined */}
+                  <td style={{ padding: '14px 14px', color: '#94a3b8', fontSize: 13 }}>
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                  </td>
+                  {/* Actions */}
+                  <td style={{ padding: '14px 14px' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => openEdit(u)} style={{
+                        padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
+                        background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                      }}>Edit</button>
+                      {u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
+                        <button onClick={() => handleDelete(u)} disabled={deletingId === u.id} style={{
+                          padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
+                          background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                        }}>
+                          {deletingId === u.id ? '…' : 'Delete'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <InlinePager page={uPage} totalPages={uTotalPages} total={uTotal} pageSize={uPageSize} setPage={setUPage} />
+          </>
+        )}
+      </div>
+
+      {/* Add / Edit Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editTarget ? 'Edit User' : 'Add New User'}
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {/* Row 1: Name + Email */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Full Name *</label>
+              <input style={supS.input} placeholder="John Doe" value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Categories</span>
-              <span style={styles.reportValue}>{data.categories.length}</span>
-            </div>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Suppliers</span>
-              <span style={styles.reportValue}>{data.suppliers.length}</span>
-            </div>
-            <div style={styles.reportMetric}>
-              <span style={styles.reportLabel}>Low Stock Items</span>
-              <span style={{
-                ...styles.reportValue,
-                color: data.stats.lowStockCount > 0 ? theme.colors.danger[600] : theme.colors.success[600]
-              }}>
-                {data.stats.lowStockCount}
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={supS.label}>Email *</label>
+              <input style={supS.input} type="email" placeholder="user@business.com" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
             </div>
           </div>
+
+          {/* Password */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label style={supS.label}>{editTarget ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
+            <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Min 8 chars, upper, lower, number'}
+              value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              required={!editTarget} minLength={editTarget ? 0 : 8} />
+          </div>
+
+          {/* Roles */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={supS.label}>Assign Roles *</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {roles.map(r => {
+                const selected = form.role_ids.includes(r.id);
+                const color    = getRoleColor(r.name);
+                return (
+                  <button key={r.id} type="button" onClick={() => toggleRole(r.id)} style={{
+                    padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `2px solid ${selected ? color : '#e2e8f0'}`,
+                    background: selected ? color + '18' : '#f8fafc',
+                    color: selected ? color : '#64748b',
+                    transition: 'all 0.15s',
+                  }}>
+                    {selected ? '✓ ' : ''}{r.name}
+                  </button>
+                );
+              })}
+            </div>
+            {form.role_ids.length === 0 && (
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Select at least one role</p>
+            )}
+          </div>
+
+          {formError && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+              ⚠️ {formError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Add User'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+// Stock Movements Tab Component
+function StockMovementsTab({ token, products }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+
+  const [movements, setMovements] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [productFilter, setProductFilter] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res  = await fetch(`${API_URL}/stock-movements`, { headers });
+        const json = await res.json();
+        setMovements(json.data || []);
+      } catch { /* silent */ }
+      finally { setLoading(false); }
+    };
+    load();
+  }, [token]);
+
+  const filtered = movements.filter(m => {
+    const productName = m.product?.name || '';
+    if (search && !productName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (typeFilter && m.type !== typeFilter) return false;
+    if (productFilter && String(m.product_id) !== String(productFilter)) return false;
+    return true;
+  });
+
+  const totalIn  = movements.filter(m => m.type === 'IN').reduce((s, m) => s + m.quantity, 0);
+  const totalOut = movements.filter(m => m.type === 'OUT').reduce((s, m) => s + m.quantity, 0);
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>Stock Movements</h1>
+          <p style={styles.pageSubtitle}>Full audit trail of all inventory changes</p>
         </div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Total Movements', value: movements.length, icon: '🔄', color: '#4f46e5', bg: '#ede9fe' },
+          { label: 'Stock In',        value: totalIn,           icon: '📥', color: '#16a34a', bg: '#f0fdf4' },
+          { label: 'Stock Out',       value: totalOut,          icon: '📤', color: '#dc2626', bg: '#fef2f2' },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{k.icon}</div>
+            <div>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k.label}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <input style={{ ...fS.input, maxWidth: 240 }} placeholder="🔍  Search by product…"
+          value={search} onChange={e => setSearch(e.target.value)} />
+        <select style={fS.select} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <option value="">All Types</option>
+          <option value="IN">📥 Stock In</option>
+          <option value="OUT">📤 Stock Out</option>
+        </select>
+        <select style={fS.select} value={productFilter} onChange={e => setProductFilter(e.target.value)}>
+          <option value="">All Products</option>
+          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        {(search || typeFilter || productFilter) && (
+          <button style={fS.clear} onClick={() => { setSearch(''); setTypeFilter(''); setProductFilter(''); }}>✕ Clear</button>
+        )}
+      </div>
+
+      <div style={styles.contentCard}>
+        {loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading movements…</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="🔄" title="No stock movements found"
+            description={search || typeFilter || productFilter ? 'Try adjusting your filters.' : 'Stock movements are recorded automatically when sales and purchases are made.'}
+            actionLabel={search || typeFilter || productFilter ? 'Clear Filters' : null}
+            onAction={search || typeFilter || productFilter ? () => { setSearch(''); setTypeFilter(''); setProductFilter(''); } : null}
+          />
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                {['Date', 'Product', 'Type', 'Quantity', 'Reference', 'Source'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(m => (
+                <tr key={m.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                  <td style={{ padding: '13px 14px', color: '#475569', fontSize: 13 }}>
+                    {new Date(m.date || m.created_at).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: '13px 14px', fontWeight: 600, color: '#0f172a', fontSize: 14 }}>
+                    {m.product?.name || `#${m.product_id}`}
+                  </td>
+                  <td style={{ padding: '13px 14px' }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      background: m.type === 'IN' ? '#f0fdf4' : '#fef2f2',
+                      color: m.type === 'IN' ? '#16a34a' : '#dc2626',
+                      border: `1px solid ${m.type === 'IN' ? '#bbf7d0' : '#fecaca'}`,
+                    }}>
+                      {m.type === 'IN' ? '📥' : '📤'} {m.type}
+                    </span>
+                  </td>
+                  <td style={{ padding: '13px 14px', fontWeight: 700, fontSize: 14, color: m.type === 'IN' ? '#16a34a' : '#dc2626' }}>
+                    {m.type === 'IN' ? '+' : '-'}{m.quantity}
+                  </td>
+                  <td style={{ padding: '13px 14px', color: '#475569', fontSize: 13 }}>
+                    #{m.reference_id || '—'}
+                  </td>
+                  <td style={{ padding: '13px 14px' }}>
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      background: m.reference_type === 'sale' ? '#eff6ff' : '#fefce8',
+                      color: m.reference_type === 'sale' ? '#2563eb' : '#92400e',
+                      border: `1px solid ${m.reference_type === 'sale' ? '#bfdbfe' : '#fde68a'}`,
+                      textTransform: 'capitalize',
+                    }}>
+                      {m.reference_type || '—'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Shared inline pagination ──────────────────────────────────────────────────
+function usePagination(items, pageSize = 15) {
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [items]);
+  const totalPages = Math.ceil(items.length / pageSize);
+  const paged = items.slice((page - 1) * pageSize, page * pageSize);
+  return { paged, page, setPage, totalPages, total: items.length, pageSize };
+}
+
+function InlinePager({ page, totalPages, total, pageSize, setPage }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
+    else if (pages[pages.length - 1] !== '...') pages.push('...');
+  }
+  const btn = (active) => ({
+    minWidth: 32, height: 32, borderRadius: 7,
+    border: `1px solid ${active ? '#4f46e5' : '#e2e8f0'}`,
+    background: active ? '#4f46e5' : '#fff',
+    color: active ? '#fff' : '#475569',
+    fontSize: 13, fontWeight: 500, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderTop: '1px solid #f1f5f9', background: '#fafbff' }}>
+      <span style={{ fontSize: 13, color: '#64748b' }}>Showing <strong>{from}–{to}</strong> of <strong>{total}</strong></span>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button style={{ ...btn(false), opacity: page === 1 ? 0.4 : 1 }} onClick={() => setPage(p => p - 1)} disabled={page === 1}>‹</button>
+        {pages.map((p, i) => p === '...'
+          ? <span key={`e${i}`} style={{ padding: '0 4px', color: '#94a3b8', fontSize: 13, alignSelf: 'center' }}>…</span>
+          : <button key={p} style={btn(p === page)} onClick={() => setPage(p)}>{p}</button>
+        )}
+        <button style={{ ...btn(false), opacity: page === totalPages ? 0.4 : 1 }} onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>›</button>
       </div>
     </div>
   );
