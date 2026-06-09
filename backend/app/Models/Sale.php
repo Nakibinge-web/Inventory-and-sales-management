@@ -19,6 +19,7 @@ class Sale extends Model
         'tax_amount',
         'total_amount',
         'payment_method',
+        'notes',
         'sale_date',
     ];
 

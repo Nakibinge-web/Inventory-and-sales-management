@@ -16,7 +16,7 @@ class SaleController extends Controller
 {
     public function index(): JsonResponse
     {
-        $sales = Sale::with(['user', 'saleItems.product'])->orderBy('sale_date', 'desc')->get();
+        $sales = Sale::with(['user', 'customer', 'saleItems.product'])->orderBy('sale_date', 'desc')->get();
 
         return response()->json(['success' => true, 'data' => $sales]);
     }
@@ -101,7 +101,7 @@ class SaleController extends Controller
                     ]);
                 }
 
-                $sale->load(['user:id,name,email', 'saleItems.product:id,name,price']);
+                $sale->load(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price']);
 
                 return response()->json(['success' => true, 'message' => 'Sale completed successfully.', 'data' => $sale], 201);
             });
@@ -112,9 +112,36 @@ class SaleController extends Controller
 
     public function show(Sale $sale): JsonResponse
     {
-        $sale->load(['user', 'saleItems.product']);
+        $sale->load(['user', 'customer', 'saleItems.product']);
 
         return response()->json(['success' => true, 'data' => $sale]);
+    }
+
+    public function update(Request $request, Sale $sale): JsonResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => 'sometimes|required|in:cash,card,mobile_money,bank_transfer',
+            'discount_type'  => 'nullable|in:percent,fixed',
+            'discount_amount'=> 'nullable|numeric|min:0',
+            'tax_amount'     => 'nullable|numeric|min:0',
+            'notes'          => 'nullable|string|max:1000',
+        ]);
+
+        // Recalculate total if financial fields changed
+        if (isset($validated['discount_amount']) || isset($validated['tax_amount'])) {
+            $itemsSubtotal   = $sale->saleItems->sum('subtotal');
+            $discountAmount  = $validated['discount_amount'] ?? ($sale->discount_amount ?? 0);
+            $taxAmount       = $validated['tax_amount']      ?? ($sale->tax_amount      ?? 0);
+            $validated['total_amount'] = max(0, $itemsSubtotal - $discountAmount + $taxAmount);
+        }
+
+        $sale->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sale updated successfully.',
+            'data'    => $sale->load(['user', 'customer', 'saleItems.product']),
+        ]);
     }
 
     public function getDailyReport(Request $request): JsonResponse
@@ -122,7 +149,7 @@ class SaleController extends Controller
         $validated = $request->validate(['date' => 'required|date']);
 
         $sales = Sale::whereDate('sale_date', $validated['date'])
-                     ->with(['user', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product'])
                      ->get();
 
         return response()->json(['success' => true, 'data' => [

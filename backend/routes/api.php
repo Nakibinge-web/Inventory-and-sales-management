@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
             Route::get('/',        [SaleController::class, 'index']);
             Route::post('/',       [SaleController::class, 'store']);
             Route::get('/{sale}',  [SaleController::class, 'show']);
+            Route::put('/{sale}',  [SaleController::class, 'update']);
         });
 
         // Reports restricted to managers and above
@@ -160,6 +161,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Stock Movements
     Route::prefix('stock-movements')->group(function () {
         Route::get('/', [StockMovementController::class, 'index']);
+        Route::post('/', [StockMovementController::class, 'store']);
         Route::get('/product/{productId}', [StockMovementController::class, 'getByProduct']);
         Route::get('/by-type', [StockMovementController::class, 'getByType']);
         Route::get('/date-range', [StockMovementController::class, 'getByDateRange']);

@@ -22,6 +22,7 @@ export default function Dashboard({ user, token, onLogout }) {
     sales: [],
     purchases: [],
     lowStock: [],
+    stockMovements: [],
     stats: {
       totalProducts: 0,
       totalSales: 0,
@@ -48,17 +49,18 @@ export default function Dashboard({ user, token, onLogout }) {
         try { return await res.json(); } catch { return { data: [] }; }
       };
 
-      const [productsRes, categoriesRes, suppliersRes, customersRes, salesRes, purchasesRes, lowStockRes] = await Promise.all([
+      const [productsRes, categoriesRes, suppliersRes, customersRes, salesRes, purchasesRes, lowStockRes, stockMovementsRes] = await Promise.all([
         fetch(`${API}/products?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/categories?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/suppliers?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/customers?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/sales?tenant_id=${user.tenant_id}`, { headers }),
         fetch(`${API}/purchases?tenant_id=${user.tenant_id}`, { headers }),
-        fetch(`${API}/products/low-stock?tenant_id=${user.tenant_id}`, { headers })
+        fetch(`${API}/products/low-stock?tenant_id=${user.tenant_id}`, { headers }),
+        fetch(`${API}/stock-movements?tenant_id=${user.tenant_id}`, { headers }),
       ]);
 
-      const [products, categories, suppliers, customers, sales, purchases, lowStock] = await Promise.all([
+      const [products, categories, suppliers, customers, sales, purchases, lowStock, stockMovements] = await Promise.all([
         safeJson(productsRes),
         safeJson(categoriesRes),
         safeJson(suppliersRes),
@@ -66,6 +68,7 @@ export default function Dashboard({ user, token, onLogout }) {
         safeJson(salesRes),
         safeJson(purchasesRes),
         safeJson(lowStockRes),
+        safeJson(stockMovementsRes),
       ]);
 
       setData({
@@ -76,6 +79,7 @@ export default function Dashboard({ user, token, onLogout }) {
         sales: sales.data || [],
         purchases: purchases.data || [],
         lowStock: lowStock.data || [],
+        stockMovements: stockMovements.data || [],
         stats: {
           totalProducts: (products.data || []).length,
           totalSales: (sales.data || []).reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0),
@@ -117,6 +121,7 @@ export default function Dashboard({ user, token, onLogout }) {
     { id: 'customers',   label: 'Customers',   icon: '👥', color: 'primary' },
     { id: 'sales',       label: 'Sales',       icon: '💰', color: 'success' },
     { id: 'purchases',   label: 'Purchases',   icon: '🛒', color: 'primary' },
+    { id: 'stock',       label: 'Stock',       icon: '🏗️', color: 'warning' },
     { id: 'reports',     label: 'Reports',     icon: '📈', color: 'danger' }
   ];
 
@@ -271,8 +276,9 @@ export default function Dashboard({ user, token, onLogout }) {
               onCustomerDeleted={id => setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }))}
             />
           )}
-          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} />}
+          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} token={token} user={user} />}
           {activeTab === 'purchases' && <PurchasesTab purchases={data.purchases} loading={loading} />}
+          {activeTab === 'stock' && <StockTab products={data.products} stockMovements={data.stockMovements} token={token} onAdjusted={fetchData} />}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} />}
         </main>
       </div>
@@ -334,7 +340,7 @@ function OverviewTab({ data, loading }) {
     { key: 'sale_date', title: 'Date', type: 'date' },
     { key: 'total_amount', title: 'Amount', type: 'currency' },
     { key: 'payment_method', title: 'Payment', render: (value) => <Badge variant="neutral" size="sm">{value}</Badge> },
-    { key: 'user', title: 'Cashier', render: (value) => value?.name || 'N/A' }
+    { key: 'user', title: 'Staff', render: (value) => value?.name || 'N/A' }
   ];
 
   return (
@@ -1126,6 +1132,77 @@ const catS = {
   },
 };
 
+const custS = {
+  hero: {
+    display: 'flex', alignItems: 'center', gap: 14,
+    padding: '16px 18px', marginBottom: 20,
+    background: 'linear-gradient(135deg, #eef2ff 0%, #f0fdf4 100%)',
+    borderRadius: 12, border: '1px solid #e0e7ff',
+  },
+  heroIcon: {
+    width: 48, height: 48, borderRadius: '50%',
+    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 22, flexShrink: 0,
+    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+  },
+  heroTitle: { margin: 0, fontSize: 15, fontWeight: 600, color: '#1e293b' },
+  heroSub: { margin: '3px 0 0', fontSize: 13, color: '#64748b', lineHeight: 1.4 },
+  form: { display: 'flex', flexDirection: 'column', gap: 18 },
+  section: {
+    display: 'flex', flexDirection: 'column', gap: 14,
+    padding: '16px', background: '#f8fafc',
+    borderRadius: 12, border: '1px solid #e2e8f0',
+  },
+  sectionTitle: {
+    fontSize: 11, fontWeight: 700, color: '#6366f1',
+    textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0,
+  },
+  field: { display: 'flex', flexDirection: 'column', gap: 6 },
+  label: { fontSize: 13, fontWeight: 600, color: '#374151' },
+  required: { color: '#ef4444', marginLeft: 2 },
+  inputWrap: {
+    display: 'flex', alignItems: 'center',
+    background: '#fff', border: '1.5px solid #e2e8f0',
+    borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s',
+  },
+  inputIcon: {
+    padding: '0 12px', fontSize: 16, color: '#94a3b8',
+    display: 'flex', alignItems: 'center', flexShrink: 0,
+    borderRight: '1px solid #f1f5f9', background: '#fafafa',
+    alignSelf: 'stretch',
+  },
+  input: {
+    flex: 1, padding: '11px 12px', border: 'none', outline: 'none',
+    fontSize: 14, fontFamily: 'inherit', color: '#0f172a', background: 'transparent',
+    width: '100%', boxSizing: 'border-box',
+  },
+  hint: { fontSize: 12, color: '#94a3b8', margin: 0 },
+  statusRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  statusPill: {
+    padding: '11px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+    background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+    color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+    transition: 'all 0.15s ease', fontFamily: 'inherit',
+  },
+  statusPillActive: {
+    border: '1.5px solid #6366f1', background: '#eef2ff', color: '#4f46e5',
+    boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.12)',
+  },
+  error: {
+    display: 'flex', alignItems: 'flex-start', gap: 8,
+    padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+    borderRadius: 10, color: '#b91c1c', fontSize: 13, lineHeight: 1.4,
+  },
+};
+
+function focusInputWrap(e, focused) {
+  const wrap = e.target.closest('[data-input-wrap]');
+  if (!wrap) return;
+  wrap.style.borderColor = focused ? '#6366f1' : '#e2e8f0';
+  wrap.style.boxShadow = focused ? '0 0 0 3px rgba(99, 102, 241, 0.12)' : 'none';
+}
+
 // Suppliers Tab Component
 function SuppliersTab({ suppliers, loading }) {
   return (
@@ -1308,52 +1385,127 @@ function CustomersTab({ customers, loading, token, user, onCustomerAdded, onCust
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title={editTarget ? 'Edit Customer' : 'Add Customer'}
+        title={editTarget ? 'Edit Customer' : 'Add New Customer'}
         size="sm"
-      >
-        <form onSubmit={handleSubmit}>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Name *</label>
-            <input
-              style={styles.formInput}
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required
-            />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Phone</label>
-            <input
-              style={styles.formInput}
-              value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-            />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Email</label>
-            <input
-              type="email"
-              style={styles.formInput}
-              value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Status</label>
-            <select
-              style={styles.formInput}
-              value={form.status}
-              onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+        footer={
+          <>
+            <Button variant="secondary" type="button" onClick={() => setShowModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={saving}
+              onClick={() => document.getElementById('customer-form')?.requestSubmit()}
             >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+              {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Add Customer'}
+            </Button>
+          </>
+        }
+      >
+        <div style={custS.hero}>
+          <div style={custS.heroIcon}>
+            {form.name ? form.name.charAt(0).toUpperCase() : '👤'}
           </div>
-          {error && <p style={{ color: 'red', marginBottom: '12px' }}>{error}</p>}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button variant="primary" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+          <div>
+            <p style={custS.heroTitle}>
+              {form.name || (editTarget ? 'Update customer details' : 'New customer profile')}
+            </p>
+            <p style={custS.heroSub}>
+              {editTarget
+                ? 'Update contact information and account status.'
+                : 'Add a customer to link them to future sales and track purchase history.'}
+            </p>
           </div>
+        </div>
+
+        <form id="customer-form" onSubmit={handleSubmit} style={custS.form}>
+          <div style={custS.section}>
+            <p style={custS.sectionTitle}>Contact Information</p>
+
+            <div style={custS.field}>
+              <label style={custS.label}>
+                Full Name<span style={custS.required}>*</span>
+              </label>
+              <div style={custS.inputWrap} data-input-wrap>
+                <span style={custS.inputIcon}>👤</span>
+                <input
+                  style={custS.input}
+                  placeholder="e.g. Jane Nakato"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  onFocus={e => focusInputWrap(e, true)}
+                  onBlur={e => focusInputWrap(e, false)}
+                  required
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div style={custS.field}>
+              <label style={custS.label}>Phone Number</label>
+              <div style={custS.inputWrap} data-input-wrap>
+                <span style={custS.inputIcon}>📞</span>
+                <input
+                  style={custS.input}
+                  type="tel"
+                  placeholder="+256 700 000 000"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  onFocus={e => focusInputWrap(e, true)}
+                  onBlur={e => focusInputWrap(e, false)}
+                />
+              </div>
+              <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+            </div>
+
+            <div style={custS.field}>
+              <label style={custS.label}>Email Address</label>
+              <div style={custS.inputWrap} data-input-wrap>
+                <span style={custS.inputIcon}>✉️</span>
+                <input
+                  style={custS.input}
+                  type="email"
+                  placeholder="customer@example.com"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onFocus={e => focusInputWrap(e, true)}
+                  onBlur={e => focusInputWrap(e, false)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={custS.section}>
+            <p style={custS.sectionTitle}>Account Status</p>
+            <div style={custS.statusRow}>
+              {[
+                { value: 'active', label: 'Active', icon: '✓' },
+                { value: 'inactive', label: 'Inactive', icon: '○' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  style={{
+                    ...custS.statusPill,
+                    ...(form.status === opt.value ? custS.statusPillActive : {}),
+                  }}
+                  onClick={() => setForm(f => ({ ...f, status: opt.value }))}
+                >
+                  <span>{opt.icon}</span> {opt.label}
+                </button>
+              ))}
+            </div>
+            <p style={custS.hint}>
+              Inactive customers are hidden from POS customer selection.
+            </p>
+          </div>
+
+          {error && (
+            <div style={custS.error}>
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
         </form>
       </Modal>
     </div>
@@ -1504,7 +1656,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
             ))}
             <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12 }}>
               {lastReceipt.discountAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginBottom: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#dc2626', marginBottom: 4 }}>
                   <span>Discount</span>
                   <span>− UGX {lastReceipt.discountAmount.toLocaleString()}</span>
                 </div>
@@ -1791,7 +1943,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
               {/* Total row */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
                 {discountAmount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#16a34a' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#dc2626' }}>
                     <span>Discount applied</span>
                     <span>− UGX {discountAmount.toLocaleString()}</span>
                   </div>
@@ -1986,10 +2138,120 @@ const posS = {
   },
 };
 
+function formatSaleDateTime(saleDate, createdAt) {
+  const dateSource = saleDate || createdAt;
+  if (!dateSource) return { date: '-', time: '' };
+  const d = new Date(dateSource);
+  if (isNaN(d.getTime())) return { date: '-', time: '' };
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  const timeSource = createdAt || saleDate;
+  const time = new Date(timeSource).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return { date, time };
+}
+
 // Sales Tab Component
-function SalesTab({ sales, loading, onNewSale }) {
+function SalesTab({ sales, loading, onNewSale, token, user }) {
+  const [viewingSale, setViewingSale]   = useState(null);
+  const [editingSale, setEditingSale]   = useState(null);
+  const [editForm, setEditForm]         = useState({});
+  const [editSaving, setEditSaving]     = useState(false);
+  const [editError, setEditError]       = useState(null);
+  const [localSales, setLocalSales]     = useState(sales);
+
+  // Keep localSales in sync when parent refreshes
+  useEffect(() => setLocalSales(sales), [sales]);
+
+  // Date filter
+  const [dateFilter, setDateFilter] = useState('all');
+
+  // Custom day lookup
+  const [customDate, setCustomDate]           = useState('');
+  const [customDaySales, setCustomDaySales]   = useState(null);
+
+  // Custom week lookup
+  const [customWeekDate, setCustomWeekDate]     = useState('');
+  const [customWeekSales, setCustomWeekSales]   = useState(null);
+  const [customWeekRange, setCustomWeekRange]   = useState(null);
+
+  const filteredSales = localSales.filter(sale => {
+    if (dateFilter === 'all') return true;
+
+    // Parse the date string as local date (YYYY-MM-DD) to avoid UTC offset shifting
+    const raw = (sale.sale_date || sale.created_at || '').slice(0, 10); // "YYYY-MM-DD"
+    const [y, m, d] = raw.split('-').map(Number);
+    const saleDate = new Date(y, m - 1, d); // local midnight
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (dateFilter === 'today') {
+      return saleDate.getTime() === today.getTime();
+    }
+    if (dateFilter === 'week') {
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay());
+      return saleDate >= startOfWeek;
+    }
+    if (dateFilter === 'month') {
+      return saleDate.getMonth() === today.getMonth() && saleDate.getFullYear() === today.getFullYear();
+    }
+    return true;
+  });
+
+  const openEdit = (sale) => {
+    setEditingSale(sale);
+    setEditForm({
+      payment_method: sale.payment_method || 'cash',
+      discount_amount: sale.discount_amount || '',
+      tax_amount: sale.tax_amount || '',
+      notes: sale.notes || '',
+    });
+    setEditError(null);
+  };
+
+  const handleEditSave = async () => {
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`${API}/sales/${editingSale.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          payment_method:  editForm.payment_method,
+          discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
+          tax_amount:      editForm.tax_amount !== ''      ? parseFloat(editForm.tax_amount)      : null,
+          notes:           editForm.notes || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditError(data?.message || 'Failed to update sale.'); return; }
+      setLocalSales(prev => prev.map(s => s.id === data.data.id ? data.data : s));
+      setEditingSale(null);
+    } catch {
+      setEditError('Network error. Check your connection.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const columns = [
-    { key: 'sale_date', title: 'Date', type: 'date' },
+    {
+      key: 'sale_date',
+      title: 'Date',
+      render: (value, row) => {
+        const { date, time } = formatSaleDateTime(value, row.created_at);
+        return (
+          <div>
+            <div style={{ color: '#1e293b', fontWeight: 500 }}>{date}</div>
+            {time && <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>{time}</div>}
+          </div>
+        );
+      }
+    },
     { key: 'total_amount', title: 'Amount', type: 'currency' },
     {
       key: 'payment_method',
@@ -1997,16 +2259,70 @@ function SalesTab({ sales, loading, onNewSale }) {
       render: (value) => <Badge variant="success" size="sm">{value}</Badge>
     },
     {
-      key: 'saleItems',
+      key: 'customer',
+      title: 'Customer',
+      render: (value) => value?.name
+        ? <Badge variant="primary" size="sm">{value.name}</Badge>
+        : <span style={{ color: '#94a3b8' }}>Walk-in Customer</span>
+    },
+    {
+      key: 'sale_items',
       title: 'Items',
-      render: (value) => `${value?.length || 0} items`
+      render: (value, row) => {
+        const items = value || row.saleItems || [];
+        return `${items.length} item${items.length === 1 ? '' : 's'}`;
+      }
     },
     {
       key: 'user',
-      title: 'Cashier',
+      title: 'Staff',
       render: (value) => value?.name || 'N/A'
-    }
+    },
+    {
+      key: 'actions',
+      title: 'Actions',
+      render: (_, row) => (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            title="View sale"
+            onClick={() => setViewingSale(row)}
+            style={{
+              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+              background: '#f8fafc', color: '#0369a1', cursor: 'pointer',
+              fontSize: 15, fontWeight: 600, lineHeight: 1,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#e0f2fe'}
+            onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+          >
+            👁
+          </button>
+          <button
+            title="Edit sale"
+            onClick={() => openEdit(row)}
+            style={{
+              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+              background: '#f8fafc', color: '#b45309', cursor: 'pointer',
+              fontSize: 15, fontWeight: 600, lineHeight: 1,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
+            onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+          >
+            ✏️
+          </button>
+        </div>
+      )
+    },
   ];
+
+  // ── helpers ──────────────────────────────────────────────
+  const detailRow = (label, value) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 14 }}>
+      <span style={{ color: '#64748b', fontWeight: 500 }}>{label}</span>
+      <span style={{ color: '#0f172a', fontWeight: 600 }}>{value}</span>
+    </div>
+  );
 
   return (
     <div style={styles.pageContainer}>
@@ -2021,9 +2337,226 @@ function SalesTab({ sales, loading, onNewSale }) {
       </div>
 
       <div style={styles.contentCard}>
+        {/* Filter buttons */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[
+            { key: 'all',   label: 'All Sales',   icon: '≡' },
+            { key: 'today', label: 'Today',        icon: '📅' },
+            { key: 'week',  label: 'This Week',    icon: '📅' },
+            { key: 'month', label: 'This Month',   icon: '📅' },
+          ].map(f => (
+            <button
+              key={f.key}
+              onClick={() => setDateFilter(f.key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 18px', borderRadius: 10, border: 'none',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                background: dateFilter === f.key ? '#4f46e5' : '#f1f5f9',
+                color:      dateFilter === f.key ? '#fff'     : '#334155',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              <span>{f.icon}</span> {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Weekly breakdown (only when This Week is active) ── */}
+        {dateFilter === 'week' && (() => {
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+
+          // Build 7 day slots Mon–Sun (reorder so Mon is first)
+          const dayNames = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+          const days = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(startOfWeek);
+            d.setDate(startOfWeek.getDate() + i);
+            return d;
+          });
+          // Reorder: Mon(1)…Sat(6), Sun(0)
+          const ordered = [...days.slice(1), days[0]];
+
+          // Build totals per day
+          const weekTotal     = filteredSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
+          const weekCount     = filteredSales.length;
+          const startLabel    = startOfWeek.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g, ' ');
+          const endLabel      = today.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g, ' ');
+
+          const dayTotals = ordered.map(day => {
+            const daySales = filteredSales.filter(sale => {
+              const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+              const [y, m, d] = raw.split('-').map(Number);
+              const sd = new Date(y, m - 1, d);
+              return sd.getTime() === day.getTime();
+            });
+            return {
+              day,
+              count: daySales.length,
+              total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0),
+              isToday: day.getTime() === today.getTime(),
+            };
+          });
+
+          return (
+            <div style={{ marginBottom: 20 }}>
+              {/* Summary banner */}
+              <div style={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                borderRadius: 14, padding: '20px 24px', marginBottom: 14,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                    Total Sales This Week
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+                    UGX {weekTotal.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>
+                    {weekCount} transaction{weekCount !== 1 ? 's' : ''} &bull; {startLabel} – {endLabel}
+                  </div>
+                </div>
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                }}>
+                  📅
+                </div>
+              </div>
+
+              {/* Day cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+                {dayTotals.map(({ day, count, total, isToday }) => (
+                  <div key={day.getTime()} style={{
+                    background: '#fff',
+                    border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`,
+                    borderRadius: 10, padding: '10px 12px',
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em' }}>
+                      {dayNames[day.getDay()]}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                      {day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: count > 0 ? '#2563eb' : '#cbd5e1', marginBottom: 2 }}>
+                      {count}
+                    </div>
+                    <div style={{ fontSize: 11, color: count > 0 ? '#475569' : '#cbd5e1', fontWeight: 500 }}>
+                      UGX {total.toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Monthly breakdown (only when This Month is active) ── */}
+        {dateFilter === 'month' && (() => {
+          const now   = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const monthName = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+          // Month totals
+          const monthTotal = filteredSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
+          const monthCount = filteredSales.length;
+
+          // Build calendar weeks for this month (week starts Monday)
+          const firstDay  = new Date(today.getFullYear(), today.getMonth(), 1);
+          const lastDay   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+          // Find Monday on or before the 1st
+          const startMon = new Date(firstDay);
+          const dow = firstDay.getDay(); // 0=Sun
+          startMon.setDate(firstDay.getDate() - (dow === 0 ? 6 : dow - 1));
+
+          // Collect weeks until we pass the last day of the month
+          const weeks = [];
+          let cursor = new Date(startMon);
+          while (cursor <= lastDay) {
+            const weekStart = new Date(cursor);
+            const weekEnd   = new Date(cursor);
+            weekEnd.setDate(cursor.getDate() + 6);
+
+            const daySales = filteredSales.filter(sale => {
+              const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+              const [y, m, d] = raw.split('-').map(Number);
+              const sd = new Date(y, m - 1, d);
+              return sd >= weekStart && sd <= weekEnd;
+            });
+
+            weeks.push({
+              label: `Week ${weeks.length + 1}`,
+              start: weekStart,
+              end:   weekEnd,
+              count: daySales.length,
+              total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0),
+              isCurrent: today >= weekStart && today <= weekEnd,
+            });
+            cursor.setDate(cursor.getDate() + 7);
+          }
+
+          return (
+            <div style={{ marginBottom: 20 }}>
+              {/* Summary banner */}
+              <div style={{
+                background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                borderRadius: 14, padding: '20px 24px', marginBottom: 14,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                    Total Sales This Month
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+                    UGX {monthTotal.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>
+                    {monthCount} transaction{monthCount !== 1 ? 's' : ''} &bull; {monthName}
+                  </div>
+                </div>
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                }}>
+                  📅
+                </div>
+              </div>
+
+              {/* Week cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks.length}, 1fr)`, gap: 10 }}>
+                {weeks.map(({ label, start, end, count, total, isCurrent }) => (
+                  <div key={label} style={{
+                    background: '#fff',
+                    border: `1.5px solid ${isCurrent ? '#9333ea' : '#e2e8f0'}`,
+                    borderRadius: 10, padding: '14px 16px',
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 2 }}>
+                      {label}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                      {start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – {end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: count > 0 ? '#7c3aed' : '#cbd5e1', marginBottom: 2 }}>
+                      {count}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 2 }}>Sales</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: count > 0 ? '#16a34a' : '#cbd5e1' }}>
+                      UGX {total.toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         <DataTable
           columns={columns}
-          data={sales}
+          data={filteredSales}
           loading={loading}
           emptyStateProps={{
             icon: '💰',
@@ -2034,6 +2567,515 @@ function SalesTab({ sales, loading, onNewSale }) {
           }}
         />
       </div>
+
+      {/* ── Custom Day Lookup ── */}
+      <div style={{ ...styles.contentCard, marginTop: 20 }}>
+        <div style={{ marginBottom: 14 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>🔍 Sales by Specific Day</h3>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Select any date to view all sales made on that day</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Select Date</label>
+            <input
+              type="date"
+              value={customDate}
+              onChange={e => { setCustomDate(e.target.value); setCustomDaySales(null); }}
+              style={{
+                padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10,
+                fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff',
+                color: '#0f172a', cursor: 'pointer',
+              }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!customDate) return;
+              const [y, m, d] = customDate.split('-').map(Number);
+              const target = new Date(y, m - 1, d);
+              const results = localSales.filter(sale => {
+                const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+                const [sy, sm, sd] = raw.split('-').map(Number);
+                return new Date(sy, sm - 1, sd).getTime() === target.getTime();
+              });
+              setCustomDaySales(results);
+            }}
+            style={{
+              padding: '9px 20px', borderRadius: 10, border: 'none',
+              background: '#4f46e5', color: '#fff', fontSize: 14, fontWeight: 600,
+              cursor: customDate ? 'pointer' : 'not-allowed',
+              opacity: customDate ? 1 : 0.5,
+            }}
+          >
+            View Sales
+          </button>
+          {customDaySales !== null && (
+            <button
+              onClick={() => { setCustomDaySales(null); setCustomDate(''); }}
+              style={{
+                padding: '9px 16px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Results */}
+        {customDaySales !== null && (
+          <div style={{ marginTop: 16 }}>
+            {/* Summary strip */}
+            <div style={{
+              background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 10,
+              padding: '12px 16px', marginBottom: 14,
+              display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                  {new Date(...customDate.split('-').map((v,i) => i===1 ? v-1 : +v))
+                    .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transactions</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#4f46e5' }}>{customDaySales.length}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Revenue</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>
+                  UGX {customDaySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {customDaySales.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>🗓️</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>No sales on this day</div>
+              </div>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={customDaySales}
+                loading={false}
+                emptyStateProps={{ icon: '💰', title: 'No sales', description: '' }}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Custom Week Lookup ── */}
+      <div style={{ ...styles.contentCard, marginTop: 20 }}>
+        <div style={{ marginBottom: 14 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>📅 Sales by Specific Week</h3>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Pick any date — the system will show all sales for that entire week (Mon – Sun)</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Pick any date in the week</label>
+            <input
+              type="date"
+              value={customWeekDate}
+              onChange={e => { setCustomWeekDate(e.target.value); setCustomWeekSales(null); setCustomWeekRange(null); }}
+              style={{
+                padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10,
+                fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff',
+                color: '#0f172a', cursor: 'pointer',
+              }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!customWeekDate) return;
+              const [y, m, d] = customWeekDate.split('-').map(Number);
+              const picked = new Date(y, m - 1, d);
+              // Find Monday of that week
+              const dow = picked.getDay(); // 0=Sun
+              const monday = new Date(picked);
+              monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
+              const sunday = new Date(monday);
+              sunday.setDate(monday.getDate() + 6);
+
+              const results = localSales.filter(sale => {
+                const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+                const [sy, sm, sd] = raw.split('-').map(Number);
+                const sd2 = new Date(sy, sm - 1, sd);
+                return sd2 >= monday && sd2 <= sunday;
+              });
+              setCustomWeekSales(results);
+              setCustomWeekRange({ monday, sunday });
+            }}
+            style={{
+              padding: '9px 20px', borderRadius: 10, border: 'none',
+              background: '#4f46e5', color: '#fff', fontSize: 14, fontWeight: 600,
+              cursor: customWeekDate ? 'pointer' : 'not-allowed',
+              opacity: customWeekDate ? 1 : 0.5,
+            }}
+          >
+            View Week
+          </button>
+          {customWeekSales !== null && (
+            <button
+              onClick={() => { setCustomWeekSales(null); setCustomWeekDate(''); setCustomWeekRange(null); }}
+              style={{
+                padding: '9px 16px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Results */}
+        {customWeekSales !== null && customWeekRange !== null && (() => {
+          const { monday, sunday } = customWeekRange;
+          const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const weekTotal = customWeekSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
+
+          // Day-by-day breakdown for that week
+          const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+          const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
+            const day = new Date(monday);
+            day.setDate(monday.getDate() + i);
+            const daySales = customWeekSales.filter(sale => {
+              const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+              const [sy, sm, sd] = raw.split('-').map(Number);
+              return new Date(sy, sm - 1, sd).getTime() === day.getTime();
+            });
+            return { day, name: dayNames[i], count: daySales.length, total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0) };
+          });
+
+          return (
+            <div style={{ marginTop: 16 }}>
+              {/* Summary strip */}
+              <div style={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                borderRadius: 12, padding: '16px 20px', marginBottom: 14,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Week</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{fmt(monday)} – {fmt(sunday)}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Transactions</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{customWeekSales.length}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Total Revenue</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>UGX {weekTotal.toLocaleString()}</div>
+                </div>
+              </div>
+
+              {/* Day-by-day cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 16 }}>
+                {dayBreakdown.map(({ day, name, count, total }) => {
+                  const now = new Date();
+                  const isToday = day.getTime() === new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                  return (
+                    <div key={name} style={{
+                      background: '#fff', borderRadius: 10, padding: '10px 12px',
+                      border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`,
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{name}</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>
+                        {day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: count > 0 ? '#2563eb' : '#cbd5e1', marginBottom: 2 }}>{count}</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: count > 0 ? '#475569' : '#cbd5e1' }}>
+                        UGX {total.toLocaleString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Sales table */}
+              {customWeekSales.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>📅</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>No sales in this week</div>
+                </div>
+              ) : (
+                <DataTable
+                  columns={columns}
+                  data={customWeekSales}
+                  loading={false}
+                  emptyStateProps={{ icon: '💰', title: 'No sales', description: '' }}
+                />
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── View Modal (Receipt) ── */}
+      <Modal
+        isOpen={!!viewingSale}
+        onClose={() => setViewingSale(null)}
+        title=""
+        size="md"
+        footer={
+          <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setViewingSale(null)}>Close</Button>
+            <Button
+              variant="success"
+              onClick={() => {
+                const src = document.getElementById('receipt-content');
+                if (!src) return;
+                const win = window.open('', '_blank', 'width=800,height=900');
+                win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Receipt</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #fff; color: #000; padding: 32px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; }
+    @media print {
+      body { padding: 20px; }
+      button { display: none !important; }
+    }
+  </style>
+</head>
+<body>${src.innerHTML}</body>
+</html>`);
+                win.document.close();
+                win.focus();
+                setTimeout(() => { win.print(); win.close(); }, 400);
+              }}
+            >
+              🖨️ Print / Save PDF
+            </Button>
+          </div>
+        }
+      >
+        {viewingSale && (() => {
+          const items       = viewingSale.sale_items || viewingSale.saleItems || [];
+          const subtotal    = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
+          const discount    = parseFloat(viewingSale.discount_amount) || 0;
+          const tax         = parseFloat(viewingSale.tax_amount) || 0;
+          const total       = parseFloat(viewingSale.total_amount) || 0;
+          const { date, time } = formatSaleDateTime(viewingSale.sale_date, viewingSale.created_at);
+          const tenant      = user?.tenant || {};
+          const tenantName  = tenant.name || 'InventoryPro';
+          // Build a SAL-YYYYMMDD-NNNN style ref using the sale date
+          const saleDate    = viewingSale.sale_date || viewingSale.created_at || '';
+          const datePart    = saleDate.replace(/-/g, '').slice(0, 8);
+          const saleId      = String(viewingSale.id).padStart(4, '0');
+          const receiptRef  = `SAL-${datePart}-${saleId}`;
+
+          const rRow = (label, value, bold = false, color = '#0f172a') => (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
+              <span style={{ color: '#64748b' }}>{label}</span>
+              <span style={{ fontWeight: bold ? 700 : 500, color }}>{value}</span>
+            </div>
+          );
+
+          return (
+            <div id="receipt-content" style={{ fontFamily: 'inherit' }}>
+
+              {/* ── Business Header ── */}
+              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '1px solid #e2e8f0' }}>
+                {/* Avatar */}
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%', background: '#4f46e5',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 28, fontWeight: 700, color: '#fff', marginBottom: 10,
+                }}>
+                  {tenantName.charAt(0).toLowerCase()}
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>{tenantName}</div>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                  {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
+                </div>
+                {tenant.address && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{tenant.address}</div>}
+              </div>
+
+              {/* ── Receipt Details + Customer ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1px solid #e2e8f0' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
+                  <div style={{ color: '#4f46e5', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{receiptRef}</div>
+                  <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                    <span>📅</span> {date}
+                  </div>
+                  {time && (
+                    <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                      <span>🕐</span> {time}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span>👤</span> Served by: {viewingSale.user?.name || 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
+                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>
+                    {viewingSale.customer?.name || 'Walk-in Customer'}
+                  </div>
+                  {viewingSale.customer?.phone && (
+                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>📞 {viewingSale.customer.phone}</div>
+                  )}
+                  {viewingSale.customer?.email && (
+                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>✉️ {viewingSale.customer.email}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Items Table ── */}
+              <div style={{ paddingTop: 18 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
+                        <th key={h} style={{
+                          padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8',
+                          letterSpacing: '0.06em', textTransform: 'uppercase',
+                          textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
+                          borderBottom: '1px solid #e2e8f0',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.length === 0 ? (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
+                    ) : items.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
+                        <td style={{ padding: '10px' }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
+                          {item.product?.sku && <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.product.sku}</div>}
+                        </td>
+                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
+                          {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
+                        </td>
+                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
+                          UGX {parseFloat(item.price).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                          UGX {parseFloat(item.subtotal).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── Totals ── */}
+              <div style={{ marginTop: 10, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                <div style={{ maxWidth: 280, marginLeft: 'auto' }}>
+                  {rRow('Subtotal:', `UGX ${subtotal.toLocaleString()}`)}
+                  {discount > 0 && rRow('Discount:', `− UGX ${discount.toLocaleString()}`, false, '#dc2626')}
+                  {tax > 0      && rRow('Tax:',      `+ UGX ${tax.toLocaleString()}`,      false, '#b45309')}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: 16 }}>TOTAL:</span>
+                    <span style={{ fontWeight: 700, fontSize: 18, color: '#0f172a' }}>UGX {total.toLocaleString()}</span>
+                  </div>
+                  {rRow('Payment Method:', viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
+                    <span style={{ color: '#64748b' }}>Payment Status:</span>
+                    <span style={{ background: '#dcfce7', color: '#16a34a', fontWeight: 700, fontSize: 12, padding: '2px 10px', borderRadius: 20 }}>Paid</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {viewingSale.notes && (
+                <div style={{ marginTop: 14, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#475569', borderLeft: '3px solid #e2e8f0' }}>
+                  📝 {viewingSale.notes}
+                </div>
+              )}
+
+              {/* ── Thank you footer ── */}
+              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: '#1e293b', marginBottom: 4 }}>Thank you!</div>
+                <div style={{ fontSize: 13, color: '#64748b' }}>We appreciate your business. Visit us again!</div>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* ── Edit Modal ── */}
+      <Modal
+        isOpen={!!editingSale}
+        onClose={() => setEditingSale(null)}
+        title={`Edit Sale #${editingSale?.id}`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditingSale(null)}>Cancel</Button>
+            <Button variant="success" loading={editSaving} onClick={handleEditSave}>Save Changes</Button>
+          </>
+        }
+      >
+        {editingSale && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {editError && (
+              <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                ⚠️ {editError}
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Payment Method</label>
+              <select
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                value={editForm.payment_method}
+                onChange={e => setEditForm(p => ({ ...p, payment_method: e.target.value }))}
+              >
+                <option value="cash">💵 Cash</option>
+                <option value="card">💳 Card</option>
+                <option value="mobile_money">📱 Mobile Money</option>
+                <option value="bank_transfer">🏦 Bank Transfer</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
+              <input
+                type="number" min="0"
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                value={editForm.discount_amount}
+                onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
+              <input
+                type="number" min="0"
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                value={editForm.tax_amount}
+                onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Notes (Optional)</label>
+              <textarea
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 72, boxSizing: 'border-box' }}
+                value={editForm.notes}
+                onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
+                placeholder="Add any notes…"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -2080,6 +3122,256 @@ function PurchasesTab({ purchases, loading }) {
             onAction: () => console.log('New Purchase')
           }}
         />
+      </div>
+    </div>
+  );
+}
+
+// Stock Tab Component
+function StockTab({ products, stockMovements, token, onAdjusted }) {
+  const [form, setForm]         = useState({ product_id: '', type: 'IN', quantity: '', reason: '', date: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError]   = useState(null);
+  const [formSuccess, setFormSuccess] = useState(null);
+  const [typeFilter, setTypeFilter]   = useState('ALL');
+  const [search, setSearch]           = useState('');
+
+  const handleSubmit = async () => {
+    if (!form.product_id || !form.quantity) { setFormError('Product and quantity are required.'); return; }
+    if (parseInt(form.quantity) < 1) { setFormError('Quantity must be at least 1.'); return; }
+    setSubmitting(true); setFormError(null); setFormSuccess(null);
+    try {
+      const res = await fetch(`${API}/stock-movements`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          product_id: parseInt(form.product_id),
+          type:       form.type,
+          quantity:   parseInt(form.quantity),
+          reason:     form.reason || null,
+          date:       form.date || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setFormError(data?.message || 'Failed to update stock.'); return; }
+      setFormSuccess(`Stock updated successfully for "${data.data?.product?.name}".`);
+      setForm({ product_id: '', type: 'IN', quantity: '', reason: '', date: '' });
+      onAdjusted();
+    } catch { setFormError('Network error. Check your connection.'); }
+    finally { setSubmitting(false); }
+  };
+
+  const typeConfig = {
+    IN:         { label: 'Stock In',    color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+    OUT:        { label: 'Stock Out',   color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    ADJUSTMENT: { label: 'Adjustment', color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
+    sale:       { label: 'Sale',        color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
+  };
+
+  const filtered = stockMovements.filter(m => {
+    const matchType = typeFilter === 'ALL' || m.type === typeFilter || (typeFilter === 'sale' && m.reference_type === 'sale');
+    const matchSearch = !search || (m.product?.name || '').toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
+  });
+
+  // Stock overview cards
+  const totalIn  = stockMovements.filter(m => m.type === 'IN').reduce((s, m) => s + m.quantity, 0);
+  const totalOut = stockMovements.filter(m => m.type === 'OUT').reduce((s, m) => s + m.quantity, 0);
+  const lowStock = products.filter(p => Number(p.stock) <= Number(p.reorder_level || 0));
+
+  return (
+    <div style={styles.pageContainer}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.pageTitle}>Stock Management</h1>
+          <p style={styles.pageSubtitle}>Adjust stock levels and view movement history</p>
+        </div>
+      </div>
+
+      {/* ── Summary cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Total Products',   value: products.length,   icon: '📦', color: '#4f46e5', bg: '#eef2ff' },
+          { label: 'Total Stock In',   value: totalIn,            icon: '⬆️', color: '#16a34a', bg: '#f0fdf4' },
+          { label: 'Total Stock Out',  value: totalOut,           icon: '⬇️', color: '#dc2626', bg: '#fef2f2' },
+        ].map(c => (
+          <div key={c.label} style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>{c.icon}</div>
+            <div>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{c.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{c.value.toLocaleString()}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 20, alignItems: 'start' }}>
+
+        {/* ── Left: Adjustment form ── */}
+        <div style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>📝 Adjust Stock</h3>
+
+          {formError && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {formError}</div>}
+          {formSuccess && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#15803d', fontSize: 13 }}>✅ {formSuccess}</div>}
+
+          {/* Product */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Product *</label>
+            <select
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+              value={form.product_id}
+              onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}
+            >
+              <option value="">— Select product —</option>
+              {products.map(p => (
+                <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Type */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6 }}>Adjustment Type *</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { val: 'IN',         label: '⬆️ Stock In',    activeColor: '#16a34a', activeBg: '#f0fdf4' },
+                { val: 'OUT',        label: '⬇️ Stock Out',   activeColor: '#dc2626', activeBg: '#fef2f2' },
+                { val: 'ADJUSTMENT', label: '🔧 Set Level',   activeColor: '#b45309', activeBg: '#fffbeb' },
+              ].map(t => (
+                <button key={t.val} onClick={() => setForm(p => ({ ...p, type: t.val }))} style={{
+                  flex: 1, padding: '8px 6px', borderRadius: 8, border: '1.5px solid',
+                  borderColor: form.type === t.val ? t.activeColor : '#e2e8f0',
+                  background:  form.type === t.val ? t.activeBg   : '#fff',
+                  color:       form.type === t.val ? t.activeColor : '#64748b',
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                }}>{t.label}</button>
+              ))}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: '#94a3b8' }}>
+              {form.type === 'IN'         && 'Adds quantity to current stock.'}
+              {form.type === 'OUT'        && 'Removes quantity from current stock.'}
+              {form.type === 'ADJUSTMENT' && 'Sets stock to an exact absolute value.'}
+            </div>
+          </div>
+
+          {/* Quantity */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>
+              {form.type === 'ADJUSTMENT' ? 'New Stock Level *' : 'Quantity *'}
+            </label>
+            <input
+              type="number" min="1"
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              placeholder={form.type === 'ADJUSTMENT' ? 'Enter new total stock' : 'Enter quantity'}
+              value={form.quantity}
+              onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))}
+            />
+          </div>
+
+          {/* Reason */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Reason (Optional)</label>
+            <input
+              type="text"
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              placeholder="e.g. Damaged goods, Stock count correction…"
+              value={form.reason}
+              onChange={e => setForm(p => ({ ...p, reason: e.target.value }))}
+            />
+          </div>
+
+          {/* Date */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Date (Optional — defaults to today)</label>
+            <input
+              type="date"
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              value={form.date}
+              onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+            />
+          </div>
+
+          <Button variant="success" style={{ width: '100%', justifyContent: 'center' }} loading={submitting} onClick={handleSubmit}>
+            Apply Adjustment
+          </Button>
+
+          {/* Low stock alert */}
+          {lowStock.length > 0 && (
+            <div style={{ marginTop: 4, padding: '10px 12px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>⚠️ {lowStock.length} product{lowStock.length > 1 ? 's' : ''} low on stock</div>
+              {lowStock.slice(0, 4).map(p => (
+                <div key={p.id} style={{ fontSize: 12, color: '#92400e', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{p.name}</span>
+                  <span style={{ fontWeight: 700 }}>{p.stock} left</span>
+                </div>
+              ))}
+              {lowStock.length > 4 && <div style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>+{lowStock.length - 4} more…</div>}
+            </div>
+          )}
+        </div>
+
+        {/* ── Right: Movement history ── */}
+        <div style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>📋 Movement History</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {['ALL', 'IN', 'OUT', 'ADJUSTMENT'].map(t => (
+                <button key={t} onClick={() => setTypeFilter(t)} style={{
+                  padding: '5px 12px', borderRadius: 8, border: '1.5px solid',
+                  borderColor: typeFilter === t ? '#4f46e5' : '#e2e8f0',
+                  background:  typeFilter === t ? '#4f46e5' : '#fff',
+                  color:       typeFilter === t ? '#fff'    : '#64748b',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>{t}</button>
+              ))}
+            </div>
+          </div>
+
+          <input
+            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 14 }}
+            placeholder="🔍  Search by product name…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
+              <div style={{ fontSize: 36 }}>📦</div>
+              <div style={{ marginTop: 8, fontSize: 14 }}>No movements found</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {/* Header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 1fr 100px', gap: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, marginBottom: 4 }}>
+                {['Product', 'Type', 'Qty', 'Reason', 'Date'].map(h => (
+                  <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+                ))}
+              </div>
+              {/* Rows */}
+              <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+                {filtered.map((m, i) => {
+                  const tc = typeConfig[m.type] || typeConfig['IN'];
+                  return (
+                    <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 1fr 100px', gap: 8, padding: '10px 12px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{m.product?.name || `#${m.product_id}`}</div>
+                        {m.product?.sku && <div style={{ fontSize: 11, color: '#94a3b8' }}>{m.product.sku}</div>}
+                      </div>
+                      <div>
+                        <span style={{ background: tc.bg, color: tc.color, border: `1px solid ${tc.border}`, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{tc.label}</span>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: m.type === 'IN' ? '#16a34a' : m.type === 'OUT' ? '#dc2626' : '#b45309' }}>
+                        {m.type === 'IN' ? '+' : m.type === 'OUT' ? '−' : '='}{m.quantity}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b' }}>{m.reason || <span style={{ color: '#cbd5e1' }}>—</span>}</div>
+                      <div style={{ fontSize: 12, color: '#64748b' }}>{m.date ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
