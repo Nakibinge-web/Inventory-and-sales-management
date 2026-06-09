@@ -52,6 +52,7 @@ class AuthController extends Controller
             }
 
             $user = Auth::user();
+            $user->load('roles', 'tenant');
             $token = $user->createToken('api-token')->plainTextToken;
 
             return response()->json([
@@ -112,6 +113,8 @@ class AuthController extends Controller
         if ($ownerRole) {
             $user->roles()->attach($ownerRole->id);
         }
+        
+        $user->load('roles', 'tenant');
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([

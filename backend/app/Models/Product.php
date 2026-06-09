@@ -13,11 +13,24 @@ class Product extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'sku',
+        'barcode',
+        'unit',
         'category_id',
         'supplier_id',
         'stock',
+        'cost_price',
         'price',
         'reorder_level',
+        'image_path',
+        'description',
+        'track_expiry',
+        'manufacture_date',
+        'expiry_date',
+    ];
+
+    protected $casts = [
+        'track_expiry' => 'boolean',
     ];
 
     // Relationships

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Product;
+use App\Models\Customer;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +16,7 @@ class SaleController extends Controller
 {
     public function index(): JsonResponse
     {
-        $sales = Sale::with(['user', 'saleItems.product'])->orderBy('sale_date', 'desc')->get();
+        $sales = Sale::with(['user', 'customer', 'saleItems.product'])->orderBy('sale_date', 'desc')->get();
 
         return response()->json(['success' => true, 'data' => $sales]);
     }
@@ -28,56 +29,119 @@ class SaleController extends Controller
             'items.*.product_id'     => 'required|exists:products,id',
             'items.*.quantity'       => 'required|integer|min:1',
             'items.*.price'          => 'required|numeric|min:0',
+            'customer_type'          => 'nullable|in:walk_in,existing,new',
+            'customer_id'            => 'nullable|exists:customers,id',
+            'new_customer.name'      => 'required_if:customer_type,new|nullable|string|max:255',
+            'new_customer.phone'     => 'nullable|string|max:20',
+            'new_customer.email'     => 'nullable|email|max:255',
+            'discount_type'          => 'nullable|in:percent,fixed',
+            'discount_amount'        => 'nullable|numeric|min:0',
+            'tax_amount'             => 'nullable|numeric|min:0',
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
+        try {
+            return DB::transaction(function () use ($validated, $request) {
+                $customerId = null;
 
-            $sale = Sale::create([
-                'user_id'        => Auth::id(),
-                'total_amount'   => $totalAmount,
-                'payment_method' => $validated['payment_method'],
-                'sale_date'      => now(),
-            ]);
-
-            foreach ($validated['items'] as $item) {
-                $product = Product::findOrFail($item['product_id']);
-
-                if ($product->stock < $item['quantity']) {
-                    throw new \Exception("Insufficient stock for product: {$product->name}");
+                if (($validated['customer_type'] ?? null) === 'new' && !empty($validated['new_customer']['name'])) {
+                    $customer = Customer::create([
+                        'tenant_id' => Auth::user()->tenant_id,
+                        'name'      => $validated['new_customer']['name'],
+                        'phone'     => $validated['new_customer']['phone'] ?? null,
+                        'email'     => $validated['new_customer']['email'] ?? null,
+                        'status'    => 'active',
+                    ]);
+                    $customerId = $customer->id;
+                } elseif (($validated['customer_type'] ?? null) === 'existing') {
+                    $customerId = $validated['customer_id'] ?? null;
                 }
 
-                SaleItem::create([
-                    'sale_id'    => $sale->id,
-                    'product_id' => $item['product_id'],
-                    'quantity'   => $item['quantity'],
-                    'price'      => $item['price'],
-                    'subtotal'   => $item['quantity'] * $item['price'],
+                $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
+
+                $discountAmount = $validated['discount_amount'] ?? 0;
+                $taxAmount      = $validated['tax_amount'] ?? 0;
+                $finalTotal     = max(0, $totalAmount - $discountAmount + $taxAmount);
+
+                $sale = Sale::create([
+                    'user_id'         => Auth::id(),
+                    'customer_id'     => $customerId,
+                    'discount_type'   => $validated['discount_type'] ?? null,
+                    'discount_amount' => $discountAmount ?: null,
+                    'tax_amount'      => $taxAmount ?: null,
+                    'total_amount'    => $finalTotal,
+                    'payment_method'  => $validated['payment_method'],
+                    'sale_date'       => now(),
                 ]);
 
-                $product->decrement('stock', $item['quantity']);
+                foreach ($validated['items'] as $item) {
+                    // findOrFail scoped by tenant via BelongsToTenant global scope
+                    $product = Product::findOrFail($item['product_id']);
 
-                StockMovement::create([
-                    'product_id'     => $item['product_id'],
-                    'type'           => 'OUT',
-                    'quantity'       => $item['quantity'],
-                    'reference_id'   => $sale->id,
-                    'reference_type' => 'sale',
-                    'date'           => now(),
-                ]);
-            }
+                    if ($product->stock < $item['quantity']) {
+                        throw new \Exception("Insufficient stock for \"{$product->name}\". Available: {$product->stock}, requested: {$item['quantity']}.");
+                    }
 
-            $sale->load(['user', 'saleItems.product']);
+                    SaleItem::create([
+                        'sale_id'    => $sale->id,
+                        'product_id' => $item['product_id'],
+                        'quantity'   => $item['quantity'],
+                        'price'      => $item['price'],
+                        'subtotal'   => $item['quantity'] * $item['price'],
+                    ]);
 
-            return response()->json(['success' => true, 'message' => 'Sale completed successfully', 'data' => $sale], 201);
-        });
+                    $product->decrement('stock', $item['quantity']);
+
+                    StockMovement::create([
+                        'product_id'     => $item['product_id'],
+                        'type'           => 'OUT',
+                        'quantity'       => $item['quantity'],
+                        'reference_id'   => $sale->id,
+                        'reference_type' => 'sale',
+                        'date'           => now(),
+                    ]);
+                }
+
+                $sale->load(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price']);
+
+                return response()->json(['success' => true, 'message' => 'Sale completed successfully.', 'data' => $sale], 201);
+            });
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
     }
 
     public function show(Sale $sale): JsonResponse
     {
-        $sale->load(['user', 'saleItems.product']);
+        $sale->load(['user', 'customer', 'saleItems.product']);
 
         return response()->json(['success' => true, 'data' => $sale]);
+    }
+
+    public function update(Request $request, Sale $sale): JsonResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => 'sometimes|required|in:cash,card,mobile_money,bank_transfer',
+            'discount_type'  => 'nullable|in:percent,fixed',
+            'discount_amount'=> 'nullable|numeric|min:0',
+            'tax_amount'     => 'nullable|numeric|min:0',
+            'notes'          => 'nullable|string|max:1000',
+        ]);
+
+        // Recalculate total if financial fields changed
+        if (isset($validated['discount_amount']) || isset($validated['tax_amount'])) {
+            $itemsSubtotal   = $sale->saleItems->sum('subtotal');
+            $discountAmount  = $validated['discount_amount'] ?? ($sale->discount_amount ?? 0);
+            $taxAmount       = $validated['tax_amount']      ?? ($sale->tax_amount      ?? 0);
+            $validated['total_amount'] = max(0, $itemsSubtotal - $discountAmount + $taxAmount);
+        }
+
+        $sale->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sale updated successfully.',
+            'data'    => $sale->load(['user', 'customer', 'saleItems.product']),
+        ]);
     }
 
     public function getDailyReport(Request $request): JsonResponse
@@ -85,7 +149,7 @@ class SaleController extends Controller
         $validated = $request->validate(['date' => 'required|date']);
 
         $sales = Sale::whereDate('sale_date', $validated['date'])
-                     ->with(['user', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product'])
                      ->get();
 
         return response()->json(['success' => true, 'data' => [

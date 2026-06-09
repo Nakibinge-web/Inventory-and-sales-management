@@ -6,6 +6,7 @@ use App\Http\Controllers\TenantController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\PurchaseController;
@@ -114,6 +115,15 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::delete('/{supplier}', [SupplierController::class, 'destroy']);
     });
 
+    // Customers
+    Route::prefix('customers')->group(function () {
+        Route::get('/', [CustomerController::class, 'index']);
+        Route::post('/', [CustomerController::class, 'store']);
+        Route::get('/{customer}', [CustomerController::class, 'show']);
+        Route::put('/{customer}', [CustomerController::class, 'update']);
+        Route::delete('/{customer}', [CustomerController::class, 'destroy']);
+    });
+
     // Products
     Route::prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index']);
@@ -126,10 +136,18 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Sales
     Route::prefix('sales')->group(function () {
-        Route::get('/', [SaleController::class, 'index']);
-        Route::post('/', [SaleController::class, 'store']);
-        Route::get('/daily-report', [SaleController::class, 'getDailyReport']);
-        Route::get('/{sale}', [SaleController::class, 'show']);
+        // Cashiers and above can view and record sales
+        Route::middleware('role:owner,admin,manager,cashier')->group(function () {
+            Route::get('/',        [SaleController::class, 'index']);
+            Route::post('/',       [SaleController::class, 'store']);
+            Route::get('/{sale}',  [SaleController::class, 'show']);
+            Route::put('/{sale}',  [SaleController::class, 'update']);
+        });
+
+        // Reports restricted to managers and above
+        Route::middleware('role:owner,admin,manager')->group(function () {
+            Route::get('/daily-report', [SaleController::class, 'getDailyReport']);
+        });
     });
 
     // Purchases
@@ -143,6 +161,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Stock Movements
     Route::prefix('stock-movements')->group(function () {
         Route::get('/', [StockMovementController::class, 'index']);
+        Route::post('/', [StockMovementController::class, 'store']);
         Route::get('/product/{productId}', [StockMovementController::class, 'getByProduct']);
         Route::get('/by-type', [StockMovementController::class, 'getByType']);
         Route::get('/date-range', [StockMovementController::class, 'getByDateRange']);

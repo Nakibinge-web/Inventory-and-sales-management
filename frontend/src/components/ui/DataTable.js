@@ -69,7 +69,7 @@ export default function DataTable({
     
     // Handle different data types
     if (column.type === 'currency') {
-      return `$${parseFloat(value || 0).toFixed(2)}`;
+      return `UGX ${parseFloat(value || 0).toLocaleString()}`;
     }
     
     if (column.type === 'date') {
