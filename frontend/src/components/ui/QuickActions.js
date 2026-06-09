@@ -5,93 +5,82 @@ export default function QuickActions({ actions = [], className = '' }) {
     backgroundColor: '#ffffff',
     borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.lg,
-    boxShadow: theme.shadows.md,
     border: '1px solid ' + theme.colors.neutral[200],
     marginBottom: theme.spacing.xl
   };
 
   const titleStyles = {
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.lg} 0`
+    color: theme.colors.neutral[800],
+    margin: `0 0 ${theme.spacing.md} 0`,
+    letterSpacing: '-0.2px'
   };
 
   const actionsGridStyles = {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
     gap: theme.spacing.md
   };
 
   const actionCardStyles = {
-    padding: theme.spacing.lg,
+    padding: theme.spacing.md,
     borderRadius: theme.borderRadius.lg,
     border: '1px solid ' + theme.colors.neutral[200],
-    backgroundColor: theme.colors.neutral[50],
+    backgroundColor: '#ffffff',
     cursor: 'pointer',
     transition: theme.transitions.default,
-    textAlign: 'center'
-  };
-
-  const actionIconStyles = {
-    fontSize: '32px',
-    marginBottom: theme.spacing.sm,
-    display: 'block'
+    textAlign: 'left'
   };
 
   const actionTitleStyles = {
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[700],
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.neutral[800],
     margin: `0 0 ${theme.spacing.xs} 0`
   };
 
   const actionDescStyles = {
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.neutral[500],
-    margin: 0
+    margin: 0,
+    lineHeight: 1.4
   };
 
   const handleActionHover = (e, isEntering) => {
     if (isEntering) {
       e.currentTarget.style.backgroundColor = theme.colors.primary[50];
       e.currentTarget.style.borderColor = theme.colors.primary[200];
-      e.currentTarget.style.transform = 'translateY(-2px)';
     } else {
-      e.currentTarget.style.backgroundColor = theme.colors.neutral[50];
+      e.currentTarget.style.backgroundColor = '#ffffff';
       e.currentTarget.style.borderColor = theme.colors.neutral[200];
-      e.currentTarget.style.transform = 'translateY(0)';
     }
   };
 
   const defaultActions = [
     {
       id: 'new-sale',
-      icon: '💰',
       title: 'New Sale',
       description: 'Process a new sale transaction',
-      onClick: () => console.log('New Sale')
+      onClick: () => {}
     },
     {
       id: 'add-product',
-      icon: '📦',
       title: 'Add Product',
       description: 'Add a new product to inventory',
-      onClick: () => console.log('Add Product')
+      onClick: () => {}
     },
     {
       id: 'add-supplier',
-      icon: '🏭',
       title: 'Add Supplier',
       description: 'Register a new supplier',
-      onClick: () => console.log('Add Supplier')
+      onClick: () => {}
     },
     {
       id: 'record-purchase',
-      icon: '🛒',
       title: 'Record Purchase',
       description: 'Record a new purchase order',
-      onClick: () => console.log('Record Purchase')
+      onClick: () => {}
     }
   ];
 
@@ -109,7 +98,6 @@ export default function QuickActions({ actions = [], className = '' }) {
             onMouseEnter={(e) => handleActionHover(e, true)}
             onMouseLeave={(e) => handleActionHover(e, false)}
           >
-            <span style={actionIconStyles}>{action.icon}</span>
             <h4 style={actionTitleStyles}>{action.title}</h4>
             <p style={actionDescStyles}>{action.description}</p>
           </div>

@@ -173,7 +173,14 @@ export default function Dashboard({ user, token, onLogout }) {
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <div style={styles.logoContainer}>
-            <span style={styles.logoIcon}>📊</span>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: theme.colors.primary[600], display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </div>
             <h1 style={styles.logo}>InventoryPro</h1>
           </div>
           <Badge variant="primary" size="sm">
@@ -222,7 +229,12 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
         
         <div style={styles.headerRight}>
-          <div style={styles.notificationIcon}>🔔</div>
+          <div style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
               {user.name.charAt(0).toUpperCase()}
@@ -245,21 +257,58 @@ export default function Dashboard({ user, token, onLogout }) {
       <div style={styles.container}>
         {/* Sidebar */}
         <nav style={styles.sidebar}>
-          <div style={styles.sidebarContent}>
-            {menuItems.map(item => (
-              <button
-                key={item.id}
-                style={{
-                  ...styles.menuItem,
-                  ...(activeTab === item.id ? styles.menuItemActive : {})
-                }}
-                onClick={() => setActiveTab(item.id)}
-              >
-                <span style={styles.menuIcon}>{item.icon}</span>
-                <span style={styles.menuLabel}>{item.label}</span>
-                {activeTab === item.id && <div style={styles.activeIndicator}></div>}
-              </button>
-            ))}
+          <div style={{ padding: '20px 12px 12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* App label */}
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 12 }}>
+              Main Menu
+            </p>
+
+            {/* Main nav items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {menuItems.filter(i => i.id !== 'users').map(item => (
+                <button
+                  key={item.id}
+                  style={{
+                    ...styles.menuItem,
+                    ...(activeTab === item.id ? styles.menuItemActive : {})
+                  }}
+                  onClick={() => setActiveTab(item.id)}
+                  onMouseEnter={e => { if (activeTab !== item.id) { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}}
+                  onMouseLeave={e => { if (activeTab !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
+                >
+                  <span style={styles.menuIcon}>{item.icon}</span>
+                  <span style={styles.menuLabel}>{item.label}</span>
+                  {activeTab === item.id && <div style={styles.activeIndicator} />}
+                </button>
+              ))}
+            </div>
+
+            {/* Spacer pushes admin section to bottom */}
+            <div style={{ flex: 1 }} />
+
+            {/* Admin section */}
+            {isOwnerOrAdmin && (
+              <div>
+                <div style={{ height: 1, background: '#1e293b', margin: '12px 8px 14px' }} />
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>
+                  Administration
+                </p>
+                <button
+                  style={{
+                    ...styles.menuItem,
+                    ...(activeTab === 'users' ? styles.menuItemActive : {})
+                  }}
+                  onClick={() => setActiveTab('users')}
+                  onMouseEnter={e => { if (activeTab !== 'users') e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}
+                  onMouseLeave={e => { if (activeTab !== 'users') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
+                >
+                  <span style={styles.menuIcon}>🔑</span>
+                  <span style={styles.menuLabel}>Users</span>
+                  {activeTab === 'users' && <div style={styles.activeIndicator} />}
+                </button>
+                <div style={{ height: 20 }} />
+              </div>
+            )}
           </div>
         </nav>
 
@@ -405,144 +454,178 @@ export default function Dashboard({ user, token, onLogout }) {
 
 // Overview Tab Component
 function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
-  const quickActions = [
-    {
-      id: 'new-sale',
-      icon: '💰',
-      title: 'New Sale',
-      description: 'Process a new sale transaction',
-      onClick: () => onNavigate('pos')
-    },
-    {
-      id: 'add-product',
-      icon: '📦',
-      title: 'Add Product',
-      description: 'Add a new product to inventory',
-      onClick: onAddProduct
-    },
-    {
-      id: 'add-supplier',
-      icon: '🏭',
-      title: 'Add Supplier',
-      description: 'Register a new supplier',
-      onClick: () => onNavigate('suppliers')
-    },
-    {
-      id: 'record-purchase',
-      icon: '🛒',
-      title: 'Record Purchase',
-      description: 'Record a new purchase order',
-      onClick: () => onNavigate('purchases')
-    }
-  ];
+  const today = new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const hour  = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const recentSalesColumns = [
-    { key: 'sale_date', title: 'Date', type: 'date' },
-    { key: 'total_amount', title: 'Amount', type: 'currency' },
-    { key: 'payment_method', title: 'Payment', render: (value) => <Badge variant="neutral" size="sm">{value}</Badge> },
-    { key: 'user', title: 'Cashier', render: (value) => value?.name || 'N/A' }
+    { key: 'sale_date',      title: 'Date',    type: 'date' },
+    { key: 'total_amount',   title: 'Amount',  type: 'currency' },
+    { key: 'payment_method', title: 'Payment', render: v => (
+      <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+        background: '#f1f5f9', color: '#475569', textTransform: 'capitalize' }}>
+        {v?.replace(/_/g, ' ') || '—'}
+      </span>
+    )},
+    { key: 'user', title: 'Cashier', render: v => v?.name || '—' }
+  ];
+
+  const kpi = [
+    { label: 'Total Products',   value: data.stats.totalProducts,                          sub: 'Items in inventory',  color: 'primary' },
+    { label: 'Total Sales',      value: `UGX ${data.stats.totalSales.toLocaleString()}`,   sub: 'Revenue generated',   color: 'success' },
+    { label: 'Total Purchases',  value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, sub: 'Stock investment',  color: 'warning' },
+    { label: 'Low Stock Alerts', value: data.stats.lowStockCount,                          sub: 'Items need reordering', color: 'danger', trend: data.stats.lowStockCount > 0 ? 'up' : 'neutral', tv: data.stats.lowStockCount > 0 ? 'Needs attention' : 'All good' },
+  ];
+
+  const quickActions = [
+    { label: 'New Sale',        sub: 'Process a sale transaction', action: () => onNavigate('pos'),       accent: '#4f46e5' },
+    { label: 'Add Product',     sub: 'Add to your inventory',       action: onAddProduct,                  accent: '#16a34a' },
+    { label: 'Add Supplier',    sub: 'Register a new vendor',       action: () => onNavigate('suppliers'), accent: '#0891b2' },
+    { label: 'Record Purchase', sub: 'Log a supplier order',        action: () => onNavigate('purchases'), accent: '#d97706' },
   ];
 
   return (
-    <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
+
+      {/* ── Hero header ───────────────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '32px 36px', marginBottom: 36,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Dashboard Overview</h1>
-          <p style={styles.pageSubtitle}>Welcome back! Here's what's happening with your business today.</p>
+          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
+          <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.5px' }}>
+            {greeting} 👋
+          </h1>
+          <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', maxWidth: 440, lineHeight: 1.5 }}>
+            Here's a live snapshot of your business. Use the quick actions below to get things done fast.
+          </p>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Today's Sales</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc', letterSpacing: '-1px' }}>
+            UGX {data.sales
+              .filter(s => new Date(s.sale_date).toDateString() === new Date().toDateString())
+              .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0)
+              .toLocaleString()}
+          </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <QuickActions actions={quickActions} />
-
-      {/* KPI Cards */}
-      <div style={styles.kpiGrid}>
-        <DashboardCard
-          title="Total Products"
-          value={data.stats.totalProducts}
-          subtitle="Items in inventory"
-          icon="📦"
-          color="primary"
-          trend="up"
-          trendValue="+12% from last month"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Total Sales"
-          value={`UGX ${data.stats.totalSales.toLocaleString()}`}
-          subtitle="Revenue generated"
-          icon="💰"
-          color="success"
-          trend="up"
-          trendValue="+8.2% from last month"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Total Purchases"
-          value={`UGX ${data.stats.totalPurchases.toLocaleString()}`}
-          subtitle="Money invested"
-          icon="🛒"
-          color="warning"
-          trend="down"
-          trendValue="-3.1% from last month"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Low Stock Alerts"
-          value={data.stats.lowStockCount}
-          subtitle="Items need reordering"
-          icon="⚠️"
-          color="danger"
-          trend={data.stats.lowStockCount > 0 ? "up" : "neutral"}
-          trendValue={data.stats.lowStockCount > 0 ? "Needs attention" : "All good"}
-          loading={loading}
-        />
+      {/* ── KPI Cards ─────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 36 }}>
+        {kpi.map(k => (
+          <DashboardCard key={k.label} title={k.label} value={k.value} subtitle={k.sub}
+            color={k.color} trend={k.trend} trendValue={k.tv} loading={loading} />
+        ))}
       </div>
 
-      {/* Recent Activity & Alerts */}
-      <div style={styles.contentGrid}>
-        <div style={styles.contentCard}>
-          <h3 style={styles.cardTitle}>Recent Sales</h3>
+      {/* ── Quick Actions ──────────────────────────────────── */}
+      <div style={{ marginBottom: 36 }}>
+        <h2 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          Quick Actions
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {quickActions.map(q => (
+            <button key={q.label} onClick={q.action} style={{
+              padding: '18px 20px', borderRadius: 12,
+              border: `1.5px solid #e2e8f0`,
+              background: '#ffffff', cursor: 'pointer', textAlign: 'left',
+              transition: 'all 0.15s', outline: 'none', position: 'relative', overflow: 'hidden',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = q.accent;
+              e.currentTarget.style.background = q.accent + '08';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = `0 4px 16px ${q.accent}22`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.background = '#ffffff';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              {/* Accent dot */}
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: q.accent, marginBottom: 12 }} />
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{q.label}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{q.sub}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Bottom row: Recent Sales + Low Stock ──────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: data.lowStock.length > 0 ? '1fr 340px' : '1fr', gap: 20 }}>
+
+        {/* Recent Sales */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Recent Sales</h3>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>Last {Math.min(data.sales.length, 5)} transactions</p>
+            </div>
+            <button onClick={() => onNavigate('sales')} style={{
+              fontSize: 12, color: '#6366f1', background: '#ede9fe', border: 'none',
+              cursor: 'pointer', fontWeight: 600, padding: '5px 12px', borderRadius: 20,
+            }}>
+              View all
+            </button>
+          </div>
           <DataTable
             columns={recentSalesColumns}
             data={data.sales.slice(0, 5)}
             loading={loading}
             emptyStateProps={{
-              icon: '💰',
-              title: 'No sales yet',
-              description: 'Start processing sales to see them here.',
-              actionLabel: 'Process First Sale',
+              title: 'No sales recorded yet',
+              description: 'Head to the POS to process your first transaction.',
+              actionLabel: 'Open POS',
               onAction: () => onNavigate('pos')
             }}
           />
         </div>
 
+        {/* Low Stock */}
         {data.lowStock.length > 0 && (
-          <div style={styles.alertCard}>
-            <div style={styles.alertHeader}>
-              <h3 style={styles.alertTitle}>⚠️ Low Stock Alert</h3>
-              <Badge variant="danger" size="sm">{data.lowStock.length} items</Badge>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+            <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Low Stock</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>Needs reordering</p>
+              </div>
+              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                {data.lowStock.length} items
+              </span>
             </div>
-            <div style={styles.alertList}>
-              {data.lowStock.slice(0, 5).map(product => (
-                <div key={product.id} style={styles.alertItem}>
-                  <div>
-                    <span style={styles.alertItemName}>{product.name}</span>
-                    <span style={styles.alertItemStock}>
-                      Stock: {product.stock} (Reorder at: {product.reorder_level})
-                    </span>
+            <div>
+              {data.lowStock.slice(0, 6).map((product, i) => (
+                <div key={product.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '12px 22px',
+                  borderBottom: i < Math.min(data.lowStock.length, 6) - 1 ? '1px solid #f8fafc' : 'none',
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.name}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Min: {product.reorder_level} units</div>
                   </div>
-                  <Badge variant="danger" size="sm">Low</Badge>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>{product.stock}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>in stock</div>
+                  </div>
                 </div>
               ))}
+              {data.lowStock.length > 6 && (
+                <div style={{ padding: '12px 22px' }}>
+                  <button onClick={() => onNavigate('products')} style={{
+                    fontSize: 12, color: '#6366f1', background: 'none', border: 'none',
+                    cursor: 'pointer', fontWeight: 600, padding: 0,
+                  }}>
+                    +{data.lowStock.length - 6} more items →
+                  </button>
+                </div>
+              )}
             </div>
-            {data.lowStock.length > 5 && (
-              <div style={styles.alertFooter}>
-                <Button variant="secondary" size="sm">
-                  View All ({data.lowStock.length})
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -613,8 +696,12 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
       title: 'Image',
       render: (value) => value
         ? <img src={`${API_BASE}/storage/${value}`} alt="product"
-            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
-        : <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
+            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+        : <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+          </div>
     },
     { key: 'name', title: 'Product Name' },
     { key: 'sku', title: 'SKU', render: (value) => value || <span style={{ color: '#94a3b8' }}>—</span> },
@@ -721,27 +808,65 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Products</h1>
-          <p style={styles.pageSubtitle}>Manage your inventory and track stock levels</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Inventory Management</p>
+          <h1 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.4px' }}>Products</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {products.length} product{products.length !== 1 ? 's' : ''} in your inventory
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Button variant="primary" onClick={() => setShowExpiry(true)} icon="⏳" iconPosition="left">
-            View Expiry Goods
-          </Button>
-          <Button variant="success" onClick={onAddProduct} icon="+" iconPosition="left">
-            Add Product
-          </Button>
+          <button onClick={() => setShowExpiry(true)} style={{
+            padding: '9px 18px', borderRadius: 8, border: '1px solid #334155',
+            background: 'transparent', color: '#94a3b8', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#a5b4fc'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}>
+            Expiry Tracker
+          </button>
+          <button onClick={onAddProduct} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#4338ca'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#4f46e5'; }}>
+            + Add Product
+          </button>
         </div>
       </div>
 
+      {/* Summary stats */}
+      {!loading && products.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+          {[
+            { label: 'Total Products', value: products.length, color: '#4f46e5' },
+            { label: 'In Stock',       value: products.filter(p => Number(p.stock) > Number(p.reorder_level || 0)).length, color: '#16a34a' },
+            { label: 'Low Stock',      value: products.filter(p => Number(p.stock) > 0 && Number(p.stock) <= Number(p.reorder_level || 0)).length, color: '#d97706' },
+            { label: 'Out of Stock',   value: products.filter(p => Number(p.stock) === 0).length, color: '#dc2626' },
+          ].map(s => (
+            <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', borderTop: `3px solid ${s.color}` }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={styles.contentCard}>
         {/* Filter bar */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
           <input
-            style={fS.input}
-            placeholder="🔍  Search by name or SKU…"
+            style={{ ...fS.input, flex: '1 1 220px' }}
+            placeholder="Search by name or SKU…"
             value={filters.search}
             onChange={e => setFilter('search', e.target.value)}
           />
@@ -751,13 +876,13 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           </select>
           <select style={fS.select} value={filters.status} onChange={e => setFilter('status', e.target.value)}>
             <option value="">All Statuses</option>
-            <option value="in">🟢 In Stock</option>
-            <option value="low">🟡 Low Stock</option>
-            <option value="out">🔴 Out of Stock</option>
+            <option value="in">In Stock</option>
+            <option value="low">Low Stock</option>
+            <option value="out">Out of Stock</option>
           </select>
           {(filters.search || filters.category || filters.status) && (
             <button style={fS.clear} onClick={() => setFilters({ search: '', category: '', status: '' })}>
-              ✕ Clear filters
+              Clear filters
             </button>
           )}
         </div>
@@ -767,7 +892,6 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           data={filteredProducts}
           loading={loading}
           emptyStateProps={{
-            icon: '📦',
             title: filters.search || filters.category || filters.status ? 'No products match your filters' : 'No products yet',
             description: filters.search || filters.category || filters.status ? 'Try adjusting or clearing your filters.' : 'Start building your inventory by adding your first product.',
             actionLabel: filters.search || filters.category || filters.status ? 'Clear Filters' : 'Add First Product',
@@ -1139,12 +1263,13 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
         <div style={styles.cardsGrid}>
           {categories.map(category => (
             <div key={category.id} style={styles.categoryCard}>
-              <div style={styles.categoryIcon}>🏷️</div>
+              {/* Color bar instead of emoji */}
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: '#4f46e5', marginBottom: 14 }} />
               <h3 style={styles.categoryTitle}>{category.name}</h3>
               <p style={styles.categoryDescription}>
                 {category.description || 'No description provided'}
               </p>
-              <div style={{ ...styles.categoryFooter, justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ ...styles.categoryFooter, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={styles.categoryDate}>
                   Created {new Date(category.created_at).toLocaleDateString()}
                 </span>
@@ -2097,23 +2222,34 @@ const posS = {
 
 // Sales Tab Component
 function SalesTab({ sales, loading, onNewSale }) {
+  const totalRevenue = sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+  const totalTx      = sales.length;
+
   const columns = [
     { key: 'sale_date', title: 'Date', type: 'date' },
     { key: 'total_amount', title: 'Amount', type: 'currency' },
     {
       key: 'payment_method',
       title: 'Payment Method',
-      render: (value) => <Badge variant="success" size="sm">{value}</Badge>
+      render: (value) => (
+        <span style={{
+          padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+          background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0',
+          textTransform: 'capitalize'
+        }}>
+          {value?.replace(/_/g, ' ') || '—'}
+        </span>
+      )
     },
     {
       key: 'saleItems',
       title: 'Items',
-      render: (value) => `${value?.length || 0} items`
+      render: (value) => `${value?.length || 0} item${value?.length !== 1 ? 's' : ''}`
     },
     {
       key: 'user',
       title: 'Cashier',
-      render: (value) => value?.name || 'N/A'
+      render: (value) => value?.name || '—'
     }
   ];
 
@@ -2129,13 +2265,28 @@ function SalesTab({ sales, loading, onNewSale }) {
         </Button>
       </div>
 
+      {/* Summary row */}
+      {!loading && sales.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+          {[
+            { label: 'Total Transactions', value: totalTx },
+            { label: 'Total Revenue',      value: `UGX ${totalRevenue.toLocaleString()}` },
+            { label: 'Average Sale',       value: `UGX ${totalTx ? Math.round(totalRevenue / totalTx).toLocaleString() : 0}` },
+          ].map(s => (
+            <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
+              <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.5px' }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={styles.contentCard}>
         <DataTable
           columns={columns}
           data={sales}
           loading={loading}
           emptyStateProps={{
-            icon: '💰',
             title: 'No sales yet',
             description: 'Start processing sales to see transaction history here.',
             actionLabel: 'Process First Sale',
@@ -3248,13 +3399,13 @@ const styles = {
 
   // Header Styles
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f172a',
     padding: `${theme.spacing.lg} ${theme.spacing['2xl']}`,
-    borderBottom: `1px solid ${theme.colors.neutral[200]}`,
+    borderBottom: '1px solid #1e293b',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: theme.shadows.sm,
+    boxShadow: 'none',
     position: 'sticky',
     top: 0,
     zIndex: 100
@@ -3273,18 +3424,16 @@ const styles = {
   },
 
   logoIcon: {
-    fontSize: '32px'
+    fontSize: '22px',
+    display: 'none'
   },
 
   logo: {
     margin: 0,
-    fontSize: theme.typography.fontSize['2xl'],
+    fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.neutral[900],
-    background: `linear-gradient(135deg, ${theme.colors.primary[600]}, ${theme.colors.primary[700]})`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text'
+    color: '#ffffff',
+    letterSpacing: '-0.5px',
   },
 
   headerCenter: {
@@ -3305,17 +3454,18 @@ const styles = {
     left: theme.spacing.md,
     top: '50%',
     transform: 'translateY(-50%)',
-    fontSize: '16px',
-    color: theme.colors.neutral[400]
+    fontSize: '14px',
+    color: '#94a3b8'
   },
 
   searchInput: {
     width: '100%',
     padding: `${theme.spacing.sm} ${theme.spacing.md} ${theme.spacing.sm} ${theme.spacing['2xl']}`,
-    border: `1px solid ${theme.colors.neutral[300]}`,
+    border: '1px solid #334155',
     borderRadius: theme.borderRadius.lg,
     fontSize: theme.typography.fontSize.sm,
-    backgroundColor: theme.colors.neutral[50],
+    backgroundColor: '#1e293b',
+    color: '#f1f5f9',
     transition: theme.transitions.default,
     outline: 'none'
   },
@@ -3362,12 +3512,12 @@ const styles = {
   userName: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[900]
+    color: '#f1f5f9'
   },
 
   userRole: {
     fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral[600],
+    color: '#94a3b8',
     fontWeight: theme.typography.fontWeight.normal
   },
 
@@ -3380,9 +3530,9 @@ const styles = {
 
   // Sidebar Styles
   sidebar: {
-    width: '280px',
-    backgroundColor: '#ffffff',
-    borderRight: `1px solid ${theme.colors.neutral[200]}`,
+    width: '260px',
+    backgroundColor: '#0f172a',
+    borderRight: '1px solid #1e293b',
     display: 'flex',
     flexDirection: 'column',
     position: 'sticky',
@@ -3402,13 +3552,13 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing.md,
-    padding: theme.spacing.md,
+    padding: '13px 14px',
     border: 'none',
     backgroundColor: 'transparent',
     cursor: 'pointer',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[600],
+    color: '#94a3b8',
     textAlign: 'left',
     borderRadius: theme.borderRadius.lg,
     transition: theme.transitions.default,
@@ -3417,19 +3567,21 @@ const styles = {
   },
 
   menuItemActive: {
-    backgroundColor: theme.colors.primary[50],
-    color: theme.colors.primary[700],
+    backgroundColor: '#1e293b',
+    color: '#f8fafc',
     fontWeight: theme.typography.fontWeight.semibold
   },
 
   menuIcon: {
-    fontSize: '20px',
-    width: '24px',
-    textAlign: 'center'
+    fontSize: '16px',
+    width: '20px',
+    textAlign: 'center',
+    opacity: 0.8
   },
 
   menuLabel: {
-    flex: 1
+    flex: 1,
+    fontSize: '14px'
   },
 
   activeIndicator: {
@@ -3438,17 +3590,17 @@ const styles = {
     top: '50%',
     transform: 'translateY(-50%)',
     width: '3px',
-    height: '20px',
-    backgroundColor: theme.colors.primary[600],
+    height: '18px',
+    backgroundColor: theme.colors.primary[500],
     borderRadius: theme.borderRadius.sm
   },
 
   // Main Content
   main: {
     flex: 1,
-    padding: theme.spacing['2xl'],
+    padding: '32px 36px',
     overflow: 'auto',
-    backgroundColor: theme.colors.neutral[50]
+    backgroundColor: '#f8fafc'
   },
 
   // Error Banner
@@ -3471,36 +3623,40 @@ const styles = {
   // Page Layout
   pageContainer: {
     maxWidth: '1400px',
-    margin: '0 auto'
+    margin: '0 auto',
+    paddingBottom: 32
   },
 
   pageHeader: {
     display: 'flex',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing['2xl']
+    marginBottom: 28,
+    paddingBottom: 20,
+    borderBottom: '1px solid #f1f5f9'
   },
 
   pageTitle: {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.xs} 0`
+    fontSize: 22,
+    fontWeight: 700,
+    color: '#0f172a',
+    margin: '0 0 4px 0',
+    letterSpacing: '-0.3px'
   },
 
   pageSubtitle: {
-    fontSize: theme.typography.fontSize.lg,
-    color: theme.colors.neutral[500],
+    fontSize: 13,
+    color: '#94a3b8',
     margin: 0
   },
 
   // Content Cards
   contentCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`,
-    overflow: 'hidden'
+    borderRadius: 12,
+    border: '1px solid #e2e8f0',
+    overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   // KPI Grid
@@ -3592,154 +3748,155 @@ const styles = {
   // Cards Grid
   cardsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-    gap: theme.spacing.xl
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gap: 20
   },
 
   // Category Card
   categoryCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`,
-    transition: theme.transitions.default,
-    cursor: 'pointer'
+    borderRadius: 12,
+    padding: '20px 22px',
+    border: '1px solid #e2e8f0',
+    transition: 'all 0.15s',
+    cursor: 'pointer',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   categoryIcon: {
-    fontSize: '48px',
-    marginBottom: theme.spacing.lg,
+    fontSize: '32px',
+    marginBottom: 12,
     display: 'block'
   },
 
   categoryTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.sm} 0`
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#0f172a',
+    margin: '0 0 6px 0'
   },
 
   categoryDescription: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral[600],
-    margin: `0 0 ${theme.spacing.lg} 0`,
+    fontSize: 13,
+    color: '#64748b',
+    margin: '0 0 14px 0',
     lineHeight: '1.5'
   },
 
   categoryFooter: {
-    borderTop: `1px solid ${theme.colors.neutral[200]}`,
-    paddingTop: theme.spacing.md
+    borderTop: '1px solid #f1f5f9',
+    paddingTop: 12
   },
 
   categoryDate: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral[400]
+    fontSize: 12,
+    color: '#94a3b8'
   },
 
   // Supplier Card
   supplierCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`,
-    transition: theme.transitions.default,
-    cursor: 'pointer'
+    borderRadius: 12,
+    padding: '20px 22px',
+    border: '1px solid #e2e8f0',
+    transition: 'all 0.15s',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   supplierHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.lg
+    gap: 12,
+    marginBottom: 14
   },
 
   supplierIcon: {
-    fontSize: '32px'
+    fontSize: '24px'
   },
 
   supplierName: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#0f172a',
     margin: 0
   },
 
   supplierDetails: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing.sm
+    gap: 8
   },
 
   supplierDetail: {
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral[600]
+    gap: 8,
+    fontSize: 13,
+    color: '#475569'
   },
 
   supplierDetailIcon: {
-    fontSize: '16px',
-    width: '20px'
+    fontSize: '14px',
+    width: '18px',
+    opacity: 0.6
   },
 
   // Reports Grid
   reportsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-    gap: theme.spacing.xl
+    gap: 20
   },
 
   reportCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`
+    borderRadius: 12,
+    padding: '20px 22px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   reportTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.lg} 0`
+    fontSize: 14,
+    fontWeight: 700,
+    color: '#0f172a',
+    margin: '0 0 16px 0',
+    letterSpacing: '-0.2px'
   },
 
   reportMetrics: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing.md
+    gap: 10
   },
 
   reportMetric: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.neutral[50],
-    borderRadius: theme.borderRadius.lg,
-    border: `1px solid ${theme.colors.neutral[200]}`
+    padding: '10px 14px',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    border: '1px solid #f1f5f9'
   },
 
   reportLabel: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral[600],
-    fontWeight: theme.typography.fontWeight.medium
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: 500
   },
 
   reportValue: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900]
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#0f172a'
   },
 
   // Skeleton Loading
   skeletonCard: {
-    backgroundColor: theme.colors.neutral[200],
-    borderRadius: theme.borderRadius.xl,
-    height: '200px',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 12,
+    height: '180px',
     animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
   }
 };

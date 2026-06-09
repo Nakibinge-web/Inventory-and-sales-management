@@ -1,120 +1,87 @@
 import { theme } from '../../styles/theme';
 
-export default function DashboardCard({ 
-  title, 
-  value, 
-  subtitle, 
-  icon, 
-  trend, 
-  trendValue, 
+export default function DashboardCard({
+  title,
+  value,
+  subtitle,
+  trend,
+  trendValue,
   color = 'primary',
-  onClick,
-  loading = false 
+  loading = false
 }) {
-  const cardStyles = {
-    backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: '1px solid ' + theme.colors.neutral[200],
-    cursor: onClick ? 'pointer' : 'default',
-    transition: theme.transitions.default,
-    position: 'relative',
-    overflow: 'hidden'
+  const colorMap = {
+    primary: { accent: '#4f46e5', light: '#ede9fe', text: '#4f46e5' },
+    success: { accent: '#16a34a', light: '#dcfce7', text: '#16a34a' },
+    warning: { accent: '#d97706', light: '#fef3c7', text: '#d97706' },
+    danger:  { accent: '#dc2626', light: '#fee2e2', text: '#dc2626' },
+    neutral: { accent: '#475569', light: '#f1f5f9', text: '#475569' },
   };
+  const c = colorMap[color] || colorMap.primary;
 
-  const hoverStyles = onClick ? {
-    transform: 'translateY(-2px)',
-    boxShadow: theme.shadows.lg,
-    borderColor: theme.colors[color][300]
-  } : {};
-
-  const iconContainerStyles = {
-    width: '48px',
-    height: '48px',
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors[color][50],
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.md,
-    fontSize: '24px'
-  };
-
-  const valueStyles = {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.neutral[900],
-    margin: '0 0 4px 0',
-    lineHeight: '1'
-  };
-
-  const titleStyles = {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[600],
-    margin: '0 0 8px 0',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px'
-  };
-
-  const trendStyles = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    color: trend === 'up' ? theme.colors.success[600] : 
-           trend === 'down' ? theme.colors.danger[600] : 
-           theme.colors.neutral[500],
-    marginTop: theme.spacing.sm
-  };
+  const trendColor = trend === 'up' ? '#16a34a' : trend === 'down' ? '#dc2626' : '#64748b';
+  const trendArrow = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
 
   const skeletonStyles = {
     backgroundColor: theme.colors.neutral[200],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 6,
     animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
   };
 
   return (
-    <div 
-      style={cardStyles}
-      onMouseEnter={(e) => onClick && Object.assign(e.target.style, hoverStyles)}
-      onMouseLeave={(e) => onClick && Object.assign(e.target.style, cardStyles)}
-      onClick={onClick}
-    >
+    <div style={{
+      backgroundColor: '#ffffff',
+      borderRadius: 12,
+      padding: '22px 24px',
+      border: '1px solid #e2e8f0',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Top accent bar */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0,
+        height: 3, backgroundColor: c.accent, borderRadius: '12px 12px 0 0'
+      }} />
+
       {loading ? (
         <div>
-          <div style={{...skeletonStyles, width: '48px', height: '48px', borderRadius: '50%', marginBottom: theme.spacing.md}}></div>
-          <div style={{...skeletonStyles, width: '60%', height: '16px', marginBottom: theme.spacing.sm}}></div>
-          <div style={{...skeletonStyles, width: '80%', height: '32px', marginBottom: theme.spacing.xs}}></div>
-          <div style={{...skeletonStyles, width: '40%', height: '14px'}}></div>
+          <div style={{ ...skeletonStyles, width: '50%', height: 13, marginBottom: 14 }} />
+          <div style={{ ...skeletonStyles, width: '70%', height: 28, marginBottom: 10 }} />
+          <div style={{ ...skeletonStyles, width: '40%', height: 12 }} />
         </div>
       ) : (
         <>
-          <div style={iconContainerStyles}>
-            {icon}
-          </div>
-          
-          <h3 style={titleStyles}>{title}</h3>
-          
-          <div style={valueStyles}>
+          <p style={{
+            margin: '0 0 10px 0',
+            fontSize: 11,
+            fontWeight: 700,
+            color: '#94a3b8',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em'
+          }}>{title}</p>
+
+          <div style={{
+            fontSize: 28,
+            fontWeight: 700,
+            color: '#0f172a',
+            lineHeight: 1,
+            marginBottom: 8,
+            letterSpacing: '-0.5px'
+          }}>
             {typeof value === 'number' ? value.toLocaleString() : value}
           </div>
-          
+
           {subtitle && (
-            <p style={{
-              fontSize: theme.typography.fontSize.sm,
-              color: theme.colors.neutral[500],
-              margin: 0
-            }}>
-              {subtitle}
-            </p>
+            <p style={{ margin: '0 0 10px 0', fontSize: 13, color: '#64748b' }}>{subtitle}</p>
           )}
-          
+
           {trend && trendValue && (
-            <div style={trendStyles}>
-              <span>{trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→'}</span>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 12, fontWeight: 600, color: trendColor,
+              background: trendColor + '12', padding: '3px 8px',
+              borderRadius: 20,
+            }}>
+              <span>{trendArrow}</span>
               <span>{trendValue}</span>
             </div>
           )}
@@ -124,18 +91,9 @@ export default function DashboardCard({
   );
 }
 
-// Add CSS animation for skeleton loading
+// Skeleton animation
 const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: .5;
-    }
-  }
-`;
+styleSheet.textContent = `@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`;
 if (!document.head.querySelector('style[data-component="DashboardCard"]')) {
   styleSheet.setAttribute('data-component', 'DashboardCard');
   document.head.appendChild(styleSheet);
