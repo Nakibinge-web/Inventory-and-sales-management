@@ -1219,7 +1219,7 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
         />
       </div>
-      {formError && <div style={catS.error}>⚠️ {formError}</div>}
+      {formError && <div style={catS.error}>{formError}</div>}
       <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
         <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
           Cancel
@@ -1233,63 +1233,70 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Categories</h1>
-          <p style={styles.pageSubtitle}>Organize your products into logical groups</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Inventory</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Categories</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {categories.length} {categories.length === 1 ? 'category' : 'categories'} — organise your products into logical groups
+          </p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add Category
-        </Button>
+        <button onClick={openAdd} style={{
+          padding: '9px 20px', borderRadius: 8, border: 'none',
+          background: '#4f46e5', color: '#fff', cursor: 'pointer',
+          fontSize: 13, fontWeight: 600,
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+        onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+          + Add Category
+        </button>
       </div>
 
       {loading ? (
         <div style={styles.cardsGrid}>
-          {[...Array(6)].map((_, i) => (
-            <div key={i} style={styles.skeletonCard}></div>
-          ))}
+          {[...Array(6)].map((_, i) => <div key={i} style={styles.skeletonCard} />)}
         </div>
       ) : categories.length === 0 ? (
         <div style={styles.contentCard}>
           <EmptyState
-            icon="🏷️"
             title="No categories yet"
-            description="Create categories to organize your products better."
+            description="Create categories to organise your products better."
             actionLabel="Add First Category"
             onAction={openAdd}
           />
         </div>
       ) : (
         <div style={styles.cardsGrid}>
-          {categories.map(category => (
-            <div key={category.id} style={styles.categoryCard}>
-              {/* Color bar instead of emoji */}
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: '#4f46e5', marginBottom: 14 }} />
-              <h3 style={styles.categoryTitle}>{category.name}</h3>
-              <p style={styles.categoryDescription}>
-                {category.description || 'No description provided'}
-              </p>
-              <div style={{ ...styles.categoryFooter, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={styles.categoryDate}>
-                  Created {new Date(category.created_at).toLocaleDateString()}
-                </span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    onClick={() => openEdit(category)}
-                    style={catS.editBtn}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => { setDeleteError(null); setDeletingCat(category); }}
-                    style={catS.deleteBtn}
-                  >
-                    Delete
-                  </button>
+          {categories.map((category, idx) => {
+            const colors = ['#4f46e5','#16a34a','#0891b2','#d97706','#dc2626','#7c3aed'];
+            const accent = colors[idx % colors.length];
+            return (
+              <div key={category.id} style={{
+                ...styles.categoryCard,
+                borderTop: `3px solid ${accent}`,
+              }}>
+                <h3 style={styles.categoryTitle}>{category.name}</h3>
+                <p style={styles.categoryDescription}>
+                  {category.description || <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>No description</span>}
+                </p>
+                <div style={{ ...styles.categoryFooter, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={styles.categoryDate}>
+                    {new Date(category.created_at).toLocaleDateString()}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => openEdit(category)} style={catS.editBtn}>Edit</button>
+                    <button onClick={() => { setDeleteError(null); setDeletingCat(category); }} style={catS.deleteBtn}>Delete</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1312,22 +1319,15 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
       >
         {deletingCat && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '14px 16px', background: '#fef2f2',
-              border: '1px solid #fecaca', borderRadius: 10
-            }}>
-              <span style={{ fontSize: 28 }}>🗑️</span>
-              <div>
-                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 15 }}>{deletingCat.name}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                  This will permanently delete the category. Products in this category will not be deleted.
-                </div>
+            <div style={{ padding: '14px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10 }}>
+              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 15, marginBottom: 4 }}>{deletingCat.name}</div>
+              <div style={{ fontSize: 13, color: '#64748b' }}>
+                This will permanently delete the category. Products in this category will not be deleted.
               </div>
             </div>
             {deleteError && (
               <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
-                ⚠️ {deleteError}
+                {deleteError}
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
@@ -1445,27 +1445,39 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Suppliers</h1>
-          <p style={styles.pageSubtitle}>Manage your vendor relationships and contacts</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Procurement</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Suppliers</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {suppliers.length} {suppliers.length === 1 ? 'supplier' : 'suppliers'} — manage your vendor relationships
+          </p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add Supplier
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {suppliers.length > 0 && (
+            <input
+              style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search suppliers…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          )}
+          <button onClick={openAdd} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+          onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add Supplier
+          </button>
+        </div>
       </div>
-
-      {/* Search bar */}
-      {suppliers.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...fS.input, maxWidth: 320 }}
-            placeholder="🔍  Search suppliers…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
 
       {loading ? (
         <div style={styles.cardsGrid}>
@@ -1473,66 +1485,45 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
         </div>
       ) : suppliers.length === 0 ? (
         <div style={styles.contentCard}>
-          <EmptyState
-            icon="🏭"
-            title="No suppliers yet"
-            description="Add suppliers to track where you purchase your products."
-            actionLabel="Add First Supplier"
-            onAction={openAdd}
-          />
+          <EmptyState title="No suppliers yet" description="Add suppliers to track where you purchase your products." actionLabel="Add First Supplier" onAction={openAdd} />
         </div>
       ) : filtered.length === 0 ? (
         <div style={styles.contentCard}>
-          <EmptyState
-            icon="🔍"
-            title="No suppliers match your search"
-            description="Try a different name, email, or contact."
-            actionLabel="Clear Search"
-            onAction={() => setSearch('')}
-          />
+          <EmptyState title="No suppliers match your search" description="Try a different name, email, or contact." actionLabel="Clear Search" onAction={() => setSearch('')} />
         </div>
       ) : (
         <div style={styles.cardsGrid}>
           {filtered.map(supplier => (
-            <div key={supplier.id} style={styles.supplierCard}>
-              <div style={styles.supplierHeader}>
-                <div style={styles.supplierIcon}>🏭</div>
-                <h3 style={styles.supplierName}>{supplier.name}</h3>
+            <div key={supplier.id} style={{ ...styles.supplierCard, transition: 'box-shadow 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'}>
+              {/* Avatar + name */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: '#ede9fe', color: '#4f46e5', fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {supplier.name?.charAt(0).toUpperCase()}
+                </div>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{supplier.name}</h3>
               </div>
-              <div style={styles.supplierDetails}>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📞</span>
-                  <span style={{ color: supplier.contact ? '#0f172a' : '#94a3b8' }}>
-                    {supplier.contact || 'No contact'}
-                  </span>
-                </div>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📧</span>
-                  <span style={{ color: supplier.email ? '#0f172a' : '#94a3b8' }}>
-                    {supplier.email || 'No email'}
-                  </span>
-                </div>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📍</span>
-                  <span style={{ color: supplier.address ? '#0f172a' : '#94a3b8' }}>
-                    {supplier.address || 'No address'}
-                  </span>
-                </div>
+              {/* Details */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: 'Phone',   value: supplier.contact },
+                  { label: 'Email',   value: supplier.email },
+                  { label: 'Address', value: supplier.address },
+                ].map(d => (
+                  <div key={d.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', width: 52, flexShrink: 0, paddingTop: 1 }}>{d.label}</span>
+                    <span style={{ fontSize: 13, color: d.value ? '#0f172a' : '#cbd5e1', fontStyle: d.value ? 'normal' : 'italic' }}>{d.value || '—'}</span>
+                  </div>
+                ))}
               </div>
               {/* Actions */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
-                <button
-                  onClick={() => openEdit(supplier)}
-                  style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                >
-                  ✏️ Edit
+              <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+                <button onClick={() => openEdit(supplier)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Edit
                 </button>
-                <button
-                  onClick={() => handleDelete(supplier)}
-                  disabled={deletingId === supplier.id}
-                  style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                >
-                  {deletingId === supplier.id ? 'Deleting…' : '🗑️ Delete'}
+                <button onClick={() => handleDelete(supplier)} disabled={deletingId === supplier.id} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  {deletingId === supplier.id ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>
@@ -1665,27 +1656,39 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Customers</h1>
-          <p style={styles.pageSubtitle}>Manage your customer records and contacts</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CRM</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Customers</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {customers.length} {customers.length === 1 ? 'customer' : 'customers'} — {customers.filter(c => c.status === 'active').length} active
+          </p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add Customer
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {customers.length > 0 && (
+            <input
+              style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search customers…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          )}
+          <button onClick={openAdd} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+          onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add Customer
+          </button>
+        </div>
       </div>
-
-      {/* Search */}
-      {customers.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...supS.input, maxWidth: 320 }}
-            placeholder="🔍  Search by name, email or phone…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
 
       {loading ? (
         <div style={styles.cardsGrid}>
@@ -1897,39 +1900,45 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
   if (lastReceipt) {
     return (
       <div style={styles.pageContainer}>
-        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 52 }}>✅</div>
-            <h2 style={{ margin: '8px 0 4px', color: '#065f46', fontSize: 22 }}>Sale Complete!</h2>
-            <p style={{ color: '#64748b', fontSize: 14 }}>Transaction recorded successfully</p>
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Success banner */}
+          <div style={{ background: 'linear-gradient(135deg, #065f46, #16a34a)', borderRadius: 16, padding: '28px 32px', textAlign: 'center' }}>
+            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h2 style={{ margin: '0 0 6px', color: '#fff', fontSize: 22, fontWeight: 700 }}>Sale Complete</h2>
+            <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Transaction recorded successfully</p>
           </div>
 
           {/* Receipt */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
-            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 12, marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>{user.tenant?.name || 'InventoryPro'}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>{new Date().toLocaleString()}</div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
+            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || 'InventoryPro'}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{new Date().toLocaleString()}</div>
             </div>
             {lastReceipt.cartSnapshot.map(item => (
-              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '4px 0' }}>
+              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '5px 0', color: '#475569' }}>
                 <span>{item.name} × {item.quantity}</span>
-                <span style={{ fontWeight: 600 }}>UGX {item.subtotal.toLocaleString()}</span>
+                <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {item.subtotal.toLocaleString()}</span>
               </div>
             ))}
-            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
+            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 14, paddingTop: 14, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 17 }}>
               <span>Total</span>
-              <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
+              <span style={{ color: '#16a34a' }}>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
             </div>
-            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right' }}>
-              Payment: <strong>{lastReceipt.paymentMethod.replace('_', ' ')}</strong>
+            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right', textTransform: 'capitalize' }}>
+              Payment: <strong>{lastReceipt.paymentMethod?.replace(/_/g, ' ')}</strong>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Button variant="secondary" style={{ flex: 1 }} onClick={() => setLastReceipt(null)}>
-              New Sale
-            </Button>
-          </div>
+          <button onClick={() => setLastReceipt(null)} style={{
+            padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+            background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+          }}>
+            New Sale
+          </button>
         </div>
       </div>
     );
@@ -1937,10 +1946,21 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '24px 32px', marginBottom: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Point of Sale</h1>
-          <p style={styles.pageSubtitle}>Search products, build a cart, and process payment</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sales</p>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Point of Sale</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Search products, build a cart, and process payment</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Items in cart</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>{cart.reduce((s, i) => s + i.quantity, 0)}</div>
         </div>
       </div>
 
@@ -1950,114 +1970,93 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input
             style={posS.searchInput}
-            placeholder="🔍  Search products by name or SKU…"
+            placeholder="Search products by name or SKU…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
 
           {filtered.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
-              <div style={{ fontSize: 36 }}>📦</div>
-              <div style={{ marginTop: 8 }}>{search ? 'No products match your search' : 'No products in stock'}</div>
+            <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8', background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#475569' }}>{search ? 'No products match your search' : 'No products in stock'}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{search ? 'Try a different name or SKU' : 'Add products to your inventory first'}</div>
             </div>
           ) : (
             <div style={posS.productGrid}>
               {filtered.map(p => (
-                <button key={p.id} style={posS.productCard} onClick={() => addToCart(p)}>
-                  <div style={posS.productEmoji}>📦</div>
+                <button key={p.id} style={posS.productCard} onClick={() => addToCart(p)}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,70,229,0.12)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
+                >
+                  {/* Product initial avatar */}
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 15, fontWeight: 700, color: '#4f46e5' }}>
+                    {p.name.charAt(0).toUpperCase()}
+                  </div>
                   <div style={posS.productName}>{p.name}</div>
-                  {p.sku && <div style={posS.productSku}>{p.sku}</div>}
+                  {p.sku && <div style={posS.productSku}>SKU: {p.sku}</div>}
                   <div style={posS.productPrice}>UGX {parseFloat(p.price).toLocaleString()}</div>
-                  <div style={posS.productStock}>Stock: {p.stock}</div>
+                  <div style={{ marginTop: 6, fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontWeight: 600 }}>
+                    {p.stock} in stock
+                  </div>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Right column — customer card + cart card */}
+        {/* Right column — customer + cart */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20 }}>
 
           {/* Customer Card */}
           <div style={posS.cartPanel}>
             <div style={posS.cartHeader}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>👤 Customer <span style={{ fontWeight: 400, fontSize: 12, color: '#94a3b8' }}>(Optional)</span></span>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Customer</span>
+                <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>Optional</span>
+              </div>
             </div>
-            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {['walk_in', 'existing', 'new'].map(type => (
-                <label
-                  key={type}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
-                    border: `1.5px solid ${customerType === type ? '#16a34a' : '#e2e8f0'}`,
-                    background: customerType === type ? '#f0fdf4' : '#fff',
-                    transition: 'border-color 0.15s, background 0.15s',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="customerType"
-                    value={type}
-                    checked={customerType === type}
-                    onChange={() => { setCustomerType(type); setSelectedCustomerId(''); setCustomerSearch(''); setNewCustomer({ name: '', phone: '', email: '' }); }}
-                    style={{ accentColor: '#16a34a', width: 16, height: 16 }}
-                  />
-                  <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                    {type === 'walk_in' ? 'Walk-in Customer' : type === 'existing' ? 'Existing Customer' : 'New Customer'}
-                  </span>
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { value: 'walk_in',  label: 'Walk-in Customer' },
+                { value: 'existing', label: 'Existing Customer' },
+                { value: 'new',      label: 'New Customer' },
+              ].map(type => (
+                <label key={type.value} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                  border: `1.5px solid ${customerType === type.value ? '#4f46e5' : '#e2e8f0'}`,
+                  background: customerType === type.value ? '#f5f3ff' : '#fff',
+                  transition: 'all 0.15s',
+                }}>
+                  <input type="radio" name="customerType" value={type.value}
+                    checked={customerType === type.value}
+                    onChange={() => { setCustomerType(type.value); setSelectedCustomerId(''); setCustomerSearch(''); setNewCustomer({ name: '', phone: '', email: '' }); }}
+                    style={{ accentColor: '#4f46e5', width: 15, height: 15 }} />
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{type.label}</span>
                 </label>
               ))}
 
               {customerType === 'existing' && (
                 <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Search by name or phone…"
-                    value={customerSearch}
-                    onChange={e => setCustomerSearch(e.target.value)}
-                  />
-                  <select
-                    style={posS.select}
-                    value={selectedCustomerId}
-                    onChange={e => setSelectedCustomerId(e.target.value)}
-                  >
+                  <input style={posS.searchInput} placeholder="Search by name or phone…"
+                    value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
+                  <select style={posS.select} value={selectedCustomerId} onChange={e => setSelectedCustomerId(e.target.value)}>
                     <option value="">— Select customer —</option>
-                    {(customers || [])
-                      .filter(c => c.status === 'active' && (
-                        !customerSearch ||
-                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-                        (c.phone || '').includes(customerSearch)
-                      ))
-                      .map(c => (
-                        <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>
-                      ))
-                    }
+                    {(customers || []).filter(c => c.status === 'active' && (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch)))
+                      .map(c => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
                   </select>
                 </div>
               )}
 
               {customerType === 'new' && (
                 <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Name *"
-                    value={newCustomer.name}
-                    onChange={e => setNewCustomer(p => ({ ...p, name: e.target.value }))}
-                  />
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Phone"
-                    value={newCustomer.phone}
-                    onChange={e => setNewCustomer(p => ({ ...p, phone: e.target.value }))}
-                  />
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Email"
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))}
-                  />
+                  <input style={posS.searchInput} placeholder="Full name *" value={newCustomer.name} onChange={e => setNewCustomer(p => ({ ...p, name: e.target.value }))} />
+                  <input style={posS.searchInput} placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer(p => ({ ...p, phone: e.target.value }))} />
+                  <input style={posS.searchInput} placeholder="Email" type="email" value={newCustomer.email} onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))} />
                 </div>
               )}
             </div>
@@ -2066,16 +2065,19 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
           {/* Cart Card */}
           <div style={posS.cartPanel}>
             <div style={posS.cartHeader}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>🛒 Cart</span>
-              {cart.length > 0 && (
-                <button style={posS.clearBtn} onClick={() => setCart([])}>Clear all</button>
-              )}
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Cart {cart.length > 0 && <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 20, background: '#ede9fe', color: '#4f46e5', fontSize: 12 }}>{cart.length}</span>}</span>
+              {cart.length > 0 && <button style={posS.clearBtn} onClick={() => setCart([])}>Clear all</button>}
             </div>
 
             {cart.length === 0 ? (
               <div style={posS.emptyCart}>
-                <div style={{ fontSize: 32 }}>🛒</div>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 8 }}>Tap a product to add it</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                  </svg>
+                </div>
+                <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Select products to add to cart</div>
               </div>
             ) : (
               <div style={posS.cartItems}>
@@ -2085,16 +2087,10 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
                       <div style={posS.cartItemName}>{item.name}</div>
                       <div style={posS.cartItemPrice}>UGX {item.price.toLocaleString()} each</div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity - 1)}>−</button>
-                      <input
-                        style={posS.qtyInput}
-                        type="number"
-                        min={1}
-                        max={item.maxStock}
-                        value={item.quantity}
-                        onChange={e => updateQty(item.product_id, e.target.value)}
-                      />
+                      <input style={posS.qtyInput} type="number" min={1} max={item.maxStock}
+                        value={item.quantity} onChange={e => updateQty(item.product_id, e.target.value)} />
                       <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity + 1)}>+</button>
                       <button style={posS.removeBtn} onClick={() => removeFromCart(item.product_id)}>✕</button>
                     </div>
@@ -2105,39 +2101,44 @@ function POSTab({ products, customers, token, user, onSaleCompleted }) {
             )}
 
             <div style={posS.cartFooter}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontWeight: 700, fontSize: 18 }}>Total</span>
-                <span style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>UGX {cartTotal.toLocaleString()}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <span style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>Total</span>
+                <span style={{ fontWeight: 800, fontSize: 20, color: '#0f172a', letterSpacing: '-0.5px' }}>UGX {cartTotal.toLocaleString()}</span>
               </div>
 
-              <div style={{ marginBottom: 12 }}>
-                <label style={posS.label}>Payment Method</label>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Payment Method</label>
                 <select style={posS.select} value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-                  <option value="cash">💵 Cash</option>
-                  <option value="card">💳 Card</option>
-                  <option value="mobile_money">📱 Mobile Money</option>
-                  <option value="bank_transfer">🏦 Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="mobile_money">Mobile Money</option>
+                  <option value="bank_transfer">Bank Transfer</option>
                 </select>
               </div>
 
               {saleError && (
-                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13, marginBottom: 10 }}>
-                  ⚠️ {saleError}
+                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>
+                  {saleError}
                 </div>
               )}
 
-              <Button
-                variant="success"
-                style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px' }}
-                loading={submitting}
+              <button
                 onClick={handleCheckout}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || submitting}
+                style={{
+                  width: '100%', padding: '13px', borderRadius: 10, border: 'none',
+                  background: cart.length === 0 ? '#e2e8f0' : '#16a34a',
+                  color: cart.length === 0 ? '#94a3b8' : '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.15s', letterSpacing: '0.02em',
+                }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting) e.currentTarget.style.background = '#15803d'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting) e.currentTarget.style.background = '#16a34a'; }}
               >
-                {submitting ? 'Processing…' : '✅ Complete Sale'}
-              </Button>
+                {submitting ? 'Processing…' : 'Complete Sale'}
+              </button>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -2148,36 +2149,77 @@ const posS = {
   searchInput: {
     padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
-    boxSizing: 'border-box', background: '#fff',
+    boxSizing: 'border-box', background: '#fff', color: '#0f172a',
   },
   productGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
     gap: 12,
   },
   productCard: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-    padding: '14px 10px', border: '1.5px solid #e2e8f0', borderRadius: 12,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+    padding: '16px 12px', border: '1.5px solid #e2e8f0', borderRadius: 12,
     background: '#fff', cursor: 'pointer', textAlign: 'center',
     transition: 'border-color 0.15s, box-shadow 0.15s',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)', outline: 'none',
   },
-  productEmoji: { fontSize: 28 },
-  productName:  { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 },
+  productName:  { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3, marginBottom: 2 },
   productSku:   { fontSize: 11, color: '#94a3b8' },
-  productPrice: { fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 2 },
-  productStock: { fontSize: 11, color: '#64748b' },
+  productPrice: { fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 4 },
   cartPanel: {
     background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
   cartHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '14px 16px', borderBottom: '1px solid #f1f5f9',
+    background: '#fafafa',
   },
   clearBtn: {
     background: 'none', border: 'none', color: '#ef4444', fontSize: 12,
-    cursor: 'pointer', fontWeight: 500,
+    cursor: 'pointer', fontWeight: 600, padding: 0,
+  },
+  emptyCart: {
+    padding: '28px 16px', textAlign: 'center',
+  },
+  cartItems: {
+    display: 'flex', flexDirection: 'column', maxHeight: 280, overflowY: 'auto',
+  },
+  cartItem: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '10px 14px', borderBottom: '1px solid #f8fafc',
+    flexWrap: 'wrap',
+  },
+  cartItemName:     { fontSize: 13, fontWeight: 600, color: '#0f172a' },
+  cartItemPrice:    { fontSize: 11, color: '#94a3b8' },
+  cartItemSubtotal: { fontSize: 13, fontWeight: 700, color: '#0f172a', width: '100%', textAlign: 'right', marginTop: 2 },
+  qtyBtn: {
+    width: 28, height: 28, borderRadius: 6, border: '1px solid #e2e8f0',
+    background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 16,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
+    flexShrink: 0,
+  },
+  qtyInput: {
+    width: 40, textAlign: 'center', border: '1px solid #e2e8f0',
+    borderRadius: 6, padding: '4px 2px', fontSize: 13, outline: 'none',
+  },
+  removeBtn: {
+    background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer',
+    fontSize: 14, padding: '2px 4px', borderRadius: 4,
+  },
+  cartFooter: {
+    padding: '16px 14px', borderTop: '1px solid #f1f5f9', background: '#fafafa',
+  },
+  select: {
+    width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0',
+    borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+    background: '#fff', color: '#0f172a', cursor: 'pointer',
+  },
+  label: {
+    fontSize: 11, fontWeight: 700, color: '#64748b',
+    textTransform: 'uppercase', letterSpacing: '0.06em',
+    display: 'block', marginBottom: 6,
   },
   emptyCart: {
     padding: '40px 20px', textAlign: 'center', color: '#94a3b8',
@@ -2255,14 +2297,22 @@ function SalesTab({ sales, loading, onNewSale }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Sales</h1>
-          <p style={styles.pageSubtitle}>Track all your sales transactions and revenue</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Revenue</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Sales</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Track all your sales transactions and revenue</p>
         </div>
-        <Button variant="success" icon="+" iconPosition="left" onClick={onNewSale}>
-          New Sale
-        </Button>
+        <button onClick={onNewSale} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+          onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}>
+          + New Sale
+        </button>
       </div>
 
       {/* Summary row */}
@@ -2364,34 +2414,35 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Purchases</h1>
-          <p style={styles.pageSubtitle}>Track inventory purchases and supplier orders</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Procurement</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Purchases</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>{purchases.length} purchase{purchases.length !== 1 ? 's' : ''} recorded</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openModal}>
-          Record Purchase
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {purchases.length > 0 && (
+            <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search by supplier or date…" value={search} onChange={e => setSearch(e.target.value)} />
+          )}
+          <button onClick={openModal} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Record Purchase
+          </button>
+        </div>
       </div>
-
-      {/* Search */}
-      {purchases.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...supS.input, maxWidth: 320 }}
-            placeholder="🔍  Search by supplier or date…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
 
       <div style={styles.contentCard}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading purchases…</div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon="🛒"
             title={search ? 'No purchases match your search' : 'No purchases yet'}
             description={search ? 'Try a different supplier or date.' : 'Record purchases from suppliers to track inventory costs.'}
             actionLabel={search ? 'Clear Search' : 'Record First Purchase'}
@@ -2608,18 +2659,21 @@ function ReportsTab({ data, loading, token }) {
   const getPayColor = (m) => paymentColors[m] || '#64748b';
 
   const tabs = [
-    { id: 'overview',  label: '📊 Overview'  },
-    { id: 'daily',     label: '📅 Daily Sales' },
-    { id: 'monthly',   label: '🗓️ Monthly Purchases' },
+    { id: 'overview', label: 'Overview'           },
+    { id: 'daily',    label: 'Daily Sales'         },
+    { id: 'monthly',  label: 'Monthly Purchases'   },
   ];
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>Reports & Analytics</h1>
-          <p style={styles.pageSubtitle}>Analyze your business performance and trends</p>
-        </div>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
+        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
+        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
+        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
       </div>
 
       {/* Sub-tabs */}
@@ -2993,34 +3047,36 @@ function UsersTab({ token, user: currentUser, toast }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>User Management</h1>
-          <p style={styles.pageSubtitle}>Manage team members and their access roles</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Administration</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>User Management</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Manage team members and their access roles</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add User
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {users.length > 0 && (
+            <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
+          )}
+          <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add User
+          </button>
+        </div>
       </div>
-
-      {/* Search */}
-      {users.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...supS.input, maxWidth: 320 }}
-            placeholder="🔍  Search by name or email…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
+      {/* Users table */}
 
       <div style={styles.contentCard}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading users…</div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon="👤"
             title={search ? 'No users match your search' : 'No users yet'}
             description={search ? 'Try a different name or email.' : 'Add team members to get started.'}
             actionLabel={search ? 'Clear Search' : 'Add First User'}
@@ -3213,38 +3269,38 @@ function StockMovementsTab({ token, products }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>Stock Movements</h1>
-          <p style={styles.pageSubtitle}>Full audit trail of all inventory changes</p>
-        </div>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
+        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Inventory</p>
+        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Stock Movements</h1>
+        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Full audit trail of all inventory changes</p>
       </div>
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Movements', value: movements.length, icon: '🔄', color: '#4f46e5', bg: '#ede9fe' },
-          { label: 'Stock In',        value: totalIn,           icon: '📥', color: '#16a34a', bg: '#f0fdf4' },
-          { label: 'Stock Out',       value: totalOut,          icon: '📤', color: '#dc2626', bg: '#fef2f2' },
+          { label: 'Total Movements', value: movements.length, color: '#4f46e5', borderColor: '#4f46e5' },
+          { label: 'Stock In',        value: totalIn,           color: '#16a34a', borderColor: '#16a34a' },
+          { label: 'Stock Out',       value: totalOut,          color: '#dc2626', borderColor: '#dc2626' },
         ].map(k => (
-          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{k.icon}</div>
-            <div>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k.label}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</p>
-            </div>
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderTop: `3px solid ${k.borderColor}`, borderRadius: 12, padding: '18px 22px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
+            <p style={{ margin: 0, fontSize: 26, fontWeight: 800, color: k.color, letterSpacing: '-0.5px' }}>{k.value}</p>
           </div>
         ))}
       </div>
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <input style={{ ...fS.input, maxWidth: 240 }} placeholder="🔍  Search by product…"
+        <input style={{ ...fS.input, maxWidth: 240 }} placeholder="Search by product…"
           value={search} onChange={e => setSearch(e.target.value)} />
         <select style={fS.select} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
-          <option value="IN">📥 Stock In</option>
-          <option value="OUT">📤 Stock Out</option>
+          <option value="IN">Stock In</option>
+          <option value="OUT">Stock Out</option>
         </select>
         <select style={fS.select} value={productFilter} onChange={e => setProductFilter(e.target.value)}>
           <option value="">All Products</option>
