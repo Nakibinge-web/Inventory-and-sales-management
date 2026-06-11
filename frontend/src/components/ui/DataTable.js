@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { theme } from '../../styles/theme';
 import Badge from './Badge';
 import EmptyState from './EmptyState';
@@ -8,8 +9,14 @@ export default function DataTable({
   loading = false,
   emptyStateProps,
   onRowClick,
-  className = ''
+  className = '',
+  pageSize = 15,
 }) {
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 whenever data changes (e.g. after filter/search)
+  useEffect(() => { setPage(1); }, [data]);
+
   const tableStyles = {
     width: '100%',
     backgroundColor: '#ffffff',
@@ -61,37 +68,20 @@ export default function DataTable({
   };
 
   const renderCellContent = (column, row) => {
-    if (column.render) {
-      return column.render(row[column.key], row);
-    }
-
+    if (column.render) return column.render(row[column.key], row);
     const value = row[column.key];
-    
-    // Handle different data types
-    if (column.type === 'currency') {
-      return `UGX ${parseFloat(value || 0).toLocaleString()}`;
-    }
-    
-    if (column.type === 'date') {
-      return new Date(value).toLocaleDateString();
-    }
-    
+    if (column.type === 'currency') return `UGX ${parseFloat(value || 0).toLocaleString()}`;
+    if (column.type === 'date') return new Date(value).toLocaleDateString();
     if (column.type === 'badge') {
       const badgeProps = column.getBadgeProps ? column.getBadgeProps(value, row) : { variant: 'neutral', children: value };
       return <Badge {...badgeProps} />;
     }
-    
-    if (column.type === 'number') {
-      return typeof value === 'number' ? value.toLocaleString() : value;
-    }
-    
+    if (column.type === 'number') return typeof value === 'number' ? value.toLocaleString() : value;
     return value || '-';
   };
 
   const handleRowHover = (e, isEntering) => {
-    if (onRowClick) {
-      e.currentTarget.style.backgroundColor = isEntering ? theme.colors.neutral[50] : 'transparent';
-    }
+    if (onRowClick) e.currentTarget.style.backgroundColor = isEntering ? theme.colors.neutral[50] : 'transparent';
   };
 
   if (loading) {
@@ -99,23 +89,14 @@ export default function DataTable({
       <div style={tableStyles}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={headerStyles}>
-            <tr>
-              {columns.map((column, index) => (
-                <th key={index} style={headerCellStyles}>
-                  {column.title}
-                </th>
-              ))}
-            </tr>
+            <tr>{columns.map((col, i) => <th key={i} style={headerCellStyles}>{col.title}</th>)}</tr>
           </thead>
           <tbody>
-            {[...Array(5)].map((_, rowIndex) => (
-              <tr key={rowIndex} style={skeletonRowStyles}>
-                {columns.map((_, colIndex) => (
-                  <td key={colIndex} style={cellStyles}>
-                    <div style={{
-                      ...skeletonCellStyles,
-                      width: Math.random() * 60 + 40 + '%'
-                    }}></div>
+            {[...Array(5)].map((_, ri) => (
+              <tr key={ri} style={skeletonRowStyles}>
+                {columns.map((_, ci) => (
+                  <td key={ci} style={cellStyles}>
+                    <div style={{ ...skeletonCellStyles, width: Math.random() * 60 + 40 + '%' }} />
                   </td>
                 ))}
               </tr>
@@ -127,46 +108,67 @@ export default function DataTable({
   }
 
   if (!data || data.length === 0) {
-    return (
-      <div style={tableStyles}>
-        <EmptyState {...emptyStateProps} />
-      </div>
-    );
+    return <div style={tableStyles}><EmptyState {...emptyStateProps} /></div>;
   }
+
+  const paged = data.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div style={tableStyles} className={className}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead style={headerStyles}>
-          <tr>
-            {columns.map((column, index) => (
-              <th key={index} style={headerCellStyles}>
-                {column.title}
-              </th>
-            ))}
-          </tr>
+          <tr>{columns.map((col, i) => <th key={i} style={headerCellStyles}>{col.title}</th>)}</tr>
         </thead>
         <tbody>
-          {data.map((row, rowIndex) => (
-            <tr 
-              key={row.id || rowIndex} 
-              style={{
-                ...rowStyles,
-                backgroundColor: rowIndex % 2 === 0 ? 'transparent' : theme.colors.neutral[25]
-              }}
+          {paged.map((row, rowIndex) => (
+            <tr
+              key={row.id || rowIndex}
+              style={{ ...rowStyles, backgroundColor: rowIndex % 2 === 0 ? 'transparent' : theme.colors.neutral[25] }}
               onMouseEnter={(e) => handleRowHover(e, true)}
               onMouseLeave={(e) => handleRowHover(e, false)}
               onClick={() => onRowClick && onRowClick(row)}
             >
-              {columns.map((column, colIndex) => (
-                <td key={colIndex} style={cellStyles}>
-                  {renderCellContent(column, row)}
-                </td>
-              ))}
+              {columns.map((col, ci) => <td key={ci} style={cellStyles}>{renderCellContent(col, row)}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
+      {data.length > pageSize && (
+        <PaginationBar total={data.length} page={page} pageSize={pageSize} onPageChange={setPage} />
+      )}
+    </div>
+  );
+}
+
+function PaginationBar({ total, page, pageSize, onPageChange }) {
+  const totalPages = Math.ceil(total / pageSize);
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
+    else if (pages[pages.length - 1] !== '...') pages.push('...');
+  }
+
+  const btn = (active) => ({
+    minWidth: 34, height: 34, borderRadius: 8, border: `1px solid ${active ? '#4f46e5' : '#e2e8f0'}`,
+    background: active ? '#4f46e5' : '#fff', color: active ? '#fff' : '#475569',
+    fontSize: 13, fontWeight: 500, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+  });
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#fafbff' }}>
+      <span style={{ fontSize: 13, color: '#64748b' }}>Showing <strong>{from}–{to}</strong> of <strong>{total}</strong></span>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <button style={{ ...btn(false), opacity: page === 1 ? 0.4 : 1 }} onClick={() => onPageChange(page - 1)} disabled={page === 1}>‹</button>
+        {pages.map((p, i) => p === '...'
+          ? <span key={`e${i}`} style={{ padding: '0 4px', color: '#94a3b8', fontSize: 13 }}>…</span>
+          : <button key={p} style={btn(p === page)} onClick={() => onPageChange(p)}>{p}</button>
+        )}
+        <button style={{ ...btn(false), opacity: page === totalPages ? 0.4 : 1 }} onClick={() => onPageChange(page + 1)} disabled={page === totalPages}>›</button>
+      </div>
     </div>
   );
 }
