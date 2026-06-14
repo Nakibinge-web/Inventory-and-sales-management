@@ -185,7 +185,14 @@ export default function Dashboard({ user, token, onLogout }) {
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <div style={styles.logoContainer}>
-            <span style={styles.logoIcon}>📊</span>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: theme.colors.primary[600], display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </div>
             <h1 style={styles.logo}>InventoryPro</h1>
           </div>
           <Badge variant="primary" size="sm">
@@ -234,7 +241,12 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
         
         <div style={styles.headerRight}>
-          <div style={styles.notificationIcon}>🔔</div>
+          <div style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
               {user.name.charAt(0).toUpperCase()}
@@ -257,21 +269,58 @@ export default function Dashboard({ user, token, onLogout }) {
       <div style={styles.container}>
         {/* Sidebar */}
         <nav style={styles.sidebar}>
-          <div style={styles.sidebarContent}>
-            {menuItems.map(item => (
-              <button
-                key={item.id}
-                style={{
-                  ...styles.menuItem,
-                  ...(activeTab === item.id ? styles.menuItemActive : {})
-                }}
-                onClick={() => setActiveTab(item.id)}
-              >
-                <span style={styles.menuIcon}>{item.icon}</span>
-                <span style={styles.menuLabel}>{item.label}</span>
-                {activeTab === item.id && <div style={styles.activeIndicator}></div>}
-              </button>
-            ))}
+          <div style={{ padding: '20px 12px 12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* App label */}
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 12 }}>
+              Main Menu
+            </p>
+
+            {/* Main nav items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {menuItems.filter(i => i.id !== 'users').map(item => (
+                <button
+                  key={item.id}
+                  style={{
+                    ...styles.menuItem,
+                    ...(activeTab === item.id ? styles.menuItemActive : {})
+                  }}
+                  onClick={() => setActiveTab(item.id)}
+                  onMouseEnter={e => { if (activeTab !== item.id) { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}}
+                  onMouseLeave={e => { if (activeTab !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
+                >
+                  <span style={styles.menuIcon}>{item.icon}</span>
+                  <span style={styles.menuLabel}>{item.label}</span>
+                  {activeTab === item.id && <div style={styles.activeIndicator} />}
+                </button>
+              ))}
+            </div>
+
+            {/* Spacer pushes admin section to bottom */}
+            <div style={{ flex: 1 }} />
+
+            {/* Admin section */}
+            {isOwnerOrAdmin && (
+              <div>
+                <div style={{ height: 1, background: '#1e293b', margin: '12px 8px 14px' }} />
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>
+                  Administration
+                </p>
+                <button
+                  style={{
+                    ...styles.menuItem,
+                    ...(activeTab === 'users' ? styles.menuItemActive : {})
+                  }}
+                  onClick={() => setActiveTab('users')}
+                  onMouseEnter={e => { if (activeTab !== 'users') e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}
+                  onMouseLeave={e => { if (activeTab !== 'users') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
+                >
+                  <span style={styles.menuIcon}>🔑</span>
+                  <span style={styles.menuLabel}>Users</span>
+                  {activeTab === 'users' && <div style={styles.activeIndicator} />}
+                </button>
+                <div style={{ height: 20 }} />
+              </div>
+            )}
           </div>
         </nav>
 
@@ -418,144 +467,178 @@ export default function Dashboard({ user, token, onLogout }) {
 
 // Overview Tab Component
 function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
-  const quickActions = [
-    {
-      id: 'new-sale',
-      icon: '💰',
-      title: 'New Sale',
-      description: 'Process a new sale transaction',
-      onClick: () => onNavigate('pos')
-    },
-    {
-      id: 'add-product',
-      icon: '📦',
-      title: 'Add Product',
-      description: 'Add a new product to inventory',
-      onClick: onAddProduct
-    },
-    {
-      id: 'add-supplier',
-      icon: '🏭',
-      title: 'Add Supplier',
-      description: 'Register a new supplier',
-      onClick: () => onNavigate('suppliers')
-    },
-    {
-      id: 'record-purchase',
-      icon: '🛒',
-      title: 'Record Purchase',
-      description: 'Record a new purchase order',
-      onClick: () => onNavigate('purchases')
-    }
-  ];
+  const today = new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const hour  = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const recentSalesColumns = [
-    { key: 'sale_date', title: 'Date', type: 'date' },
-    { key: 'total_amount', title: 'Amount', type: 'currency' },
-    { key: 'payment_method', title: 'Payment', render: (value) => <Badge variant="neutral" size="sm">{value}</Badge> },
-    { key: 'user', title: 'Staff', render: (value) => value?.name || 'N/A' }
+    { key: 'sale_date',      title: 'Date',    type: 'date' },
+    { key: 'total_amount',   title: 'Amount',  type: 'currency' },
+    { key: 'payment_method', title: 'Payment', render: v => (
+      <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+        background: '#f1f5f9', color: '#475569', textTransform: 'capitalize' }}>
+        {v?.replace(/_/g, ' ') || '—'}
+      </span>
+    )},
+    { key: 'user', title: 'Cashier', render: v => v?.name || '—' }
+  ];
+
+  const kpi = [
+    { label: 'Total Products',   value: data.stats.totalProducts,                          sub: 'Items in inventory',  color: 'primary' },
+    { label: 'Total Sales',      value: `UGX ${data.stats.totalSales.toLocaleString()}`,   sub: 'Revenue generated',   color: 'success' },
+    { label: 'Total Purchases',  value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, sub: 'Stock investment',  color: 'warning' },
+    { label: 'Low Stock Alerts', value: data.stats.lowStockCount,                          sub: 'Items need reordering', color: 'danger', trend: data.stats.lowStockCount > 0 ? 'up' : 'neutral', tv: data.stats.lowStockCount > 0 ? 'Needs attention' : 'All good' },
+  ];
+
+  const quickActions = [
+    { label: 'New Sale',        sub: 'Process a sale transaction', action: () => onNavigate('pos'),       accent: '#4f46e5' },
+    { label: 'Add Product',     sub: 'Add to your inventory',       action: onAddProduct,                  accent: '#16a34a' },
+    { label: 'Add Supplier',    sub: 'Register a new vendor',       action: () => onNavigate('suppliers'), accent: '#0891b2' },
+    { label: 'Record Purchase', sub: 'Log a supplier order',        action: () => onNavigate('purchases'), accent: '#d97706' },
   ];
 
   return (
-    <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
+
+      {/* ── Hero header ───────────────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '32px 36px', marginBottom: 36,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Dashboard Overview</h1>
-          <p style={styles.pageSubtitle}>Welcome back! Here's what's happening with your business today.</p>
+          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
+          <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.5px' }}>
+            {greeting} 👋
+          </h1>
+          <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', maxWidth: 440, lineHeight: 1.5 }}>
+            Here's a live snapshot of your business. Use the quick actions below to get things done fast.
+          </p>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Today's Sales</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc', letterSpacing: '-1px' }}>
+            UGX {data.sales
+              .filter(s => new Date(s.sale_date).toDateString() === new Date().toDateString())
+              .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0)
+              .toLocaleString()}
+          </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <QuickActions actions={quickActions} />
-
-      {/* KPI Cards */}
-      <div style={styles.kpiGrid}>
-        <DashboardCard
-          title="Total Products"
-          value={data.stats.totalProducts}
-          subtitle="Items in inventory"
-          icon="📦"
-          color="primary"
-          trend="up"
-          trendValue="+12% from last month"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Total Sales"
-          value={`UGX ${data.stats.totalSales.toLocaleString()}`}
-          subtitle="Revenue generated"
-          icon="💰"
-          color="success"
-          trend="up"
-          trendValue="+8.2% from last month"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Total Purchases"
-          value={`UGX ${data.stats.totalPurchases.toLocaleString()}`}
-          subtitle="Money invested"
-          icon="🛒"
-          color="warning"
-          trend="down"
-          trendValue="-3.1% from last month"
-          loading={loading}
-        />
-        <DashboardCard
-          title="Low Stock Alerts"
-          value={data.stats.lowStockCount}
-          subtitle="Items need reordering"
-          icon="⚠️"
-          color="danger"
-          trend={data.stats.lowStockCount > 0 ? "up" : "neutral"}
-          trendValue={data.stats.lowStockCount > 0 ? "Needs attention" : "All good"}
-          loading={loading}
-        />
+      {/* ── KPI Cards ─────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 36 }}>
+        {kpi.map(k => (
+          <DashboardCard key={k.label} title={k.label} value={k.value} subtitle={k.sub}
+            color={k.color} trend={k.trend} trendValue={k.tv} loading={loading} />
+        ))}
       </div>
 
-      {/* Recent Activity & Alerts */}
-      <div style={styles.contentGrid}>
-        <div style={styles.contentCard}>
-          <h3 style={styles.cardTitle}>Recent Sales</h3>
+      {/* ── Quick Actions ──────────────────────────────────── */}
+      <div style={{ marginBottom: 36 }}>
+        <h2 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          Quick Actions
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {quickActions.map(q => (
+            <button key={q.label} onClick={q.action} style={{
+              padding: '18px 20px', borderRadius: 12,
+              border: `1.5px solid #e2e8f0`,
+              background: '#ffffff', cursor: 'pointer', textAlign: 'left',
+              transition: 'all 0.15s', outline: 'none', position: 'relative', overflow: 'hidden',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = q.accent;
+              e.currentTarget.style.background = q.accent + '08';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = `0 4px 16px ${q.accent}22`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = '#e2e8f0';
+              e.currentTarget.style.background = '#ffffff';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              {/* Accent dot */}
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: q.accent, marginBottom: 12 }} />
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{q.label}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{q.sub}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Bottom row: Recent Sales + Low Stock ──────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: data.lowStock.length > 0 ? '1fr 340px' : '1fr', gap: 20 }}>
+
+        {/* Recent Sales */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Recent Sales</h3>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>Last {Math.min(data.sales.length, 5)} transactions</p>
+            </div>
+            <button onClick={() => onNavigate('sales')} style={{
+              fontSize: 12, color: '#6366f1', background: '#ede9fe', border: 'none',
+              cursor: 'pointer', fontWeight: 600, padding: '5px 12px', borderRadius: 20,
+            }}>
+              View all
+            </button>
+          </div>
           <DataTable
             columns={recentSalesColumns}
             data={data.sales.slice(0, 5)}
             loading={loading}
             emptyStateProps={{
-              icon: '💰',
-              title: 'No sales yet',
-              description: 'Start processing sales to see them here.',
-              actionLabel: 'Process First Sale',
+              title: 'No sales recorded yet',
+              description: 'Head to the POS to process your first transaction.',
+              actionLabel: 'Open POS',
               onAction: () => onNavigate('pos')
             }}
           />
         </div>
 
+        {/* Low Stock */}
         {data.lowStock.length > 0 && (
-          <div style={styles.alertCard}>
-            <div style={styles.alertHeader}>
-              <h3 style={styles.alertTitle}>⚠️ Low Stock Alert</h3>
-              <Badge variant="danger" size="sm">{data.lowStock.length} items</Badge>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+            <div style={{ padding: '16px 22px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Low Stock</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>Needs reordering</p>
+              </div>
+              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                {data.lowStock.length} items
+              </span>
             </div>
-            <div style={styles.alertList}>
-              {data.lowStock.slice(0, 5).map(product => (
-                <div key={product.id} style={styles.alertItem}>
-                  <div>
-                    <span style={styles.alertItemName}>{product.name}</span>
-                    <span style={styles.alertItemStock}>
-                      Stock: {product.stock} (Reorder at: {product.reorder_level})
-                    </span>
+            <div>
+              {data.lowStock.slice(0, 6).map((product, i) => (
+                <div key={product.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '12px 22px',
+                  borderBottom: i < Math.min(data.lowStock.length, 6) - 1 ? '1px solid #f8fafc' : 'none',
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.name}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Min: {product.reorder_level} units</div>
                   </div>
-                  <Badge variant="danger" size="sm">Low</Badge>
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>{product.stock}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>in stock</div>
+                  </div>
                 </div>
               ))}
+              {data.lowStock.length > 6 && (
+                <div style={{ padding: '12px 22px' }}>
+                  <button onClick={() => onNavigate('products')} style={{
+                    fontSize: 12, color: '#6366f1', background: 'none', border: 'none',
+                    cursor: 'pointer', fontWeight: 600, padding: 0,
+                  }}>
+                    +{data.lowStock.length - 6} more items →
+                  </button>
+                </div>
+              )}
             </div>
-            {data.lowStock.length > 5 && (
-              <div style={styles.alertFooter}>
-                <Button variant="secondary" size="sm">
-                  View All ({data.lowStock.length})
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -626,8 +709,12 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
       title: 'Image',
       render: (value) => value
         ? <img src={`${API_BASE}/storage/${value}`} alt="product"
-            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
-        : <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
+            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+        : <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+          </div>
     },
     { key: 'name', title: 'Product Name' },
     { key: 'sku', title: 'SKU', render: (value) => value || <span style={{ color: '#94a3b8' }}>—</span> },
@@ -734,27 +821,65 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Products</h1>
-          <p style={styles.pageSubtitle}>Manage your inventory and track stock levels</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Inventory Management</p>
+          <h1 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.4px' }}>Products</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {products.length} product{products.length !== 1 ? 's' : ''} in your inventory
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Button variant="primary" onClick={() => setShowExpiry(true)} icon="⏳" iconPosition="left">
-            View Expiry Goods
-          </Button>
-          <Button variant="success" onClick={onAddProduct} icon="+" iconPosition="left">
-            Add Product
-          </Button>
+          <button onClick={() => setShowExpiry(true)} style={{
+            padding: '9px 18px', borderRadius: 8, border: '1px solid #334155',
+            background: 'transparent', color: '#94a3b8', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#a5b4fc'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}>
+            Expiry Tracker
+          </button>
+          <button onClick={onAddProduct} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#4338ca'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#4f46e5'; }}>
+            + Add Product
+          </button>
         </div>
       </div>
 
+      {/* Summary stats */}
+      {!loading && products.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+          {[
+            { label: 'Total Products', value: products.length, color: '#4f46e5' },
+            { label: 'In Stock',       value: products.filter(p => Number(p.stock) > Number(p.reorder_level || 0)).length, color: '#16a34a' },
+            { label: 'Low Stock',      value: products.filter(p => Number(p.stock) > 0 && Number(p.stock) <= Number(p.reorder_level || 0)).length, color: '#d97706' },
+            { label: 'Out of Stock',   value: products.filter(p => Number(p.stock) === 0).length, color: '#dc2626' },
+          ].map(s => (
+            <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', borderTop: `3px solid ${s.color}` }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
+              <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={styles.contentCard}>
         {/* Filter bar */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
           <input
-            style={fS.input}
-            placeholder="🔍  Search by name or SKU…"
+            style={{ ...fS.input, flex: '1 1 220px' }}
+            placeholder="Search by name or SKU…"
             value={filters.search}
             onChange={e => setFilter('search', e.target.value)}
           />
@@ -764,13 +889,13 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           </select>
           <select style={fS.select} value={filters.status} onChange={e => setFilter('status', e.target.value)}>
             <option value="">All Statuses</option>
-            <option value="in">🟢 In Stock</option>
-            <option value="low">🟡 Low Stock</option>
-            <option value="out">🔴 Out of Stock</option>
+            <option value="in">In Stock</option>
+            <option value="low">Low Stock</option>
+            <option value="out">Out of Stock</option>
           </select>
           {(filters.search || filters.category || filters.status) && (
             <button style={fS.clear} onClick={() => setFilters({ search: '', category: '', status: '' })}>
-              ✕ Clear filters
+              Clear filters
             </button>
           )}
         </div>
@@ -780,7 +905,6 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           data={filteredProducts}
           loading={loading}
           emptyStateProps={{
-            icon: '📦',
             title: filters.search || filters.category || filters.status ? 'No products match your filters' : 'No products yet',
             description: filters.search || filters.category || filters.status ? 'Try adjusting or clearing your filters.' : 'Start building your inventory by adding your first product.',
             actionLabel: filters.search || filters.category || filters.status ? 'Clear Filters' : 'Add First Product',
@@ -1108,7 +1232,7 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
         />
       </div>
-      {formError && <div style={catS.error}>⚠️ {formError}</div>}
+      {formError && <div style={catS.error}>{formError}</div>}
       <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
         <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
           Cancel
@@ -1122,62 +1246,70 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Categories</h1>
-          <p style={styles.pageSubtitle}>Organize your products into logical groups</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Inventory</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Categories</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {categories.length} {categories.length === 1 ? 'category' : 'categories'} — organise your products into logical groups
+          </p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add Category
-        </Button>
+        <button onClick={openAdd} style={{
+          padding: '9px 20px', borderRadius: 8, border: 'none',
+          background: '#4f46e5', color: '#fff', cursor: 'pointer',
+          fontSize: 13, fontWeight: 600,
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+        onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+          + Add Category
+        </button>
       </div>
 
       {loading ? (
         <div style={styles.cardsGrid}>
-          {[...Array(6)].map((_, i) => (
-            <div key={i} style={styles.skeletonCard}></div>
-          ))}
+          {[...Array(6)].map((_, i) => <div key={i} style={styles.skeletonCard} />)}
         </div>
       ) : categories.length === 0 ? (
         <div style={styles.contentCard}>
           <EmptyState
-            icon="🏷️"
             title="No categories yet"
-            description="Create categories to organize your products better."
+            description="Create categories to organise your products better."
             actionLabel="Add First Category"
             onAction={openAdd}
           />
         </div>
       ) : (
         <div style={styles.cardsGrid}>
-          {categories.map(category => (
-            <div key={category.id} style={styles.categoryCard}>
-              <div style={styles.categoryIcon}>🏷️</div>
-              <h3 style={styles.categoryTitle}>{category.name}</h3>
-              <p style={styles.categoryDescription}>
-                {category.description || 'No description provided'}
-              </p>
-              <div style={{ ...styles.categoryFooter, justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={styles.categoryDate}>
-                  Created {new Date(category.created_at).toLocaleDateString()}
-                </span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    onClick={() => openEdit(category)}
-                    style={catS.editBtn}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => { setDeleteError(null); setDeletingCat(category); }}
-                    style={catS.deleteBtn}
-                  >
-                    Delete
-                  </button>
+          {categories.map((category, idx) => {
+            const colors = ['#4f46e5','#16a34a','#0891b2','#d97706','#dc2626','#7c3aed'];
+            const accent = colors[idx % colors.length];
+            return (
+              <div key={category.id} style={{
+                ...styles.categoryCard,
+                borderTop: `3px solid ${accent}`,
+              }}>
+                <h3 style={styles.categoryTitle}>{category.name}</h3>
+                <p style={styles.categoryDescription}>
+                  {category.description || <span style={{ color: '#cbd5e1', fontStyle: 'italic' }}>No description</span>}
+                </p>
+                <div style={{ ...styles.categoryFooter, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={styles.categoryDate}>
+                    {new Date(category.created_at).toLocaleDateString()}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => openEdit(category)} style={catS.editBtn}>Edit</button>
+                    <button onClick={() => { setDeleteError(null); setDeletingCat(category); }} style={catS.deleteBtn}>Delete</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1200,22 +1332,15 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
       >
         {deletingCat && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '14px 16px', background: '#fef2f2',
-              border: '1px solid #fecaca', borderRadius: 10
-            }}>
-              <span style={{ fontSize: 28 }}>🗑️</span>
-              <div>
-                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 15 }}>{deletingCat.name}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                  This will permanently delete the category. Products in this category will not be deleted.
-                </div>
+            <div style={{ padding: '14px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10 }}>
+              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 15, marginBottom: 4 }}>{deletingCat.name}</div>
+              <div style={{ fontSize: 13, color: '#64748b' }}>
+                This will permanently delete the category. Products in this category will not be deleted.
               </div>
             </div>
             {deleteError && (
               <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
-                ⚠️ {deleteError}
+                {deleteError}
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
@@ -1404,27 +1529,39 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Suppliers</h1>
-          <p style={styles.pageSubtitle}>Manage your vendor relationships and contacts</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Procurement</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Suppliers</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {suppliers.length} {suppliers.length === 1 ? 'supplier' : 'suppliers'} — manage your vendor relationships
+          </p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add Supplier
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {suppliers.length > 0 && (
+            <input
+              style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search suppliers…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          )}
+          <button onClick={openAdd} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+          onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add Supplier
+          </button>
+        </div>
       </div>
-
-      {/* Search bar */}
-      {suppliers.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...fS.input, maxWidth: 320 }}
-            placeholder="🔍  Search suppliers…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
 
       {loading ? (
         <div style={styles.cardsGrid}>
@@ -1432,66 +1569,45 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
         </div>
       ) : suppliers.length === 0 ? (
         <div style={styles.contentCard}>
-          <EmptyState
-            icon="🏭"
-            title="No suppliers yet"
-            description="Add suppliers to track where you purchase your products."
-            actionLabel="Add First Supplier"
-            onAction={openAdd}
-          />
+          <EmptyState title="No suppliers yet" description="Add suppliers to track where you purchase your products." actionLabel="Add First Supplier" onAction={openAdd} />
         </div>
       ) : filtered.length === 0 ? (
         <div style={styles.contentCard}>
-          <EmptyState
-            icon="🔍"
-            title="No suppliers match your search"
-            description="Try a different name, email, or contact."
-            actionLabel="Clear Search"
-            onAction={() => setSearch('')}
-          />
+          <EmptyState title="No suppliers match your search" description="Try a different name, email, or contact." actionLabel="Clear Search" onAction={() => setSearch('')} />
         </div>
       ) : (
         <div style={styles.cardsGrid}>
           {filtered.map(supplier => (
-            <div key={supplier.id} style={styles.supplierCard}>
-              <div style={styles.supplierHeader}>
-                <div style={styles.supplierIcon}>🏭</div>
-                <h3 style={styles.supplierName}>{supplier.name}</h3>
+            <div key={supplier.id} style={{ ...styles.supplierCard, transition: 'box-shadow 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'}>
+              {/* Avatar + name */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: '#ede9fe', color: '#4f46e5', fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {supplier.name?.charAt(0).toUpperCase()}
+                </div>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{supplier.name}</h3>
               </div>
-              <div style={styles.supplierDetails}>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📞</span>
-                  <span style={{ color: supplier.contact ? '#0f172a' : '#94a3b8' }}>
-                    {supplier.contact || 'No contact'}
-                  </span>
-                </div>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📧</span>
-                  <span style={{ color: supplier.email ? '#0f172a' : '#94a3b8' }}>
-                    {supplier.email || 'No email'}
-                  </span>
-                </div>
-                <div style={styles.supplierDetail}>
-                  <span style={styles.supplierDetailIcon}>📍</span>
-                  <span style={{ color: supplier.address ? '#0f172a' : '#94a3b8' }}>
-                    {supplier.address || 'No address'}
-                  </span>
-                </div>
+              {/* Details */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: 'Phone',   value: supplier.contact },
+                  { label: 'Email',   value: supplier.email },
+                  { label: 'Address', value: supplier.address },
+                ].map(d => (
+                  <div key={d.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', width: 52, flexShrink: 0, paddingTop: 1 }}>{d.label}</span>
+                    <span style={{ fontSize: 13, color: d.value ? '#0f172a' : '#cbd5e1', fontStyle: d.value ? 'normal' : 'italic' }}>{d.value || '—'}</span>
+                  </div>
+                ))}
               </div>
               {/* Actions */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
-                <button
-                  onClick={() => openEdit(supplier)}
-                  style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                >
-                  ✏️ Edit
+              <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+                <button onClick={() => openEdit(supplier)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Edit
                 </button>
-                <button
-                  onClick={() => handleDelete(supplier)}
-                  disabled={deletingId === supplier.id}
-                  style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                >
-                  {deletingId === supplier.id ? 'Deleting…' : '🗑️ Delete'}
+                <button onClick={() => handleDelete(supplier)} disabled={deletingId === supplier.id} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  {deletingId === supplier.id ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>
@@ -1624,14 +1740,38 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Hero header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Customers</h1>
-          <p style={styles.pageSubtitle}>Manage your customer records and contacts</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CRM</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Customers</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            {customers.length} {customers.length === 1 ? 'customer' : 'customers'} — {customers.filter(c => c.status === 'active').length} active
+          </p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add Customer
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {customers.length > 0 && (
+            <input
+              style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search customers…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          )}
+          <button onClick={openAdd} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+          onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add Customer
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -2007,23 +2147,28 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
   if (lastReceipt) {
     return (
       <div style={styles.pageContainer}>
-        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 52 }}>✅</div>
-            <h2 style={{ margin: '8px 0 4px', color: '#065f46', fontSize: 22 }}>Sale Complete!</h2>
-            <p style={{ color: '#64748b', fontSize: 14 }}>Transaction recorded successfully</p>
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Success banner */}
+          <div style={{ background: 'linear-gradient(135deg, #065f46, #16a34a)', borderRadius: 16, padding: '28px 32px', textAlign: 'center' }}>
+            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h2 style={{ margin: '0 0 6px', color: '#fff', fontSize: 22, fontWeight: 700 }}>Sale Complete</h2>
+            <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Transaction recorded successfully</p>
           </div>
 
           {/* Receipt */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
-            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 12, marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>{user.tenant?.name || 'InventoryPro'}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>{new Date().toLocaleString()}</div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
+            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || 'InventoryPro'}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{new Date().toLocaleString()}</div>
             </div>
             {lastReceipt.cartSnapshot.map(item => (
-              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '4px 0' }}>
+              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '5px 0', color: '#475569' }}>
                 <span>{item.name} × {item.quantity}</span>
-                <span style={{ fontWeight: 600 }}>UGX {item.subtotal.toLocaleString()}</span>
+                <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {item.subtotal.toLocaleString()}</span>
               </div>
             ))}
             <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12 }}>
@@ -2044,8 +2189,8 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
                 <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
               </div>
             </div>
-            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right' }}>
-              Payment: <strong>{lastReceipt.paymentMethod.replace('_', ' ')}</strong>
+            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right', textTransform: 'capitalize' }}>
+              Payment: <strong>{lastReceipt.paymentMethod?.replace(/_/g, ' ')}</strong>
             </div>
             {lastReceipt.paymentMethod === 'cash' && (
               <div style={{ marginTop: 8, borderTop: '1px dashed #e2e8f0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -2061,11 +2206,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Button variant="secondary" style={{ flex: 1 }} onClick={() => setLastReceipt(null)}>
-              New Sale
-            </Button>
-          </div>
+          <button onClick={() => setLastReceipt(null)} style={{
+            padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+            background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+          }}>
+            New Sale
+          </button>
         </div>
       </div>
     );
@@ -2073,10 +2219,21 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '24px 32px', marginBottom: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Point of Sale</h1>
-          <p style={styles.pageSubtitle}>Search products, build a cart, and process payment</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sales</p>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Point of Sale</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Search products, build a cart, and process payment</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Items in cart</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>{cart.reduce((s, i) => s + i.quantity, 0)}</div>
         </div>
       </div>
 
@@ -2086,7 +2243,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input
             style={posS.searchInput}
-            placeholder="🔍  Search products by name or SKU…"
+            placeholder="Search products by name or SKU…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -2138,101 +2295,75 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
           ) : (
             <div style={posS.productGrid}>
               {filtered.map(p => (
-                <button key={p.id} style={posS.productCard} onClick={() => addToCart(p)}>
-                  <div style={posS.productEmoji}>📦</div>
+                <button key={p.id} style={posS.productCard} onClick={() => addToCart(p)}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,70,229,0.12)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
+                >
+                  {/* Product initial avatar */}
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 15, fontWeight: 700, color: '#4f46e5' }}>
+                    {p.name.charAt(0).toUpperCase()}
+                  </div>
                   <div style={posS.productName}>{p.name}</div>
-                  {p.sku && <div style={posS.productSku}>{p.sku}</div>}
+                  {p.sku && <div style={posS.productSku}>SKU: {p.sku}</div>}
                   <div style={posS.productPrice}>UGX {parseFloat(p.price).toLocaleString()}</div>
-                  <div style={posS.productStock}>Stock: {p.stock}</div>
+                  <div style={{ marginTop: 6, fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontWeight: 600 }}>
+                    {p.stock} in stock
+                  </div>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Right column — customer card + cart card */}
+        {/* Right column — customer + cart */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20 }}>
 
           {/* Customer Card */}
           <div style={posS.cartPanel}>
             <div style={posS.cartHeader}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>👤 Customer <span style={{ fontWeight: 400, fontSize: 12, color: '#94a3b8' }}>(Optional)</span></span>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Customer</span>
+                <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>Optional</span>
+              </div>
             </div>
-            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {['walk_in', 'existing', 'new'].map(type => (
-                <label
-                  key={type}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
-                    border: `1.5px solid ${customerType === type ? '#16a34a' : '#e2e8f0'}`,
-                    background: customerType === type ? '#f0fdf4' : '#fff',
-                    transition: 'border-color 0.15s, background 0.15s',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="customerType"
-                    value={type}
-                    checked={customerType === type}
-                    onChange={() => { setCustomerType(type); setSelectedCustomerId(''); setCustomerSearch(''); setNewCustomer({ name: '', phone: '', email: '' }); }}
-                    style={{ accentColor: '#16a34a', width: 16, height: 16 }}
-                  />
-                  <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                    {type === 'walk_in' ? 'Walk-in Customer' : type === 'existing' ? 'Existing Customer' : 'New Customer'}
-                  </span>
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { value: 'walk_in',  label: 'Walk-in Customer' },
+                { value: 'existing', label: 'Existing Customer' },
+                { value: 'new',      label: 'New Customer' },
+              ].map(type => (
+                <label key={type.value} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                  border: `1.5px solid ${customerType === type.value ? '#4f46e5' : '#e2e8f0'}`,
+                  background: customerType === type.value ? '#f5f3ff' : '#fff',
+                  transition: 'all 0.15s',
+                }}>
+                  <input type="radio" name="customerType" value={type.value}
+                    checked={customerType === type.value}
+                    onChange={() => { setCustomerType(type.value); setSelectedCustomerId(''); setCustomerSearch(''); setNewCustomer({ name: '', phone: '', email: '' }); }}
+                    style={{ accentColor: '#4f46e5', width: 15, height: 15 }} />
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{type.label}</span>
                 </label>
               ))}
 
               {customerType === 'existing' && (
                 <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Search by name or phone…"
-                    value={customerSearch}
-                    onChange={e => setCustomerSearch(e.target.value)}
-                  />
-                  <select
-                    style={posS.select}
-                    value={selectedCustomerId}
-                    onChange={e => setSelectedCustomerId(e.target.value)}
-                  >
+                  <input style={posS.searchInput} placeholder="Search by name or phone…"
+                    value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
+                  <select style={posS.select} value={selectedCustomerId} onChange={e => setSelectedCustomerId(e.target.value)}>
                     <option value="">— Select customer —</option>
-                    {(customers || [])
-                      .filter(c => c.status === 'active' && (
-                        !customerSearch ||
-                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-                        (c.phone || '').includes(customerSearch)
-                      ))
-                      .map(c => (
-                        <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>
-                      ))
-                    }
+                    {(customers || []).filter(c => c.status === 'active' && (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch)))
+                      .map(c => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
                   </select>
                 </div>
               )}
 
               {customerType === 'new' && (
                 <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Name *"
-                    value={newCustomer.name}
-                    onChange={e => setNewCustomer(p => ({ ...p, name: e.target.value }))}
-                  />
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Phone"
-                    value={newCustomer.phone}
-                    onChange={e => setNewCustomer(p => ({ ...p, phone: e.target.value }))}
-                  />
-                  <input
-                    style={posS.searchInput}
-                    placeholder="Email"
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))}
-                  />
+                  <input style={posS.searchInput} placeholder="Full name *" value={newCustomer.name} onChange={e => setNewCustomer(p => ({ ...p, name: e.target.value }))} />
+                  <input style={posS.searchInput} placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer(p => ({ ...p, phone: e.target.value }))} />
+                  <input style={posS.searchInput} placeholder="Email" type="email" value={newCustomer.email} onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))} />
                 </div>
               )}
             </div>
@@ -2241,16 +2372,19 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
           {/* Cart Card */}
           <div style={posS.cartPanel}>
             <div style={posS.cartHeader}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>🛒 Cart</span>
-              {cart.length > 0 && (
-                <button style={posS.clearBtn} onClick={() => setCart([])}>Clear all</button>
-              )}
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Cart {cart.length > 0 && <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 20, background: '#ede9fe', color: '#4f46e5', fontSize: 12 }}>{cart.length}</span>}</span>
+              {cart.length > 0 && <button style={posS.clearBtn} onClick={() => setCart([])}>Clear all</button>}
             </div>
 
             {cart.length === 0 ? (
               <div style={posS.emptyCart}>
-                <div style={{ fontSize: 32 }}>🛒</div>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 8 }}>Tap a product to add it</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                  </svg>
+                </div>
+                <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Select products to add to cart</div>
               </div>
             ) : (
               <div style={posS.cartItems}>
@@ -2260,16 +2394,10 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
                       <div style={posS.cartItemName}>{item.name}</div>
                       <div style={posS.cartItemPrice}>UGX {item.price.toLocaleString()} each</div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity - 1)}>−</button>
-                      <input
-                        style={posS.qtyInput}
-                        type="number"
-                        min={1}
-                        max={item.maxStock}
-                        value={item.quantity}
-                        onChange={e => updateQty(item.product_id, e.target.value)}
-                      />
+                      <input style={posS.qtyInput} type="number" min={1} max={item.maxStock}
+                        value={item.quantity} onChange={e => updateQty(item.product_id, e.target.value)} />
                       <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity + 1)}>+</button>
                       <button style={posS.removeBtn} onClick={() => removeFromCart(item.product_id)}>✕</button>
                     </div>
@@ -2406,23 +2534,28 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
               )}
 
               {saleError && (
-                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13, marginBottom: 10 }}>
-                  ⚠️ {saleError}
+                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13, marginBottom: 12 }}>
+                  {saleError}
                 </div>
               )}
 
-              <Button
-                variant="success"
-                style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px' }}
-                loading={submitting}
+              <button
                 onClick={handleCheckout}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || submitting}
+                style={{
+                  width: '100%', padding: '13px', borderRadius: 10, border: 'none',
+                  background: cart.length === 0 ? '#e2e8f0' : '#16a34a',
+                  color: cart.length === 0 ? '#94a3b8' : '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  transition: 'background 0.15s', letterSpacing: '0.02em',
+                }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting) e.currentTarget.style.background = '#15803d'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting) e.currentTarget.style.background = '#16a34a'; }}
               >
-                {submitting ? 'Processing…' : '✅ Complete Sale'}
-              </Button>
+                {submitting ? 'Processing…' : 'Complete Sale'}
+              </button>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -2433,7 +2566,7 @@ const posS = {
   searchInput: {
     padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
-    boxSizing: 'border-box', background: '#fff',
+    boxSizing: 'border-box', background: '#fff', color: '#0f172a',
   },
   discountInput: {
     padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10,
@@ -2442,32 +2575,73 @@ const posS = {
   },
   productGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
     gap: 12,
   },
   productCard: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-    padding: '14px 10px', border: '1.5px solid #e2e8f0', borderRadius: 12,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+    padding: '16px 12px', border: '1.5px solid #e2e8f0', borderRadius: 12,
     background: '#fff', cursor: 'pointer', textAlign: 'center',
     transition: 'border-color 0.15s, box-shadow 0.15s',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)', outline: 'none',
   },
-  productEmoji: { fontSize: 28 },
-  productName:  { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 },
+  productName:  { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3, marginBottom: 2 },
   productSku:   { fontSize: 11, color: '#94a3b8' },
-  productPrice: { fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 2 },
-  productStock: { fontSize: 11, color: '#64748b' },
+  productPrice: { fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 4 },
   cartPanel: {
     background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
   cartHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '14px 16px', borderBottom: '1px solid #f1f5f9',
+    background: '#fafafa',
   },
   clearBtn: {
     background: 'none', border: 'none', color: '#ef4444', fontSize: 12,
-    cursor: 'pointer', fontWeight: 500,
+    cursor: 'pointer', fontWeight: 600, padding: 0,
+  },
+  emptyCart: {
+    padding: '28px 16px', textAlign: 'center',
+  },
+  cartItems: {
+    display: 'flex', flexDirection: 'column', maxHeight: 280, overflowY: 'auto',
+  },
+  cartItem: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '10px 14px', borderBottom: '1px solid #f8fafc',
+    flexWrap: 'wrap',
+  },
+  cartItemName:     { fontSize: 13, fontWeight: 600, color: '#0f172a' },
+  cartItemPrice:    { fontSize: 11, color: '#94a3b8' },
+  cartItemSubtotal: { fontSize: 13, fontWeight: 700, color: '#0f172a', width: '100%', textAlign: 'right', marginTop: 2 },
+  qtyBtn: {
+    width: 28, height: 28, borderRadius: 6, border: '1px solid #e2e8f0',
+    background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 16,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
+    flexShrink: 0,
+  },
+  qtyInput: {
+    width: 40, textAlign: 'center', border: '1px solid #e2e8f0',
+    borderRadius: 6, padding: '4px 2px', fontSize: 13, outline: 'none',
+  },
+  removeBtn: {
+    background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer',
+    fontSize: 14, padding: '2px 4px', borderRadius: 4,
+  },
+  cartFooter: {
+    padding: '16px 14px', borderTop: '1px solid #f1f5f9', background: '#fafafa',
+  },
+  select: {
+    width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0',
+    borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+    background: '#fff', color: '#0f172a', cursor: 'pointer',
+  },
+  label: {
+    fontSize: 11, fontWeight: 700, color: '#64748b',
+    textTransform: 'uppercase', letterSpacing: '0.06em',
+    display: 'block', marginBottom: 6,
   },
   emptyCart: {
     padding: '40px 20px', textAlign: 'center', color: '#94a3b8',
@@ -2628,7 +2802,15 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
     {
       key: 'payment_method',
       title: 'Payment Method',
-      render: (value) => <Badge variant="success" size="sm">{value}</Badge>
+      render: (value) => (
+        <span style={{
+          padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+          background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0',
+          textTransform: 'capitalize'
+        }}>
+          {value?.replace(/_/g, ' ') || '—'}
+        </span>
+      )
     },
     {
       key: 'customer',
@@ -2698,15 +2880,39 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Sales</h1>
-          <p style={styles.pageSubtitle}>Track all your sales transactions and revenue</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Revenue</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Sales</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Track all your sales transactions and revenue</p>
         </div>
-        <Button variant="success" icon="+" iconPosition="left" onClick={onNewSale}>
-          New Sale
-        </Button>
+        <button onClick={onNewSale} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+          onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}>
+          + New Sale
+        </button>
       </div>
+
+      {/* Summary row */}
+      {!loading && sales.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+          {[
+            { label: 'Total Transactions', value: totalTx },
+            { label: 'Total Revenue',      value: `UGX ${totalRevenue.toLocaleString()}` },
+            { label: 'Average Sale',       value: `UGX ${totalTx ? Math.round(totalRevenue / totalTx).toLocaleString() : 0}` },
+          ].map(s => (
+            <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
+              <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.5px' }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={styles.contentCard}>
         {/* Filter buttons */}
@@ -2931,7 +3137,6 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
           data={filteredSales}
           loading={loading}
           emptyStateProps={{
-            icon: '💰',
             title: 'No sales yet',
             description: 'Start processing sales to see transaction history here.',
             actionLabel: 'Process First Sale',
@@ -3518,34 +3723,35 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>Purchases</h1>
-          <p style={styles.pageSubtitle}>Track inventory purchases and supplier orders</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Procurement</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Purchases</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>{purchases.length} purchase{purchases.length !== 1 ? 's' : ''} recorded</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openModal}>
-          Record Purchase
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {purchases.length > 0 && (
+            <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search by supplier or date…" value={search} onChange={e => setSearch(e.target.value)} />
+          )}
+          <button onClick={openModal} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Record Purchase
+          </button>
+        </div>
       </div>
-
-      {/* Search */}
-      {purchases.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...supS.input, maxWidth: 320 }}
-            placeholder="🔍  Search by supplier or date…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
 
       <div style={styles.contentCard}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading purchases…</div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon="🛒"
             title={search ? 'No purchases match your search' : 'No purchases yet'}
             description={search ? 'Try a different supplier or date.' : 'Record purchases from suppliers to track inventory costs.'}
             actionLabel={search ? 'Clear Search' : 'Record First Purchase'}
@@ -4039,18 +4245,21 @@ function ReportsTab({ data, loading, token }) {
   const getPayColor = (m) => paymentColors[m] || '#64748b';
 
   const tabs = [
-    { id: 'overview',  label: '📊 Overview'  },
-    { id: 'daily',     label: '📅 Daily Sales' },
-    { id: 'monthly',   label: '🗓️ Monthly Purchases' },
+    { id: 'overview', label: 'Overview'           },
+    { id: 'daily',    label: 'Daily Sales'         },
+    { id: 'monthly',  label: 'Monthly Purchases'   },
   ];
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>Reports & Analytics</h1>
-          <p style={styles.pageSubtitle}>Analyze your business performance and trends</p>
-        </div>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
+        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
+        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
+        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
       </div>
 
       {/* Sub-tabs */}
@@ -4424,34 +4633,36 @@ function UsersTab({ token, user: currentUser, toast }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
         <div>
-          <h1 style={styles.pageTitle}>User Management</h1>
-          <p style={styles.pageSubtitle}>Manage team members and their access roles</p>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Administration</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>User Management</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Manage team members and their access roles</p>
         </div>
-        <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>
-          Add User
-        </Button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {users.length > 0 && (
+            <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
+          )}
+          <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add User
+          </button>
+        </div>
       </div>
-
-      {/* Search */}
-      {users.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <input
-            style={{ ...supS.input, maxWidth: 320 }}
-            placeholder="🔍  Search by name or email…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-      )}
+      {/* Users table */}
 
       <div style={styles.contentCard}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading users…</div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon="👤"
             title={search ? 'No users match your search' : 'No users yet'}
             description={search ? 'Try a different name or email.' : 'Add team members to get started.'}
             actionLabel={search ? 'Clear Search' : 'Add First User'}
@@ -4644,38 +4855,38 @@ function StockMovementsTab({ token, products }) {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.pageHeader}>
-        <div>
-          <h1 style={styles.pageTitle}>Stock Movements</h1>
-          <p style={styles.pageSubtitle}>Full audit trail of all inventory changes</p>
-        </div>
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+      }}>
+        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Inventory</p>
+        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Stock Movements</h1>
+        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Full audit trail of all inventory changes</p>
       </div>
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Movements', value: movements.length, icon: '🔄', color: '#4f46e5', bg: '#ede9fe' },
-          { label: 'Stock In',        value: totalIn,           icon: '📥', color: '#16a34a', bg: '#f0fdf4' },
-          { label: 'Stock Out',       value: totalOut,          icon: '📤', color: '#dc2626', bg: '#fef2f2' },
+          { label: 'Total Movements', value: movements.length, color: '#4f46e5', borderColor: '#4f46e5' },
+          { label: 'Stock In',        value: totalIn,           color: '#16a34a', borderColor: '#16a34a' },
+          { label: 'Stock Out',       value: totalOut,          color: '#dc2626', borderColor: '#dc2626' },
         ].map(k => (
-          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{k.icon}</div>
-            <div>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k.label}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</p>
-            </div>
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderTop: `3px solid ${k.borderColor}`, borderRadius: 12, padding: '18px 22px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
+            <p style={{ margin: 0, fontSize: 26, fontWeight: 800, color: k.color, letterSpacing: '-0.5px' }}>{k.value}</p>
           </div>
         ))}
       </div>
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <input style={{ ...fS.input, maxWidth: 240 }} placeholder="🔍  Search by product…"
+        <input style={{ ...fS.input, maxWidth: 240 }} placeholder="Search by product…"
           value={search} onChange={e => setSearch(e.target.value)} />
         <select style={fS.select} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
-          <option value="IN">📥 Stock In</option>
-          <option value="OUT">📤 Stock Out</option>
+          <option value="IN">Stock In</option>
+          <option value="OUT">Stock Out</option>
         </select>
         <select style={fS.select} value={productFilter} onChange={e => setProductFilter(e.target.value)}>
           <option value="">All Products</option>
@@ -4830,13 +5041,13 @@ const styles = {
 
   // Header Styles
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0f172a',
     padding: `${theme.spacing.lg} ${theme.spacing['2xl']}`,
-    borderBottom: `1px solid ${theme.colors.neutral[200]}`,
+    borderBottom: '1px solid #1e293b',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: theme.shadows.sm,
+    boxShadow: 'none',
     position: 'sticky',
     top: 0,
     zIndex: 100
@@ -4855,18 +5066,16 @@ const styles = {
   },
 
   logoIcon: {
-    fontSize: '32px'
+    fontSize: '22px',
+    display: 'none'
   },
 
   logo: {
     margin: 0,
-    fontSize: theme.typography.fontSize['2xl'],
+    fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.neutral[900],
-    background: `linear-gradient(135deg, ${theme.colors.primary[600]}, ${theme.colors.primary[700]})`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text'
+    color: '#ffffff',
+    letterSpacing: '-0.5px',
   },
 
   headerCenter: {
@@ -4887,17 +5096,18 @@ const styles = {
     left: theme.spacing.md,
     top: '50%',
     transform: 'translateY(-50%)',
-    fontSize: '16px',
-    color: theme.colors.neutral[400]
+    fontSize: '14px',
+    color: '#94a3b8'
   },
 
   searchInput: {
     width: '100%',
     padding: `${theme.spacing.sm} ${theme.spacing.md} ${theme.spacing.sm} ${theme.spacing['2xl']}`,
-    border: `1px solid ${theme.colors.neutral[300]}`,
+    border: '1px solid #334155',
     borderRadius: theme.borderRadius.lg,
     fontSize: theme.typography.fontSize.sm,
-    backgroundColor: theme.colors.neutral[50],
+    backgroundColor: '#1e293b',
+    color: '#f1f5f9',
     transition: theme.transitions.default,
     outline: 'none'
   },
@@ -4944,12 +5154,12 @@ const styles = {
   userName: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[900]
+    color: '#f1f5f9'
   },
 
   userRole: {
     fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral[600],
+    color: '#94a3b8',
     fontWeight: theme.typography.fontWeight.normal
   },
 
@@ -4962,9 +5172,9 @@ const styles = {
 
   // Sidebar Styles
   sidebar: {
-    width: '280px',
-    backgroundColor: '#ffffff',
-    borderRight: `1px solid ${theme.colors.neutral[200]}`,
+    width: '260px',
+    backgroundColor: '#0f172a',
+    borderRight: '1px solid #1e293b',
     display: 'flex',
     flexDirection: 'column',
     position: 'sticky',
@@ -4984,13 +5194,13 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing.md,
-    padding: theme.spacing.md,
+    padding: '13px 14px',
     border: 'none',
     backgroundColor: 'transparent',
     cursor: 'pointer',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
-    color: theme.colors.neutral[600],
+    color: '#94a3b8',
     textAlign: 'left',
     borderRadius: theme.borderRadius.lg,
     transition: theme.transitions.default,
@@ -4999,19 +5209,21 @@ const styles = {
   },
 
   menuItemActive: {
-    backgroundColor: theme.colors.primary[50],
-    color: theme.colors.primary[700],
+    backgroundColor: '#1e293b',
+    color: '#f8fafc',
     fontWeight: theme.typography.fontWeight.semibold
   },
 
   menuIcon: {
-    fontSize: '20px',
-    width: '24px',
-    textAlign: 'center'
+    fontSize: '16px',
+    width: '20px',
+    textAlign: 'center',
+    opacity: 0.8
   },
 
   menuLabel: {
-    flex: 1
+    flex: 1,
+    fontSize: '14px'
   },
 
   activeIndicator: {
@@ -5020,17 +5232,17 @@ const styles = {
     top: '50%',
     transform: 'translateY(-50%)',
     width: '3px',
-    height: '20px',
-    backgroundColor: theme.colors.primary[600],
+    height: '18px',
+    backgroundColor: theme.colors.primary[500],
     borderRadius: theme.borderRadius.sm
   },
 
   // Main Content
   main: {
     flex: 1,
-    padding: theme.spacing['2xl'],
+    padding: '32px 36px',
     overflow: 'auto',
-    backgroundColor: theme.colors.neutral[50]
+    backgroundColor: '#f8fafc'
   },
 
   // Error Banner
@@ -5053,36 +5265,40 @@ const styles = {
   // Page Layout
   pageContainer: {
     maxWidth: '1400px',
-    margin: '0 auto'
+    margin: '0 auto',
+    paddingBottom: 32
   },
 
   pageHeader: {
     display: 'flex',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing['2xl']
+    marginBottom: 28,
+    paddingBottom: 20,
+    borderBottom: '1px solid #f1f5f9'
   },
 
   pageTitle: {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.xs} 0`
+    fontSize: 22,
+    fontWeight: 700,
+    color: '#0f172a',
+    margin: '0 0 4px 0',
+    letterSpacing: '-0.3px'
   },
 
   pageSubtitle: {
-    fontSize: theme.typography.fontSize.lg,
-    color: theme.colors.neutral[500],
+    fontSize: 13,
+    color: '#94a3b8',
     margin: 0
   },
 
   // Content Cards
   contentCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`,
-    overflow: 'hidden'
+    borderRadius: 12,
+    border: '1px solid #e2e8f0',
+    overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   // KPI Grid
@@ -5174,154 +5390,155 @@ const styles = {
   // Cards Grid
   cardsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-    gap: theme.spacing.xl
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gap: 20
   },
 
   // Category Card
   categoryCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`,
-    transition: theme.transitions.default,
-    cursor: 'pointer'
+    borderRadius: 12,
+    padding: '20px 22px',
+    border: '1px solid #e2e8f0',
+    transition: 'all 0.15s',
+    cursor: 'pointer',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   categoryIcon: {
-    fontSize: '48px',
-    marginBottom: theme.spacing.lg,
+    fontSize: '32px',
+    marginBottom: 12,
     display: 'block'
   },
 
   categoryTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.sm} 0`
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#0f172a',
+    margin: '0 0 6px 0'
   },
 
   categoryDescription: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral[600],
-    margin: `0 0 ${theme.spacing.lg} 0`,
+    fontSize: 13,
+    color: '#64748b',
+    margin: '0 0 14px 0',
     lineHeight: '1.5'
   },
 
   categoryFooter: {
-    borderTop: `1px solid ${theme.colors.neutral[200]}`,
-    paddingTop: theme.spacing.md
+    borderTop: '1px solid #f1f5f9',
+    paddingTop: 12
   },
 
   categoryDate: {
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.neutral[400]
+    fontSize: 12,
+    color: '#94a3b8'
   },
 
   // Supplier Card
   supplierCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`,
-    transition: theme.transitions.default,
-    cursor: 'pointer'
+    borderRadius: 12,
+    padding: '20px 22px',
+    border: '1px solid #e2e8f0',
+    transition: 'all 0.15s',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   supplierHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.lg
+    gap: 12,
+    marginBottom: 14
   },
 
   supplierIcon: {
-    fontSize: '32px'
+    fontSize: '24px'
   },
 
   supplierName: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#0f172a',
     margin: 0
   },
 
   supplierDetails: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing.sm
+    gap: 8
   },
 
   supplierDetail: {
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral[600]
+    gap: 8,
+    fontSize: 13,
+    color: '#475569'
   },
 
   supplierDetailIcon: {
-    fontSize: '16px',
-    width: '20px'
+    fontSize: '14px',
+    width: '18px',
+    opacity: 0.6
   },
 
   // Reports Grid
   reportsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-    gap: theme.spacing.xl
+    gap: 20
   },
 
   reportCard: {
     backgroundColor: '#ffffff',
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.xl,
-    boxShadow: theme.shadows.md,
-    border: `1px solid ${theme.colors.neutral[200]}`
+    borderRadius: 12,
+    padding: '20px 22px',
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
   },
 
   reportTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900],
-    margin: `0 0 ${theme.spacing.lg} 0`
+    fontSize: 14,
+    fontWeight: 700,
+    color: '#0f172a',
+    margin: '0 0 16px 0',
+    letterSpacing: '-0.2px'
   },
 
   reportMetrics: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing.md
+    gap: 10
   },
 
   reportMetric: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.neutral[50],
-    borderRadius: theme.borderRadius.lg,
-    border: `1px solid ${theme.colors.neutral[200]}`
+    padding: '10px 14px',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    border: '1px solid #f1f5f9'
   },
 
   reportLabel: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.neutral[600],
-    fontWeight: theme.typography.fontWeight.medium
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: 500
   },
 
   reportValue: {
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.neutral[900]
+    fontSize: 15,
+    fontWeight: 700,
+    color: '#0f172a'
   },
 
   // Skeleton Loading
   skeletonCard: {
-    backgroundColor: theme.colors.neutral[200],
-    borderRadius: theme.borderRadius.xl,
-    height: '200px',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 12,
+    height: '180px',
     animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
   }
 };
