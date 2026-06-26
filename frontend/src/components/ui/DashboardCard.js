@@ -65,7 +65,11 @@ export default function DashboardCard({
             color: '#0f172a',
             lineHeight: 1,
             marginBottom: 8,
-            letterSpacing: '-0.5px'
+            letterSpacing: '-0.5px',
+            fontFamily: typeof value === 'string' && value.startsWith('UGX')
+              ? "'DM Mono', monospace"
+              : 'inherit',
+            fontFeatureSettings: "'tnum'",
           }}>
             {typeof value === 'number' ? value.toLocaleString() : value}
           </div>

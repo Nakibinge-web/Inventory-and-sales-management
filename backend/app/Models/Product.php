@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Traits\BelongsToTenant;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -32,6 +33,15 @@ class Product extends Model
     protected $casts = [
         'track_expiry' => 'boolean',
     ];
+
+    protected $appends = ['image_url'];
+
+    // Computed full URL for the product image
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image_path) return null;
+        return Storage::disk('public')->url($this->image_path);
+    }
 
     // Relationships
     public function tenant()

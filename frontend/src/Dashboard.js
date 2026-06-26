@@ -193,7 +193,7 @@ export default function Dashboard({ user, token, onLogout }) {
                 <rect x="14" y="14" width="7" height="7" rx="1"/>
               </svg>
             </div>
-            <h1 style={styles.logo}>InventoryPro</h1>
+            <h1 style={styles.logo}>BusinessYo</h1>
           </div>
           <Badge variant="primary" size="sm">
             {user.tenant?.name || 'Business'}
@@ -346,16 +346,26 @@ export default function Dashboard({ user, token, onLogout }) {
               user={user}
               toast={toast}
               onSaleCompleted={(sale) => {
-                setData(prev => ({
-                  ...prev,
-                  sales: [sale, ...prev.sales],
-                  stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
-                  products: prev.products.map(p => {
-                    const item = sale.sale_items?.find(i => i.product_id === p.id)
-                               || sale.saleItems?.find(i => i.product_id === p.id);
-                    return item ? { ...p, stock: p.stock - item.quantity } : p;
-                  })
-                }));
+                setData(prev => {
+                  // If the sale created a new customer, add them to the customers list
+                  const newCustomerEntry = sale.customer;
+                  const customerAlreadyExists = newCustomerEntry
+                    ? prev.customers.some(c => c.id === newCustomerEntry.id)
+                    : true;
+                  return {
+                    ...prev,
+                    sales: [sale, ...prev.sales],
+                    stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
+                    products: prev.products.map(p => {
+                      const item = sale.sale_items?.find(i => i.product_id === p.id)
+                                 || sale.saleItems?.find(i => i.product_id === p.id);
+                      return item ? { ...p, stock: p.stock - item.quantity } : p;
+                    }),
+                    customers: (!customerAlreadyExists && newCustomerEntry)
+                      ? [...prev.customers, newCustomerEntry]
+                      : prev.customers,
+                  };
+                });
                 toast.success('Sale completed!', `UGX ${parseFloat(sale.total_amount || 0).toLocaleString()} recorded.`);
               }}
             />
@@ -421,16 +431,24 @@ export default function Dashboard({ user, token, onLogout }) {
               suppliers={data.suppliers}
               products={data.products}
               toast={toast}
-              onPurchaseAdded={(p) => {
-                setData(prev => ({
-                  ...prev,
-                  purchases: [p, ...prev.purchases],
-                  stats: { ...prev.stats, totalPurchases: prev.stats.totalPurchases + parseFloat(p.total_amount || 0) },
-                  products: prev.products.map(prod => {
+              onPurchaseAdded={(p, newProducts) => {
+                setData(prev => {
+                  // Update stock for existing products that were purchased
+                  const updatedProducts = prev.products.map(prod => {
                     const item = p.purchase_items?.find(i => i.product_id === prod.id);
                     return item ? { ...prod, stock: prod.stock + item.quantity } : prod;
-                  })
-                }));
+                  });
+                  // Append any brand-new products created during this purchase
+                  const mergedProducts = newProducts && newProducts.length > 0
+                    ? [...updatedProducts, ...newProducts.filter(np => !updatedProducts.some(ep => ep.id === np.id))]
+                    : updatedProducts;
+                  return {
+                    ...prev,
+                    purchases: [p, ...prev.purchases],
+                    stats: { ...prev.stats, totalPurchases: prev.stats.totalPurchases + parseFloat(p.total_amount || 0) },
+                    products: mergedProducts,
+                  };
+                });
               }}
             />
           )}
@@ -707,14 +725,17 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
     {
       key: 'image_path',
       title: 'Image',
-      render: (value) => value
-        ? <img src={`${API_BASE}/storage/${value}`} alt="product"
-            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
-        : <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>
-            </svg>
-          </div>
+      render: (value, row) => {
+        const src = row.image_url || (value ? `${API_BASE}/storage/${value}` : null);
+        return src
+          ? <img src={src} alt="product"
+              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+          : <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>
+              </svg>
+            </div>;
+      }
     },
     { key: 'name', title: 'Product Name' },
     { key: 'sku', title: 'SKU', render: (value) => value || <span style={{ color: '#94a3b8' }}>—</span> },
@@ -2179,7 +2200,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
                 </div>
               )}
               {lastReceipt.taxAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#b45309', marginBottom: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginBottom: 4 }}>
                   <span>Tax</span>
                   <span>+ UGX {lastReceipt.taxAmount.toLocaleString()}</span>
                 </div>
@@ -2449,7 +2470,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
                   </div>
                 )}
                 {taxAmount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#b45309' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#16a34a' }}>
                     <span>Tax</span>
                     <span>+ UGX {taxAmount.toLocaleString()}</span>
                   </div>
@@ -2878,11 +2899,17 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
     </div>
   );
 
+  // ── Summary stats ────────────────────────────────────────
+  const totalTx      = filteredSales.length;
+  const totalRevenue = filteredSales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+
   return (
     <div style={styles.pageContainer}>
+
+      {/* ── Page header ── */}
       <div style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
-        borderRadius: 16, padding: '28px 32px', marginBottom: 28,
+        borderRadius: 16, padding: '28px 32px', marginBottom: 24,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
       }}>
@@ -2891,51 +2918,57 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
           <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Sales</h1>
           <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Track all your sales transactions and revenue</p>
         </div>
-        <button onClick={onNewSale} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+        <button onClick={onNewSale}
+          style={{ padding: '10px 22px', borderRadius: 9, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: 7 }}
           onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
           onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}>
-          + New Sale
+          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New Sale
         </button>
       </div>
 
-      {/* Summary row */}
+      {/* ── KPI cards ── */}
       {!loading && sales.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
           {[
-            { label: 'Total Transactions', value: totalTx },
-            { label: 'Total Revenue',      value: `UGX ${totalRevenue.toLocaleString()}` },
-            { label: 'Average Sale',       value: `UGX ${totalTx ? Math.round(totalRevenue / totalTx).toLocaleString() : 0}` },
+            { label: 'Total Transactions', value: totalTx,                                                                          icon: '🧾', color: '#4f46e5', bg: '#eef2ff' },
+            { label: 'Total Revenue',      value: `UGX ${totalRevenue.toLocaleString()}`,                                           icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
+            { label: 'Average Sale',       value: `UGX ${totalTx ? Math.round(totalRevenue / totalTx).toLocaleString() : 0}`,       icon: '📊', color: '#0891b2', bg: '#ecfeff' },
           ].map(s => (
-            <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
-              <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.5px' }}>{s.value}</p>
+            <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 11, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+              <div>
+                <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
+                <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{s.value}</p>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       <div style={styles.contentCard}>
-        {/* Filter buttons */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+
+        {/* ── Filter bar ── */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '4px', background: '#f1f5f9', borderRadius: 12, width: 'fit-content' }}>
           {[
-            { key: 'all',   label: 'All Sales',   icon: '≡' },
-            { key: 'today', label: 'Today',        icon: '📅' },
-            { key: 'week',  label: 'This Week',    icon: '📅' },
-            { key: 'month', label: 'This Month',   icon: '📅' },
+            { key: 'all',   label: 'All Sales',  icon: '⊞' },
+            { key: 'today', label: 'Today',       icon: '◎' },
+            { key: 'week',  label: 'This Week',   icon: '▦' },
+            { key: 'month', label: 'This Month',  icon: '▤' },
           ].map(f => (
             <button
               key={f.key}
               onClick={() => setDateFilter(f.key)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 18px', borderRadius: 10, border: 'none',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                background: dateFilter === f.key ? '#4f46e5' : '#f1f5f9',
-                color:      dateFilter === f.key ? '#fff'     : '#334155',
-                transition: 'background 0.15s, color 0.15s',
+                padding: '7px 16px', borderRadius: 9, border: 'none',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: dateFilter === f.key ? '#fff' : 'transparent',
+                color:      dateFilter === f.key ? '#4f46e5' : '#64748b',
+                boxShadow:  dateFilter === f.key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                transition: 'all 0.15s',
               }}
             >
-              <span>{f.icon}</span> {f.label}
+              <span style={{ fontSize: 11, opacity: 0.7 }}>{f.icon}</span> {f.label}
             </button>
           ))}
         </div>
@@ -2982,51 +3015,61 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
             <div style={{ marginBottom: 20 }}>
               {/* Summary banner */}
               <div style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                background: 'linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%)',
                 borderRadius: 14, padding: '20px 24px', marginBottom: 14,
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                boxShadow: '0 2px 12px rgba(59,130,246,0.25)',
               }}>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                    Total Sales This Week
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                    This week's sales
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
                     UGX {weekTotal.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>
-                    {weekCount} transaction{weekCount !== 1 ? 's' : ''} &bull; {startLabel} – {endLabel}
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                    {weekCount} transaction{weekCount !== 1 ? 's' : ''} &nbsp;·&nbsp; {startLabel} – {endLabel}
                   </div>
                 </div>
                 <div style={{
-                  width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                  background: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 18px', textAlign: 'center',
                 }}>
-                  📅
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Daily avg</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>UGX {weekCount ? Math.round(weekTotal / 7).toLocaleString() : 0}</div>
                 </div>
               </div>
 
               {/* Day cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
-                {dayTotals.map(({ day, count, total, isToday }) => (
-                  <div key={day.getTime()} style={{
-                    background: '#fff',
-                    border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`,
-                    borderRadius: 10, padding: '10px 12px',
-                  }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em' }}>
-                      {dayNames[day.getDay()]}
+                {dayTotals.map(({ day, count, total, isToday }) => {
+                  const maxTotal = Math.max(...dayTotals.map(d => d.total), 1);
+                  const barPct = Math.round((total / maxTotal) * 100);
+                  return (
+                    <div key={day.getTime()} style={{
+                      background: isToday ? '#eff6ff' : '#fff',
+                      border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`,
+                      borderRadius: 12, padding: '12px 10px',
+                      display: 'flex', flexDirection: 'column', gap: 6,
+                    }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#3b82f6' : '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                        {dayNames[day.getDay()]}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                        {day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </div>
+                      {/* Mini bar */}
+                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#3b82f6' : '#e2e8f0', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? '#1d4ed8' : '#d1d5db', lineHeight: 1 }}>
+                        {count}
+                      </div>
+                      <div style={{ fontSize: 10, color: count > 0 ? '#64748b' : '#d1d5db', fontWeight: 500 }}>
+                        {count > 0 ? `UGX ${total.toLocaleString()}` : '—'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      {day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: count > 0 ? '#2563eb' : '#cbd5e1', marginBottom: 2 }}>
-                      {count}
-                    </div>
-                    <div style={{ fontSize: 11, color: count > 0 ? '#475569' : '#cbd5e1', fontWeight: 500 }}>
-                      UGX {total.toLocaleString()}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -3081,52 +3124,59 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
             <div style={{ marginBottom: 20 }}>
               {/* Summary banner */}
               <div style={{
-                background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                background: 'linear-gradient(135deg, #6d28d9 0%, #9333ea 100%)',
                 borderRadius: 14, padding: '20px 24px', marginBottom: 14,
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                boxShadow: '0 2px 12px rgba(109,40,217,0.25)',
               }}>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                    Total Sales This Month
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                    {monthName} sales
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
                     UGX {monthTotal.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>
-                    {monthCount} transaction{monthCount !== 1 ? 's' : ''} &bull; {monthName}
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                    {monthCount} transaction{monthCount !== 1 ? 's' : ''}
                   </div>
                 </div>
-                <div style={{
-                  width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-                }}>
-                  📅
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Weekly avg</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>UGX {weeks.length ? Math.round(monthTotal / weeks.length).toLocaleString() : 0}</div>
                 </div>
               </div>
 
               {/* Week cards */}
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeks.length}, 1fr)`, gap: 10 }}>
-                {weeks.map(({ label, start, end, count, total, isCurrent }) => (
-                  <div key={label} style={{
-                    background: '#fff',
-                    border: `1.5px solid ${isCurrent ? '#9333ea' : '#e2e8f0'}`,
-                    borderRadius: 10, padding: '14px 16px',
-                  }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 2 }}>
-                      {label}
+                {weeks.map(({ label, start, end, count, total, isCurrent }) => {
+                  const maxWeekTotal = Math.max(...weeks.map(w => w.total), 1);
+                  const barPct = Math.round((total / maxWeekTotal) * 100);
+                  return (
+                    <div key={label} style={{
+                      background: isCurrent ? '#faf5ff' : '#fff',
+                      border: `1.5px solid ${isCurrent ? '#9333ea' : '#e2e8f0'}`,
+                      borderRadius: 12, padding: '16px 14px',
+                    }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isCurrent ? '#9333ea' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>
+                        {label}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 10 }}>
+                        {start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – {end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </div>
+                      {/* Mini bar */}
+                      <div style={{ height: 5, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
+                        <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#9333ea' : '#e2e8f0', borderRadius: 3, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: count > 0 ? '#6d28d9' : '#d1d5db', marginBottom: 2, lineHeight: 1 }}>
+                        {count}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>sale{count !== 1 ? 's' : ''}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: count > 0 ? '#16a34a' : '#d1d5db' }}>
+                        {count > 0 ? `UGX ${total.toLocaleString()}` : '—'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
-                      {start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – {end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: count > 0 ? '#7c3aed' : '#cbd5e1', marginBottom: 2 }}>
-                      {count}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 2 }}>Sales</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: count > 0 ? '#16a34a' : '#cbd5e1' }}>
-                      UGX {total.toLocaleString()}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -3147,23 +3197,22 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
 
       {/* ── Custom Day Lookup ── */}
       <div style={{ ...styles.contentCard, marginTop: 20 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>🔍 Sales by Specific Day</h3>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Select any date to view all sales made on that day</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🔍</div>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Sales by Specific Day</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Select any date to view all sales made on that day</p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Select Date</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Select Date</label>
             <input
               type="date"
               value={customDate}
               onChange={e => { setCustomDate(e.target.value); setCustomDaySales(null); }}
-              style={{
-                padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10,
-                fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff',
-                color: '#0f172a', cursor: 'pointer',
-              }}
+              style={{ padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', cursor: 'pointer', minWidth: 180 }}
             />
           </div>
           <button
@@ -3178,68 +3227,47 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
               });
               setCustomDaySales(results);
             }}
-            style={{
-              padding: '9px 20px', borderRadius: 10, border: 'none',
-              background: '#4f46e5', color: '#fff', fontSize: 14, fontWeight: 600,
-              cursor: customDate ? 'pointer' : 'not-allowed',
-              opacity: customDate ? 1 : 0.5,
-            }}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: customDate ? '#4f46e5' : '#e2e8f0', color: customDate ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: customDate ? 'pointer' : 'not-allowed', transition: 'background 0.15s' }}
           >
             View Sales
           </button>
           {customDaySales !== null && (
-            <button
-              onClick={() => { setCustomDaySales(null); setCustomDate(''); }}
-              style={{
-                padding: '9px 16px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-                background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
+            <button onClick={() => { setCustomDaySales(null); setCustomDate(''); }}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Clear
             </button>
           )}
         </div>
 
-        {/* Results */}
         {customDaySales !== null && (
-          <div style={{ marginTop: 16 }}>
-            {/* Summary strip */}
-            <div style={{
-              background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 10,
-              padding: '12px 16px', marginBottom: 14,
-              display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center',
-            }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
                   {new Date(...customDate.split('-').map((v,i) => i===1 ? v-1 : +v))
                     .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                 </div>
               </div>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transactions</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#4f46e5' }}>{customDaySales.length}</div>
+              <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Transactions</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{customDaySales.length}</div>
               </div>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Revenue</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>
+              <div style={{ padding: '16px 22px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Revenue</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a' }}>
                   UGX {customDaySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0).toLocaleString()}
                 </div>
               </div>
             </div>
-
             {customDaySales.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>🗓️</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>No sales on this day</div>
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <div style={{ fontSize: 38, marginBottom: 10 }}>🗓️</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No sales recorded on this day</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try selecting a different date</div>
               </div>
             ) : (
-              <DataTable
-                columns={columns}
-                data={customDaySales}
-                loading={false}
-                emptyStateProps={{ icon: '💰', title: 'No sales', description: '' }}
-              />
+              <DataTable columns={columns} data={customDaySales} loading={false} emptyStateProps={{ title: 'No sales', description: '' }} />
             )}
           </div>
         )}
@@ -3247,23 +3275,22 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
 
       {/* ── Custom Week Lookup ── */}
       <div style={{ ...styles.contentCard, marginTop: 20 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>📅 Sales by Specific Week</h3>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Pick any date — the system will show all sales for that entire week (Mon – Sun)</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>📅</div>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Sales by Specific Week</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Pick any date — shows all sales for that full week (Mon – Sun)</p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Pick any date in the week</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Any date in the week</label>
             <input
               type="date"
               value={customWeekDate}
               onChange={e => { setCustomWeekDate(e.target.value); setCustomWeekSales(null); setCustomWeekRange(null); }}
-              style={{
-                padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10,
-                fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff',
-                color: '#0f172a', cursor: 'pointer',
-              }}
+              style={{ padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', cursor: 'pointer', minWidth: 180 }}
             />
           </div>
           <button
@@ -3271,13 +3298,11 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
               if (!customWeekDate) return;
               const [y, m, d] = customWeekDate.split('-').map(Number);
               const picked = new Date(y, m - 1, d);
-              // Find Monday of that week
-              const dow = picked.getDay(); // 0=Sun
+              const dow = picked.getDay();
               const monday = new Date(picked);
               monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
               const sunday = new Date(monday);
               sunday.setDate(monday.getDate() + 6);
-
               const results = localSales.filter(sale => {
                 const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
                 const [sy, sm, sd] = raw.split('-').map(Number);
@@ -3287,35 +3312,22 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
               setCustomWeekSales(results);
               setCustomWeekRange({ monday, sunday });
             }}
-            style={{
-              padding: '9px 20px', borderRadius: 10, border: 'none',
-              background: '#4f46e5', color: '#fff', fontSize: 14, fontWeight: 600,
-              cursor: customWeekDate ? 'pointer' : 'not-allowed',
-              opacity: customWeekDate ? 1 : 0.5,
-            }}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: customWeekDate ? '#4f46e5' : '#e2e8f0', color: customWeekDate ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: customWeekDate ? 'pointer' : 'not-allowed', transition: 'background 0.15s' }}
           >
             View Week
           </button>
           {customWeekSales !== null && (
-            <button
-              onClick={() => { setCustomWeekSales(null); setCustomWeekDate(''); setCustomWeekRange(null); }}
-              style={{
-                padding: '9px 16px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-                background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
+            <button onClick={() => { setCustomWeekSales(null); setCustomWeekDate(''); setCustomWeekRange(null); }}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Clear
             </button>
           )}
         </div>
 
-        {/* Results */}
         {customWeekSales !== null && customWeekRange !== null && (() => {
           const { monday, sunday } = customWeekRange;
           const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
           const weekTotal = customWeekSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
-
-          // Day-by-day breakdown for that week
           const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
           const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
             const day = new Date(monday);
@@ -3327,65 +3339,53 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
             });
             return { day, name: dayNames[i], count: daySales.length, total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0) };
           });
+          const maxDayTotal = Math.max(...dayBreakdown.map(d => d.total), 1);
 
           return (
-            <div style={{ marginTop: 16 }}>
-              {/* Summary strip */}
-              <div style={{
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                borderRadius: 12, padding: '16px 20px', marginBottom: 14,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
-              }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Week</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{fmt(monday)} – {fmt(sunday)}</div>
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>to {fmt(sunday)}</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Transactions</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{customWeekSales.length}</div>
+                <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Transactions</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8' }}>{customWeekSales.length}</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Total Revenue</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>UGX {weekTotal.toLocaleString()}</div>
+                <div style={{ padding: '16px 22px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Revenue</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a' }}>UGX {weekTotal.toLocaleString()}</div>
                 </div>
               </div>
 
-              {/* Day-by-day cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 20 }}>
                 {dayBreakdown.map(({ day, name, count, total }) => {
                   const now = new Date();
                   const isToday = day.getTime() === new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                  const barPct = Math.round((total / maxDayTotal) * 100);
                   return (
-                    <div key={name} style={{
-                      background: '#fff', borderRadius: 10, padding: '10px 12px',
-                      border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`,
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{name}</div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>
-                        {day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    <div key={name} style={{ background: isToday ? '#eff6ff' : '#fff', border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#3b82f6' : '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{name}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
+                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#3b82f6' : '#e2e8f0', borderRadius: 2, transition: 'width 0.4s ease' }} />
                       </div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: count > 0 ? '#2563eb' : '#cbd5e1', marginBottom: 2 }}>{count}</div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: count > 0 ? '#475569' : '#cbd5e1' }}>
-                        UGX {total.toLocaleString()}
-                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? '#1d4ed8' : '#d1d5db', lineHeight: 1 }}>{count}</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: count > 0 ? '#64748b' : '#d1d5db' }}>{count > 0 ? `UGX ${total.toLocaleString()}` : '—'}</div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Sales table */}
               {customWeekSales.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>
-                  <div style={{ fontSize: 36, marginBottom: 8 }}>📅</div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>No sales in this week</div>
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No sales recorded in this week</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try picking a date from a different week</div>
                 </div>
               ) : (
-                <DataTable
-                  columns={columns}
-                  data={customWeekSales}
-                  loading={false}
-                  emptyStateProps={{ icon: '💰', title: 'No sales', description: '' }}
-                />
+                <DataTable columns={columns} data={customWeekSales} loading={false} emptyStateProps={{ title: 'No sales', description: '' }} />
               )}
             </div>
           );
@@ -3554,7 +3554,7 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
                 <div style={{ maxWidth: 280, marginLeft: 'auto' }}>
                   {rRow('Subtotal:', `UGX ${subtotal.toLocaleString()}`)}
                   {discount > 0 && rRow('Discount:', `− UGX ${discount.toLocaleString()}`, false, '#dc2626')}
-                  {tax > 0      && rRow('Tax:',      `+ UGX ${tax.toLocaleString()}`,      false, '#b45309')}
+                  {tax > 0      && rRow('Tax:',      `+ UGX ${tax.toLocaleString()}`,      false, '#16a34a')}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
                     <span style={{ fontWeight: 700, fontSize: 16 }}>TOTAL:</span>
                     <span style={{ fontWeight: 700, fontSize: 18, color: '#0f172a' }}>UGX {total.toLocaleString()}</span>
@@ -3661,7 +3661,16 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
 function PurchasesTab({ purchases, loading, token, user, suppliers, products, toast, onPurchaseAdded }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-  const EMPTY_LINE = { product_id: '', quantity: '', cost_price: '' };
+  // Each line can be 'existing' (select from products) or 'new' (fill in details)
+  const EMPTY_LINE = {
+    mode: 'existing',          // 'existing' | 'new'
+    product_id: '',            // used when mode === 'existing'
+    // new product fields
+    np_name: '', np_sku: '', np_unit: '', np_price: '', np_reorder: '',
+    // shared
+    quantity: '', cost_price: '',
+  };
+
   const [showModal, setShowModal]   = useState(false);
   const [supplierId, setSupplierId] = useState('');
   const [lines, setLines]           = useState([{ ...EMPTY_LINE }]);
@@ -3679,22 +3688,55 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
     setShowModal(true);
   };
 
-  const setLine = (i, key, val) => setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+  const setLine = (i, key, val) =>
+    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+
+  const toggleMode = (i) =>
+    setLines(prev => prev.map((l, idx) =>
+      idx === i ? { ...EMPTY_LINE, mode: l.mode === 'existing' ? 'new' : 'existing' } : l
+    ));
+
   const addLine    = () => setLines(prev => [...prev, { ...EMPTY_LINE }]);
   const removeLine = (i) => setLines(prev => prev.filter((_, idx) => idx !== i));
 
-  const lineTotal = (l) => {
-    const q = parseFloat(l.quantity) || 0;
-    const c = parseFloat(l.cost_price) || 0;
-    return q * c;
-  };
+  const lineTotal = (l) => (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0);
   const grandTotal = lines.reduce((s, l) => s + lineTotal(l), 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!supplierId) { setFormError('Please select a supplier.'); return; }
-    const validLines = lines.filter(l => l.product_id && l.quantity && l.cost_price);
-    if (validLines.length === 0) { setFormError('Add at least one complete product line.'); return; }
+
+    // Validate lines
+    const validLines = lines.filter(l => {
+      if (l.mode === 'existing') return l.product_id && l.quantity && l.cost_price;
+      return l.np_name && l.np_price && l.quantity && l.cost_price;
+    });
+    if (validLines.length === 0) {
+      setFormError('Add at least one complete product line.');
+      return;
+    }
+
+    const items = validLines.map(l => {
+      if (l.mode === 'existing') {
+        return {
+          product_id: l.product_id,
+          quantity:   parseInt(l.quantity),
+          cost_price: parseFloat(l.cost_price),
+        };
+      }
+      // new product — omit product_id, include new_product object
+      return {
+        quantity:   parseInt(l.quantity),
+        cost_price: parseFloat(l.cost_price),
+        new_product: {
+          name:          l.np_name,
+          sku:           l.np_sku   || undefined,
+          unit:          l.np_unit  || undefined,
+          price:         parseFloat(l.np_price),
+          reorder_level: l.np_reorder ? parseFloat(l.np_reorder) : undefined,
+        },
+      };
+    });
 
     setSaving(true);
     setFormError(null);
@@ -3702,14 +3744,11 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
       const res  = await fetch(`${API_URL}/purchases`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          supplier_id: supplierId,
-          items: validLines.map(l => ({ product_id: l.product_id, quantity: parseInt(l.quantity), cost_price: parseFloat(l.cost_price) })),
-        }),
+        body: JSON.stringify({ supplier_id: supplierId, items }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
-      onPurchaseAdded(json.data);
+      onPurchaseAdded(json.data, json.new_products || []);
       toast.success('Purchase recorded', `UGX ${parseFloat(json.data.total_amount || 0).toLocaleString()} purchase recorded.`);
       setShowModal(false);
     } catch { setFormError('Could not reach the server.'); }
@@ -3721,8 +3760,11 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
     new Date(p.purchase_date).toLocaleDateString().includes(search)
   );
 
+  const inp = { ...supS.input };
+
   return (
     <div style={styles.pageContainer}>
+      {/* Header banner */}
       <div style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
         borderRadius: 16, padding: '28px 32px', marginBottom: 28,
@@ -3736,17 +3778,25 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {purchases.length > 0 && (
-            <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
-              placeholder="Search by supplier or date…" value={search} onChange={e => setSearch(e.target.value)} />
+            <input
+              style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
+              placeholder="Search by supplier or date…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           )}
-          <button onClick={openModal} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          <button
+            onClick={openModal}
+            style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
             onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}
+          >
             + Record Purchase
           </button>
         </div>
       </div>
 
+      {/* Purchases table */}
       <div style={styles.contentCard}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading purchases…</div>
@@ -3770,21 +3820,19 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
               {filtered.map(p => (
                 <>
                   <tr key={p.id} style={{ borderBottom: expandedId === p.id ? 'none' : '1px solid #f8fafc', background: expandedId === p.id ? '#fafbff' : 'transparent' }}>
-                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>
-                      {new Date(p.purchase_date).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: '14px 14px' }}>
+                    <td style={{ padding: '14px', color: '#475569', fontSize: 14 }}>{new Date(p.purchase_date).toLocaleDateString()}</td>
+                    <td style={{ padding: '14px' }}>
                       <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
                         {p.supplier?.name || 'N/A'}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>
+                    <td style={{ padding: '14px', color: '#475569', fontSize: 14 }}>
                       {p.purchase_items?.length || 0} item{(p.purchase_items?.length || 0) !== 1 ? 's' : ''}
                     </td>
-                    <td style={{ padding: '14px 14px', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
+                    <td style={{ padding: '14px', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
                       UGX {parseFloat(p.total_amount || 0).toLocaleString()}
                     </td>
-                    <td style={{ padding: '14px 14px' }}>
+                    <td style={{ padding: '14px' }}>
                       <button
                         onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                         style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
@@ -3795,7 +3843,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                   </tr>
                   {expandedId === p.id && (
                     <tr key={`${p.id}-exp`}>
-                      <td colSpan={5} style={{ padding: '0 14px 16px 14px', background: '#fafbff' }}>
+                      <td colSpan={5} style={{ padding: '0 14px 16px', background: '#fafbff' }}>
                         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
@@ -3841,7 +3889,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
           </div>
 
           {/* Product Lines */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label style={supS.label}>Products *</label>
               <button type="button" onClick={addLine} style={{ fontSize: 13, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
@@ -3849,27 +3897,117 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
               </button>
             </div>
 
-            {/* Header row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, padding: '0 4px' }}>
-              {['Product', 'Qty', 'Cost Price (UGX)', ''].map(h => (
-                <span key={h} style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</span>
-              ))}
-            </div>
-
             {lines.map((line, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'center' }}>
-                <select style={supS.input} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
-                  <option value="">— Select product —</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <input style={supS.input} type="number" min="1" placeholder="0" value={line.quantity}
-                  onChange={e => setLine(i, 'quantity', e.target.value)} />
-                <input style={supS.input} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
-                  onChange={e => setLine(i, 'cost_price', e.target.value)} />
-                <button type="button" onClick={() => removeLine(i)} disabled={lines.length === 1}
-                  style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: lines.length === 1 ? 'not-allowed' : 'pointer', opacity: lines.length === 1 ? 0.4 : 1, fontSize: 14 }}>
-                  ✕
-                </button>
+              <div key={i} style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '14px', background: line.mode === 'new' ? '#fafbff' : '#fff' }}>
+
+                {/* Mode toggle + remove */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['existing', 'new'].map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => toggleMode(i)}
+                        style={{
+                          padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                          border: '1.5px solid',
+                          borderColor: line.mode === m ? '#4f46e5' : '#e2e8f0',
+                          background:  line.mode === m ? '#4f46e5' : '#fff',
+                          color:       line.mode === m ? '#fff'    : '#94a3b8',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {m === 'existing' ? '📦 Existing Product' : '✨ New Product'}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeLine(i)}
+                    disabled={lines.length === 1}
+                    style={{ padding: '5px 9px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: lines.length === 1 ? 'not-allowed' : 'pointer', opacity: lines.length === 1 ? 0.4 : 1, fontSize: 13 }}
+                  >
+                    ✕ Remove
+                  </button>
+                </div>
+
+                {/* Existing product row */}
+                {line.mode === 'existing' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product *</span>
+                      <select style={inp} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
+                        <option value="">— Select product —</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty *</span>
+                      <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
+                        onChange={e => setLine(i, 'quantity', e.target.value)} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                      <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
+                        onChange={e => setLine(i, 'cost_price', e.target.value)} />
+                    </div>
+                  </div>
+                )}
+
+                {/* New product rows */}
+                {line.mode === 'new' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name *</span>
+                        <input style={inp} placeholder="e.g. Brown Sugar 1kg" value={line.np_name}
+                          onChange={e => setLine(i, 'np_name', e.target.value)} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU</span>
+                        <input style={inp} placeholder="e.g. SGR-001" value={line.np_sku}
+                          onChange={e => setLine(i, 'np_sku', e.target.value)} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
+                        <input style={inp} placeholder="e.g. kg, pcs, box" value={line.np_unit}
+                          onChange={e => setLine(i, 'np_unit', e.target.value)} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Selling Price (UGX) *</span>
+                        <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.np_price}
+                          onChange={e => setLine(i, 'np_price', e.target.value)} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Reorder Level</span>
+                        <input style={inp} type="number" min="0" placeholder="0" value={line.np_reorder}
+                          onChange={e => setLine(i, 'np_reorder', e.target.value)} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty Purchased *</span>
+                        <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
+                          onChange={e => setLine(i, 'quantity', e.target.value)} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                        <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
+                          onChange={e => setLine(i, 'cost_price', e.target.value)} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6366f1', background: '#eef2ff', borderRadius: 6, padding: '6px 10px' }}>
+                      ✨ This product will be created in your inventory with the quantity above as its initial stock.
+                    </div>
+                  </div>
+                )}
+
+                {/* Line subtotal */}
+                {lineTotal(line) > 0 && (
+                  <div style={{ marginTop: 8, textAlign: 'right', fontSize: 13, color: '#64748b' }}>
+                    Subtotal: <strong style={{ color: '#0f172a' }}>UGX {lineTotal(line).toLocaleString()}</strong>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -4185,6 +4323,7 @@ function ReportsTab({ data, loading, token }) {
 
   const [activeReport, setActiveReport] = useState('overview');
   const [dailyDate, setDailyDate]       = useState(new Date().toISOString().split('T')[0]);
+  const [weeklyDate, setWeeklyDate]     = useState(new Date().toISOString().split('T')[0]);
   const [monthlyMonth, setMonthlyMonth] = useState(new Date().toISOString().slice(0, 7));
   const [reportData, setReportData]     = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -4224,15 +4363,18 @@ function ReportsTab({ data, loading, token }) {
   const topSuppliers = Object.entries(supplierSpend).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxSupplierSpend = topSuppliers[0]?.[1] || 1;
 
-  // ── Fetch daily / monthly reports ─────────────────────────────────────────
+  // ── Fetch reports ──────────────────────────────────────────────────────────
   const fetchReport = async () => {
     setReportLoading(true);
     setReportError(null);
     setReportData(null);
     try {
-      const url = activeReport === 'daily'
-        ? `${API_URL}/sales/daily-report?date=${dailyDate}`
-        : `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
+      let url;
+      if (activeReport === 'daily')   url = `${API_URL}/sales/daily-report?date=${dailyDate}`;
+      else if (activeReport === 'weekly') url = `${API_URL}/sales/weekly-report?date=${weeklyDate}`;
+      else if (activeReport === 'monthly-sales') url = `${API_URL}/sales/monthly-report?month=${monthlyMonth}`;
+      else url = `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
+
       const res  = await fetch(url, { headers });
       const json = await res.json();
       if (!res.ok) { setReportError(json?.message || 'Failed to load report.'); return; }
@@ -4245,9 +4387,10 @@ function ReportsTab({ data, loading, token }) {
   const getPayColor = (m) => paymentColors[m] || '#64748b';
 
   const tabs = [
-    { id: 'overview', label: 'Overview'           },
-    { id: 'daily',    label: 'Daily Sales'         },
-    { id: 'monthly',  label: 'Monthly Purchases'   },
+    { id: 'overview',       label: 'Overview'         },
+    { id: 'daily',          label: 'Daily Sales'       },
+    { id: 'weekly',         label: 'Weekly Sales'      },
+    { id: 'monthly-sales',  label: 'Monthly Sales'     },
   ];
 
   return (
@@ -4408,17 +4551,36 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Date',         value: reportData.date },
                   { label: 'Transactions', value: reportData.total_transactions },
                   { label: 'Total Sales',  value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
+                  { label: 'Total Cost',   value: `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}` },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
                     <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{k.value}</p>
                   </div>
                 ))}
+              </div>
+              {/* Profit highlight */}
+              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 32 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Net Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Margin</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
+                    {parseFloat(reportData.total_sales) > 0
+                      ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%`
+                      : '—'}
+                  </p>
+                </div>
               </div>
               <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
@@ -4430,7 +4592,7 @@ function ReportsTab({ data, loading, token }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
-                        {['Time', 'Cashier', 'Payment', 'Items', 'Amount'].map(h => (
+                        {['Time', 'Cashier', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
                           <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
                         ))}
                       </tr>
@@ -4445,8 +4607,10 @@ function ReportsTab({ data, loading, token }) {
                               {s.payment_method?.replace('_', ' ')}
                             </span>
                           </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.sale_items?.length || 0}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -4458,8 +4622,139 @@ function ReportsTab({ data, loading, token }) {
         </div>
       )}
 
-      {/* ── MONTHLY PURCHASES REPORT ── */}
-      {activeReport === 'monthly' && (
+      {/* ── WEEKLY SALES REPORT ── */}
+      {activeReport === 'weekly' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={supS.label}>Any date within the week</label>
+              <input style={{ ...supS.input, width: 200 }} type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} />
+            </div>
+            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+          </div>
+
+          {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
+
+          {reportData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* KPI cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                {[
+                  { label: 'Week Start',    value: reportData.week_start },
+                  { label: 'Week End',      value: reportData.week_end },
+                  { label: 'Transactions',  value: reportData.total_transactions },
+                  { label: 'Total Sales',   value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
+                ].map(k => (
+                  <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Profit highlight */}
+              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 32 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Net Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div style={{ marginLeft: 16 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Total Cost</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>UGX {parseFloat(reportData.total_cost || 0).toLocaleString()}</p>
+                </div>
+                <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Margin</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
+                    {parseFloat(reportData.total_sales) > 0
+                      ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%`
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Daily breakdown bar chart */}
+              {reportData.by_day && reportData.by_day.length > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
+                  <h3 style={{ margin: '0 0 20px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Daily Breakdown</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {(() => {
+                      const maxTotal = Math.max(...reportData.by_day.map(d => parseFloat(d.total || 0)), 1);
+                      return reportData.by_day.map(d => (
+                        <div key={d.date}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{d.day} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({d.date})</span></span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                              UGX {parseFloat(d.total || 0).toLocaleString()} &nbsp;
+                              <span style={{ color: '#94a3b8', fontWeight: 400 }}>{d.transactions} txn{d.transactions !== 1 ? 's' : ''}</span>
+                              &nbsp;·&nbsp;
+                              <span style={{ color: parseFloat(d.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                profit: UGX {parseFloat(d.profit || 0).toLocaleString()}
+                              </span>
+                            </span>
+                          </div>
+                          <div style={{ height: 10, background: '#f1f5f9', borderRadius: 5, overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%',
+                              width: `${(parseFloat(d.total || 0) / maxTotal) * 100}%`,
+                              background: d.transactions > 0 ? '#4f46e5' : '#e2e8f0',
+                              borderRadius: 5,
+                              transition: 'width 0.4s ease',
+                            }} />
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Transactions table */}
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
+                </div>
+                {reportData.sales?.length === 0 ? (
+                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales this week.</p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        {['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.sales?.map(s => (
+                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
+                              {s.payment_method?.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MONTHLY SALES REPORT ── */}
+      {activeReport === 'monthly-sales' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -4473,11 +4768,12 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* KPI cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {[
-                  { label: 'Month',            value: reportData.month },
-                  { label: 'Transactions',     value: reportData.total_transactions },
-                  { label: 'Total Purchases',  value: `UGX ${parseFloat(reportData.total_purchases || 0).toLocaleString()}` },
+                  { label: 'Month',        value: reportData.month },
+                  { label: 'Transactions', value: reportData.total_transactions },
+                  { label: 'Total Sales',  value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
@@ -4485,28 +4781,122 @@ function ReportsTab({ data, loading, token }) {
                   </div>
                 ))}
               </div>
+
+              {/* Profit highlight */}
+              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 32 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Net Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div style={{ marginLeft: 16 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Total Cost</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>UGX {parseFloat(reportData.total_cost || 0).toLocaleString()}</p>
+                </div>
+                <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Margin</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
+                    {parseFloat(reportData.total_sales) > 0
+                      ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%`
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                {/* Payment method breakdown */}
+                {reportData.by_payment && reportData.by_payment.length > 0 && (
+                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
+                    <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales by Payment Method</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {(() => {
+                        const methodTotal = reportData.by_payment.reduce((sum, p) => sum + parseFloat(p.total || 0), 0) || 1;
+                        return reportData.by_payment.map(p => (
+                          <div key={p.method}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', textTransform: 'capitalize' }}>{(p.method || '').replace(/_/g, ' ')}</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                                UGX {parseFloat(p.total || 0).toLocaleString()} &nbsp;
+                                <span style={{ color: '#94a3b8', fontWeight: 400 }}>({Math.round((parseFloat(p.total || 0) / methodTotal) * 100)}%)</span>
+                                &nbsp;·&nbsp;
+                                <span style={{ color: parseFloat(p.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                  profit: UGX {parseFloat(p.profit || 0).toLocaleString()}
+                                </span>
+                              </span>
+                            </div>
+                            <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(parseFloat(p.total || 0) / methodTotal) * 100}%`, background: getPayColor(p.method), borderRadius: 4, transition: 'width 0.4s ease' }} />
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Daily breakdown within the month */}
+                {reportData.by_day && reportData.by_day.length > 0 && (
+                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22, maxHeight: 340, overflowY: 'auto' }}>
+                    <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Daily Breakdown</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(() => {
+                        const maxDayTotal = Math.max(...reportData.by_day.map(d => parseFloat(d.total || 0)), 1);
+                        return reportData.by_day.map(d => (
+                          <div key={d.date}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
+                                UGX {parseFloat(d.total || 0).toLocaleString()} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({d.transactions})</span>
+                                &nbsp;·&nbsp;
+                                <span style={{ color: parseFloat(d.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                  UGX {parseFloat(d.profit || 0).toLocaleString()}
+                                </span>
+                              </span>
+                            </div>
+                            <div style={{ height: 7, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(parseFloat(d.total || 0) / maxDayTotal) * 100}%`, background: '#16a34a', borderRadius: 4 }} />
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Transactions table */}
               <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Purchase Transactions</h3>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
                 </div>
-                {reportData.purchases?.length === 0 ? (
-                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No purchases this month.</p>
+                {reportData.sales?.length === 0 ? (
+                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales this month.</p>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
-                        {['Date', 'Supplier', 'Items', 'Total Amount'].map(h => (
+                        {['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
                           <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.purchases?.map(p => (
-                        <tr key={p.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(p.purchase_date).toLocaleDateString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{p.supplier?.name || '—'}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{p.purchase_items?.length || 0}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(p.total_amount || 0).toLocaleString()}</td>
+                      {reportData.sales?.map(s => (
+                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
+                              {s.payment_method?.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>

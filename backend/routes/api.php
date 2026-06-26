@@ -136,17 +136,19 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Sales
     Route::prefix('sales')->group(function () {
+        // Reports restricted to managers and above — must be before /{sale} wildcard
+        Route::middleware('role:owner,admin,manager')->group(function () {
+            Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
+            Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
+            Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
+        });
+
         // Cashiers and above can view and record sales
         Route::middleware('role:owner,admin,manager,cashier')->group(function () {
             Route::get('/',        [SaleController::class, 'index']);
             Route::post('/',       [SaleController::class, 'store']);
             Route::get('/{sale}',  [SaleController::class, 'show']);
             Route::put('/{sale}',  [SaleController::class, 'update']);
-        });
-
-        // Reports restricted to managers and above
-        Route::middleware('role:owner,admin,manager')->group(function () {
-            Route::get('/daily-report', [SaleController::class, 'getDailyReport']);
         });
     });
 
