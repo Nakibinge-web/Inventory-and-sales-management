@@ -2744,6 +2744,9 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
     return true;
   });
 
+  const totalTx = filteredSales.length;
+  const totalRevenue = filteredSales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+
   const openEdit = (sale) => {
     setEditingSale(sale);
     setEditForm({

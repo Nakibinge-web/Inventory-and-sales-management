@@ -17,7 +17,7 @@ use App\Http\Controllers\PermissionController;
 
 // Public auth routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->name('api.register');
 
 // All other routes require a valid Sanctum token + tenant resolution
 Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
