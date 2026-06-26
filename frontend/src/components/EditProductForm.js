@@ -30,7 +30,9 @@ export default function EditProductForm({ token, product, categories, suppliers,
     expiry_date:      product.expiry_date || '',
   });
   const [image, setImage]     = useState(null);
-  const [preview, setPreview] = useState(product.image_path ? `${API_BASE}/storage/${product.image_path}` : null);
+  const [preview, setPreview] = useState(
+    product.image_url || (product.image_path ? `${API_BASE}/storage/${product.image_path}` : null)
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
   const fileRef               = useRef();

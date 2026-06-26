@@ -70,7 +70,11 @@ export default function DataTable({
   const renderCellContent = (column, row) => {
     if (column.render) return column.render(row[column.key], row);
     const value = row[column.key];
-    if (column.type === 'currency') return `UGX ${parseFloat(value || 0).toLocaleString()}`;
+    if (column.type === 'currency') return (
+      <span style={{ fontFamily: "'DM Mono', monospace", fontFeatureSettings: "'tnum'", letterSpacing: '-0.01em', fontWeight: 500 }}>
+        UGX {parseFloat(value || 0).toLocaleString()}
+      </span>
+    );
     if (column.type === 'date') return new Date(value).toLocaleDateString();
     if (column.type === 'badge') {
       const badgeProps = column.getBadgeProps ? column.getBadgeProps(value, row) : { variant: 'neutral', children: value };

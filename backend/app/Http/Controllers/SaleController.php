@@ -144,6 +144,40 @@ class SaleController extends Controller
         ]);
     }
 
+    /**
+     * Calculate the total cost and profit for a collection of sales.
+     * Cost  = sum of (item.quantity × product.cost_price) across all sale items.
+     * Profit = total_sales_amount − total_cost.
+     *
+     * Returns ['total_cost' => float, 'total_profit' => float, 'sales' => collection with appended cost/profit].
+     */
+    private function calcProfitForSales($sales): array
+    {
+        $totalCost = 0;
+
+        $salesWithProfit = $sales->map(function ($sale) use (&$totalCost) {
+            $saleCost = $sale->saleItems->sum(function ($item) {
+                $costPrice = $item->product?->cost_price ?? 0;
+                return $item->quantity * floatval($costPrice);
+            });
+            $totalCost   += $saleCost;
+            $saleProfit   = floatval($sale->total_amount) - $saleCost;
+            // Append computed fields without persisting
+            $sale->setAttribute('cost',   round($saleCost,   2));
+            $sale->setAttribute('profit', round($saleProfit, 2));
+            return $sale;
+        });
+
+        $totalSales  = $sales->sum('total_amount');
+        $totalProfit = floatval($totalSales) - $totalCost;
+
+        return [
+            'total_cost'   => round($totalCost,   2),
+            'total_profit' => round($totalProfit, 2),
+            'sales'        => $salesWithProfit,
+        ];
+    }
+
     public function getDailyReport(Request $request): JsonResponse
     {
         $validated = $request->validate(['date' => 'required|date']);
@@ -152,10 +186,112 @@ class SaleController extends Controller
                      ->with(['user', 'customer', 'saleItems.product'])
                      ->get();
 
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
         return response()->json(['success' => true, 'data' => [
             'date'               => $validated['date'],
             'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
             'total_transactions' => $sales->count(),
+            'sales'              => $sales,
+        ]]);
+    }
+
+    public function getWeeklyReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['date' => 'required|date']);
+
+        $date      = \Carbon\Carbon::parse($validated['date']);
+        $weekStart = $date->copy()->startOfWeek(\Carbon\Carbon::MONDAY);
+        $weekEnd   = $date->copy()->endOfWeek(\Carbon\Carbon::SUNDAY);
+
+        $sales = Sale::whereBetween('sale_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->orderBy('sale_date')
+                     ->get();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
+        // Daily breakdown within the week
+        $byDay = [];
+        for ($d = $weekStart->copy(); $d->lte($weekEnd); $d->addDay()) {
+            $dayStr   = $d->toDateString();
+            $daySales = $sales->filter(fn($s) => \Carbon\Carbon::parse($s->sale_date)->toDateString() === $dayStr);
+            $dayCost  = $daySales->sum('cost');
+            $byDay[]  = [
+                'date'         => $dayStr,
+                'day'          => $d->format('D'),
+                'total'        => $daySales->sum('total_amount'),
+                'cost'         => round($dayCost, 2),
+                'profit'       => round($daySales->sum('total_amount') - $dayCost, 2),
+                'transactions' => $daySales->count(),
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => [
+            'week_start'         => $weekStart->toDateString(),
+            'week_end'           => $weekEnd->toDateString(),
+            'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
+            'total_transactions' => $sales->count(),
+            'by_day'             => $byDay,
+            'sales'              => $sales,
+        ]]);
+    }
+
+    public function getMonthlySalesReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['month' => 'required|date_format:Y-m']);
+
+        [$year, $month] = explode('-', $validated['month']);
+
+        $sales = Sale::whereYear('sale_date', $year)
+                     ->whereMonth('sale_date', $month)
+                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->orderBy('sale_date')
+                     ->get();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
+        // Day-by-day breakdown
+        $daysInMonth = \Carbon\Carbon::createFromDate($year, $month, 1)->daysInMonth;
+        $byDay = [];
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $dayStr   = sprintf('%04d-%02d-%02d', $year, $month, $d);
+            $daySales = $sales->filter(fn($s) => \Carbon\Carbon::parse($s->sale_date)->toDateString() === $dayStr);
+            if ($daySales->count() > 0) {
+                $dayCost = $daySales->sum('cost');
+                $byDay[] = [
+                    'date'         => $dayStr,
+                    'total'        => $daySales->sum('total_amount'),
+                    'cost'         => round($dayCost, 2),
+                    'profit'       => round($daySales->sum('total_amount') - $dayCost, 2),
+                    'transactions' => $daySales->count(),
+                ];
+            }
+        }
+
+        // Payment method breakdown
+        $byPayment = $sales->groupBy('payment_method')->map(fn($g) => [
+            'method' => $g->first()->payment_method,
+            'total'  => $g->sum('total_amount'),
+            'profit' => round($g->sum('profit'), 2),
+            'count'  => $g->count(),
+        ])->values();
+
+        return response()->json(['success' => true, 'data' => [
+            'month'              => $validated['month'],
+            'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
+            'total_transactions' => $sales->count(),
+            'by_day'             => $byDay,
+            'by_payment'         => $byPayment,
             'sales'              => $sales,
         ]]);
     }
