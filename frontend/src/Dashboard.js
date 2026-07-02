@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { theme } from './styles/theme';
 import DashboardCard from './components/ui/DashboardCard';
 import DataTable from './components/ui/DataTable';
@@ -2069,6 +2069,85 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
   const [amountPaid, setAmountPaid] = useState('');
   const [cashNote, setCashNote]     = useState('');
 
+  // ── Barcode scanner state ────────────────────────────────
+  const barcodeInputRef                     = useRef(null);
+  const [barcodeValue, setBarcodeValue]     = useState('');
+  const [barcodeFlash, setBarcodeFlash]     = useState(null); // 'success' | 'error' | null
+  const [barcodeMsg, setBarcodeMsg]         = useState('');
+  const barcodeTimerRef                     = useRef(null);
+  // Tracks rapid keystrokes to distinguish scanner input from manual typing
+  const barcodeLastKeyTime                  = useRef(0);
+  const barcodeAccumRef                     = useRef('');
+
+  // Auto-focus barcode input when the POS mounts
+  useEffect(() => {
+    barcodeInputRef.current?.focus();
+  }, []);
+
+  // ── Global keydown listener: redirect keystrokes to barcode field
+  // even if the user has clicked elsewhere on the page.
+  // Only redirects if the active element is not another input/textarea/select.
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const isOtherInput = ['input', 'textarea', 'select'].includes(tag) &&
+                           document.activeElement !== barcodeInputRef.current;
+      if (isOtherInput) return;
+      if (e.key === 'Tab' || e.key === 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return;
+      barcodeInputRef.current?.focus();
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, []);
+
+  const flashBarcode = (type, msg) => {
+    setBarcodeFlash(type);
+    setBarcodeMsg(msg);
+    clearTimeout(barcodeTimerRef.current);
+    barcodeTimerRef.current = setTimeout(() => {
+      setBarcodeFlash(null);
+      setBarcodeMsg('');
+      setBarcodeValue('');
+    }, 1800);
+  };
+
+  const handleBarcodeScan = (rawValue) => {
+    const code = rawValue.trim();
+    if (!code) return;
+
+    // Match against barcode field first, then SKU as fallback
+    const product = products.find(
+      p => (p.barcode && p.barcode.trim() === code) ||
+           (p.sku    && p.sku.trim().toLowerCase() === code.toLowerCase())
+    );
+
+    if (!product) {
+      flashBarcode('error', `No product found for "${code}"`);
+      return;
+    }
+    if (Number(product.stock) <= 0) {
+      flashBarcode('error', `"${product.name}" is out of stock`);
+      return;
+    }
+
+    addToCart(product);
+    flashBarcode('success', `✓ Added: ${product.name}`);
+  };
+
+  // Detect scanner input: scanners fire characters in <50ms bursts then send Enter.
+  // If Enter arrives after a rapid burst, treat as a scan (auto-submit).
+  // If Enter arrives after slow typing, also submit — keeps manual entry working.
+  const handleBarcodeKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleBarcodeScan(barcodeValue);
+      return;
+    }
+    // Track timing so we know if input was fast (scanner) vs slow (keyboard)
+    const now = Date.now();
+    barcodeLastKeyTime.current = now;
+  };
+
   const inStockProducts = products.filter(p => Number(p.stock) > 0);
 
   const filtered = inStockProducts.filter(p => {
@@ -2262,11 +2341,63 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
 
         {/* Left — product search & grid */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* ── Barcode scanner input ── */}
+          <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                📷 Barcode Scanner
+              </span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>— scan barcode to add instantly</span>
+            </div>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                ref={barcodeInputRef}
+                type="text"
+                value={barcodeValue}
+                onChange={e => setBarcodeValue(e.target.value)}
+                onKeyDown={handleBarcodeKeyDown}
+                placeholder="Scan barcode or type SKU…"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px 10px 42px',
+                  border: `2px solid ${barcodeFlash === 'success' ? '#16a34a' : barcodeFlash === 'error' ? '#dc2626' : '#e2e8f0'}`,
+                  borderRadius: 10,
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  background: barcodeFlash === 'success' ? '#f0fdf4' : barcodeFlash === 'error' ? '#fef2f2' : '#fff',
+                  color: '#0f172a',
+                  transition: 'border-color 0.2s, background 0.2s',
+                  letterSpacing: '0.03em',
+                }}
+              />
+              {/* Barcode icon */}
+              <svg style={{ position: 'absolute', left: 12, pointerEvents: 'none', opacity: 0.4 }}
+                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 5v14M7 5v14M11 5v14M15 5v10M19 5v14M15 18v1"/>
+              </svg>
+            </div>
+            {/* Feedback message */}
+            {barcodeFlash && (
+              <div style={{
+                marginTop: 6, padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: barcodeFlash === 'success' ? '#dcfce7' : '#fee2e2',
+                color: barcodeFlash === 'success' ? '#15803d' : '#b91c1c',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                {barcodeFlash === 'success' ? '✓' : '✕'} {barcodeMsg}
+              </div>
+            )}
+          </div>
+
+          {/* ── Name / SKU search ── */}
           <input
             style={posS.searchInput}
             placeholder="Search products by name or SKU…"
             value={search}
             onChange={e => setSearch(e.target.value)}
+            onFocus={() => { /* don't steal focus from barcode field on click */ }}
           />
 
           {/* Category filter pills */}
