@@ -16,9 +16,20 @@ class SaleController extends Controller
 {
     public function index(): JsonResponse
     {
-        $sales = Sale::with(['user', 'customer', 'saleItems.product'])->orderBy('sale_date', 'desc')->get();
+        $user      = Auth::user();
+        $isCashier = $user->roles()->pluck('name')
+                         ->intersect(['owner', 'admin', 'manager'])
+                         ->isEmpty();
 
-        return response()->json(['success' => true, 'data' => $sales]);
+        $query = Sale::with(['user', 'customer', 'saleItems.product'])
+                     ->orderBy('sale_date', 'desc');
+
+        // Cashiers only see their own sales
+        if ($isCashier) {
+            $query->where('user_id', $user->id);
+        }
+
+        return response()->json(['success' => true, 'data' => $query->get()]);
     }
 
     public function store(Request $request): JsonResponse
@@ -112,6 +123,16 @@ class SaleController extends Controller
 
     public function show(Sale $sale): JsonResponse
     {
+        $user      = Auth::user();
+        $isCashier = $user->roles()->pluck('name')
+                         ->intersect(['owner', 'admin', 'manager'])
+                         ->isEmpty();
+
+        // Cashiers can only view their own sales
+        if ($isCashier && $sale->user_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to view this sale.'], 403);
+        }
+
         $sale->load(['user', 'customer', 'saleItems.product']);
 
         return response()->json(['success' => true, 'data' => $sale]);
@@ -119,6 +140,15 @@ class SaleController extends Controller
 
     public function update(Request $request, Sale $sale): JsonResponse
     {
+        $user      = Auth::user();
+        $isCashier = $user->roles()->pluck('name')
+                         ->intersect(['owner', 'admin', 'manager'])
+                         ->isEmpty();
+
+        if ($isCashier && $sale->user_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to edit this sale.'], 403);
+        }
+
         $validated = $request->validate([
             'payment_method' => 'sometimes|required|in:cash,card,mobile_money,bank_transfer',
             'discount_type'  => 'nullable|in:percent,fixed',
