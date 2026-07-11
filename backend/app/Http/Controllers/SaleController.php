@@ -325,4 +325,77 @@ class SaleController extends Controller
             'sales'              => $sales,
         ]]);
     }
+
+    public function getYearlyReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['year' => 'required|digits:4|integer|min:2000|max:2100']);
+        $year      = (int) $validated['year'];
+
+        $sales = Sale::whereYear('sale_date', $year)
+                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->orderBy('sale_date')
+                     ->get();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
+        // Month-by-month breakdown
+        $byMonth = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $monthSales = $sales->filter(
+                fn($s) => (int) \Carbon\Carbon::parse($s->sale_date)->month === $m
+            );
+            $monthCost = $monthSales->sum('cost');
+            $byMonth[] = [
+                'month'        => $m,
+                'month_name'   => \Carbon\Carbon::createFromDate($year, $m, 1)->format('M'),
+                'total'        => round($monthSales->sum('total_amount'), 2),
+                'cost'         => round($monthCost, 2),
+                'profit'       => round($monthSales->sum('total_amount') - $monthCost, 2),
+                'transactions' => $monthSales->count(),
+            ];
+        }
+
+        // Quarter breakdown
+        $byQuarter = [];
+        foreach ([[1,3,'Q1'],[4,6,'Q2'],[7,9,'Q3'],[10,12,'Q4']] as [$from, $to, $label]) {
+            $qSales = $sales->filter(
+                fn($s) => (int) \Carbon\Carbon::parse($s->sale_date)->month >= $from
+                       && (int) \Carbon\Carbon::parse($s->sale_date)->month <= $to
+            );
+            $qCost = $qSales->sum('cost');
+            $byQuarter[] = [
+                'quarter'      => $label,
+                'total'        => round($qSales->sum('total_amount'), 2),
+                'cost'         => round($qCost, 2),
+                'profit'       => round($qSales->sum('total_amount') - $qCost, 2),
+                'transactions' => $qSales->count(),
+            ];
+        }
+
+        // Payment method breakdown for the year
+        $byPayment = $sales->groupBy('payment_method')->map(fn($g) => [
+            'method' => $g->first()->payment_method,
+            'total'  => $g->sum('total_amount'),
+            'profit' => round($g->sum('profit'), 2),
+            'count'  => $g->count(),
+        ])->values();
+
+        // Best and worst months
+        $bestMonth  = collect($byMonth)->sortByDesc('total')->first();
+        $worstMonth = collect($byMonth)->where('transactions', '>', 0)->sortBy('total')->first();
+
+        return response()->json(['success' => true, 'data' => [
+            'year'               => $year,
+            'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
+            'total_transactions' => $sales->count(),
+            'by_month'           => $byMonth,
+            'by_quarter'         => $byQuarter,
+            'by_payment'         => $byPayment,
+            'best_month'         => $bestMonth,
+            'worst_month'        => $worstMonth,
+        ]]);
+    }
 }
