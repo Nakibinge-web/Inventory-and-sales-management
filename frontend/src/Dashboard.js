@@ -3033,10 +3033,6 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
     </div>
   );
 
-  // ── Summary stats ────────────────────────────────────────
-  const totalTx      = filteredSales.length;
-  const totalRevenue = filteredSales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
-
   return (
     <div style={styles.pageContainer}>
 
