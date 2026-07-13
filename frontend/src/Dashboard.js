@@ -167,6 +167,7 @@ export default function Dashboard({ user, token, onLogout }) {
     { id: 'purchases',        label: 'Purchases',       icon: '🛒', color: 'primary' },
     { id: 'stock-movements',  label: 'Stock Movements', icon: '🔄', color: 'neutral' },
     { id: 'reports',          label: 'Reports',         icon: '📈', color: 'danger' },
+    { id: 'ai',               label: 'AI Assistant',    icon: '🤖', color: 'primary' },
     ...(isOwnerOrAdmin ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
@@ -453,6 +454,7 @@ export default function Dashboard({ user, token, onLogout }) {
             />
           )}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} />}
           {activeTab === 'users' && isOwnerOrAdmin && (
             <UsersTab token={token} user={user} toast={toast} />
@@ -4455,6 +4457,7 @@ function ReportsTab({ data, loading, token }) {
   const [dailyDate, setDailyDate]       = useState(new Date().toISOString().split('T')[0]);
   const [weeklyDate, setWeeklyDate]     = useState(new Date().toISOString().split('T')[0]);
   const [monthlyMonth, setMonthlyMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [yearlyYear, setYearlyYear]     = useState(new Date().getFullYear().toString());
   const [reportData, setReportData]     = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError]   = useState(null);
@@ -4503,6 +4506,7 @@ function ReportsTab({ data, loading, token }) {
       if (activeReport === 'daily')   url = `${API_URL}/sales/daily-report?date=${dailyDate}`;
       else if (activeReport === 'weekly') url = `${API_URL}/sales/weekly-report?date=${weeklyDate}`;
       else if (activeReport === 'monthly-sales') url = `${API_URL}/sales/monthly-report?month=${monthlyMonth}`;
+      else if (activeReport === 'yearly') url = `${API_URL}/sales/yearly-report?year=${yearlyYear}`;
       else url = `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
 
       const res  = await fetch(url, { headers });
@@ -4521,6 +4525,7 @@ function ReportsTab({ data, loading, token }) {
     { id: 'daily',          label: 'Daily Sales'       },
     { id: 'weekly',         label: 'Weekly Sales'      },
     { id: 'monthly-sales',  label: 'Monthly Sales'     },
+    { id: 'yearly',         label: 'Yearly Report'     },
   ];
 
   return (
@@ -5037,6 +5042,407 @@ function ReportsTab({ data, loading, token }) {
           )}
         </div>
       )}
+
+      {/* ── YEARLY REPORT ── */}
+      {activeReport === 'yearly' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={supS.label}>Select Year</label>
+              <select
+                value={yearlyYear}
+                onChange={e => { setYearlyYear(e.target.value); setReportData(null); }}
+                style={{ ...supS.input, width: 140 }}
+              >
+                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+          </div>
+
+          {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
+
+          {reportData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+              {/* ── KPI row ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                {[
+                  { label: 'Year',          value: reportData.year,                                                                          icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
+                  { label: 'Transactions',  value: reportData.total_transactions,                                                            icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
+                  { label: 'Total Revenue', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}`,                        icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
+                  { label: 'Total Cost',    value: `UGX ${parseFloat(reportData.total_cost  || 0).toLocaleString()}`,                        icon: '🛒', color: '#d97706', bg: '#fffbeb' },
+                ].map(k => (
+                  <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{k.icon}</div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{k.value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Profit highlight ── */}
+              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '20px 26px', display: 'flex', alignItems: 'center', gap: 18 }}>
+                <div style={{ fontSize: 36 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Annual Net Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626', letterSpacing: '-0.5px' }}>
+                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div style={{ marginLeft: 20 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Profit Margin</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, color: '#374151' }}>
+                    {parseFloat(reportData.total_sales) > 0 ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%` : '—'}
+                  </p>
+                </div>
+                {reportData.best_month && (
+                  <div style={{ marginLeft: 20 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Best Month</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, color: '#16a34a' }}>
+                      {reportData.best_month.month_name} — UGX {parseFloat(reportData.best_month.total || 0).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                {reportData.worst_month && (
+                  <div style={{ marginLeft: 20 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Lowest Month</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, color: '#64748b' }}>
+                      {reportData.worst_month.month_name} — UGX {parseFloat(reportData.worst_month.total || 0).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Monthly bar chart ── */}
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
+                <h3 style={{ margin: '0 0 20px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Monthly Revenue & Profit</h3>
+                {(() => {
+                  const maxTotal = Math.max(...(reportData.by_month || []).map(m => parseFloat(m.total || 0)), 1);
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(reportData.by_month || []).map(m => {
+                        const revPct    = Math.round((parseFloat(m.total  || 0) / maxTotal) * 100);
+                        const profitPct = Math.round((parseFloat(m.profit || 0) / maxTotal) * 100);
+                        const isProfit  = parseFloat(m.profit || 0) >= 0;
+                        return (
+                          <div key={m.month}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#334155', minWidth: 36 }}>{m.month_name}</span>
+                              <span style={{ fontSize: 12, color: '#64748b' }}>
+                                UGX {parseFloat(m.total || 0).toLocaleString()}
+                                &nbsp;·&nbsp;
+                                <span style={{ color: isProfit ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                                  {isProfit ? '+' : ''}UGX {parseFloat(m.profit || 0).toLocaleString()}
+                                </span>
+                                &nbsp;·&nbsp;
+                                <span style={{ color: '#94a3b8' }}>{m.transactions} txns</span>
+                              </span>
+                            </div>
+                            {/* Revenue bar */}
+                            <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden', marginBottom: 3 }}>
+                              <div style={{ height: '100%', width: `${revPct}%`, background: m.transactions > 0 ? '#4f46e5' : '#e2e8f0', borderRadius: 4, transition: 'width 0.4s ease' }} />
+                            </div>
+                            {/* Profit bar */}
+                            <div style={{ height: 5, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.abs(profitPct)}%`, background: isProfit ? '#16a34a' : '#dc2626', borderRadius: 3, transition: 'width 0.4s ease' }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748b' }}><span style={{ width: 12, height: 8, background: '#4f46e5', borderRadius: 2, display: 'inline-block' }}></span>Revenue</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748b' }}><span style={{ width: 12, height: 5, background: '#16a34a', borderRadius: 2, display: 'inline-block' }}></span>Profit</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── Quarter breakdown ── */}
+              {reportData.by_quarter && (
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Quarterly Breakdown</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    {reportData.by_quarter.map(q => {
+                      const maxQ = Math.max(...reportData.by_quarter.map(x => parseFloat(x.total || 0)), 1);
+                      const pct  = Math.round((parseFloat(q.total || 0) / maxQ) * 100);
+                      return (
+                        <div key={q.quarter} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 14px' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>{q.quarter}</div>
+                          <div style={{ height: 5, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: '#4f46e5', borderRadius: 3, transition: 'width 0.4s ease' }} />
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginBottom: 2 }}>UGX {parseFloat(q.total || 0).toLocaleString()}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{q.transactions} transactions</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: parseFloat(q.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                            Profit: UGX {parseFloat(q.profit || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Payment method breakdown ── */}
+              {reportData.by_payment && reportData.by_payment.length > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales by Payment Method</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {(() => {
+                      const total = reportData.by_payment.reduce((s, p) => s + parseFloat(p.total || 0), 0) || 1;
+                      return reportData.by_payment.map(p => (
+                        <div key={p.method}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', textTransform: 'capitalize' }}>{(p.method || '').replace(/_/g, ' ')}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                              UGX {parseFloat(p.total || 0).toLocaleString()}
+                              &nbsp;<span style={{ color: '#94a3b8', fontWeight: 400 }}>({Math.round((parseFloat(p.total || 0) / total) * 100)}%)</span>
+                              &nbsp;·&nbsp;
+                              <span style={{ color: parseFloat(p.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>profit: UGX {parseFloat(p.profit || 0).toLocaleString()}</span>
+                            </span>
+                          </div>
+                          <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${(parseFloat(p.total || 0) / total) * 100}%`, background: getPayColor(p.method), borderRadius: 4, transition: 'width 0.4s ease' }} />
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AI Assistant Tab ──────────────────────────────────────────────────────────
+function AiTab({ token, data }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      text: "Hi! I'm your AI business analyst. I have access to your sales, purchases, inventory, and revenue data.\n\nAsk me anything — or pick a quick question below to get started.",
+    },
+  ]);
+  const [input, setInput]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [cooldown, setCooldown] = useState(0); // seconds remaining
+  const bottomRef               = useRef(null);
+  const cooldownRef             = useRef(null);
+
+  const QUICK_PROMPTS = [
+    { label: 'Sales performance', icon: '📊', text: 'How did my sales perform this month compared to last month?' },
+    { label: 'Top products',      icon: '🏆', text: 'Which are my top 5 best-performing products by revenue?' },
+    { label: 'Forecast',          icon: '🔮', text: 'Based on my sales trend over the last 6 months, forecast my revenue for next month.' },
+    { label: 'Low stock alert',   icon: '⚠️',  text: 'Which products are running low on stock and what should I reorder first?' },
+    { label: 'Profit analysis',   icon: '💰', text: 'What is my estimated gross profit this month and how can I improve it?' },
+    { label: 'Busiest days',      icon: '📅', text: 'What are my busiest sales days and peak revenue periods?' },
+  ];
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const startCooldown = (seconds) => {
+    setCooldown(seconds);
+    clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) { clearInterval(cooldownRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const send = async (questionText) => {
+    const q = (questionText ?? input).trim();
+    if (!q || loading || cooldown > 0) return;
+    setInput('');
+    setError(null);
+    setMessages(prev => [...prev, { role: 'user', text: q }]);
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_URL}/ai/chat`, { method: 'POST', headers, body: JSON.stringify({ question: q }) });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const msg = res.status === 429
+          ? '⏳ The AI service is rate-limited right now. Please wait 30 seconds and try again.'
+          : json.message || 'The AI service returned an error.';
+        setError(msg);
+        setMessages(prev => [...prev, { role: 'assistant', text: msg }]);
+        if (res.status === 429) startCooldown(30);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', text: json.answer }]);
+      }
+    } catch {
+      setError('Could not reach the server.');
+      setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Could not reach the server. Please check your connection.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Simple markdown-ish renderer: bold, bullets, line breaks
+  const renderText = (text) => {
+    return text.split('\n').map((line, i) => {
+      // Bold: **text**
+      const parts = line.split(/\*\*(.*?)\*\*/g).map((part, j) =>
+        j % 2 === 1 ? <strong key={j}>{part}</strong> : part
+      );
+      const isBullet = line.startsWith('- ') || line.startsWith('• ');
+      if (isBullet) {
+        return <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}><span style={{ color: '#4f46e5', flexShrink: 0 }}>•</span><span>{parts}</span></div>;
+      }
+      return <div key={i} style={{ marginBottom: line ? 4 : 8 }}>{parts}</div>;
+    });
+  };
+
+  return (
+    <div style={styles.pageContainer}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', borderRadius: 16, padding: '28px 32px', marginBottom: 24, boxShadow: '0 4px 24px rgba(15,23,42,0.14)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0, boxShadow: '0 4px 16px rgba(79,70,229,0.4)' }}>🤖</div>
+          <div>
+            <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Powered by Mistral AI</p>
+            <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>AI Business Assistant</h1>
+            <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your financial data, spot trends, and forecast business performance</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+
+        {/* ── Chat panel ── */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 420, maxHeight: 560 }}>
+            {messages.map((msg, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+                {/* Avatar */}
+                <div style={{
+                  width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                  background: msg.role === 'user' ? '#4f46e5' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 15, color: '#fff', fontWeight: 700,
+                }}>
+                  {msg.role === 'user' ? '👤' : '🤖'}
+                </div>
+                {/* Bubble */}
+                <div style={{
+                  maxWidth: '78%', padding: '12px 16px', borderRadius: msg.role === 'user' ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
+                  background: msg.role === 'user' ? '#4f46e5' : '#f8fafc',
+                  border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0',
+                  color: msg.role === 'user' ? '#fff' : '#0f172a',
+                  fontSize: 14, lineHeight: '1.6',
+                }}>
+                  {renderText(msg.text)}
+                </div>
+              </div>
+            ))}
+
+            {/* Typing indicator */}
+            {loading && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🤖</div>
+                <div style={{ padding: '12px 18px', borderRadius: '4px 14px 14px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', gap: 5, alignItems: 'center' }}>
+                  {[0, 1, 2].map(d => (
+                    <div key={d} style={{ width: 7, height: 7, borderRadius: '50%', background: '#94a3b8', animation: `aiPulse 1.2s ease-in-out ${d * 0.2}s infinite` }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input bar */}
+          <div style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#fafbff' }}>
+            {cooldown > 0 && (
+              <div style={{ marginBottom: 10, padding: '8px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                ⏳ Rate limited — ready again in <strong>{cooldown}s</strong>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder="Ask anything about your business… (Enter to send, Shift+Enter for new line)"
+                rows={2}
+                style={{ flex: 1, padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', resize: 'none', outline: 'none', background: '#fff', color: '#0f172a', lineHeight: '1.5' }}
+              />
+              <button
+                onClick={() => send()}
+                disabled={!input.trim() || loading || cooldown > 0}
+                style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: input.trim() && !loading && !cooldown ? '#4f46e5' : '#e2e8f0', color: input.trim() && !loading && !cooldown ? '#fff' : '#94a3b8', cursor: input.trim() && !loading && !cooldown ? 'pointer' : 'not-allowed', fontSize: 18, transition: 'all 0.15s', flexShrink: 0, lineHeight: 1 }}
+              >
+                {cooldown > 0 ? `${cooldown}s` : '➤'}
+              </button>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Your live business data is sent as context. No data is stored by the AI.</p>
+          </div>
+        </div>
+
+        {/* ── Right panel: quick prompts + data snapshot ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Quick prompts */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Quick Questions</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {QUICK_PROMPTS.map(p => (
+                <button key={p.label} onClick={() => send(p.text)} disabled={loading || cooldown > 0}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#f8fafc', cursor: loading || cooldown > 0 ? 'not-allowed' : 'pointer', textAlign: 'left', opacity: loading || cooldown > 0 ? 0.5 : 1, transition: 'all 0.15s' }}
+                  onMouseEnter={e => { if (!loading) { e.currentTarget.style.borderColor = '#a5b4fc'; e.currentTarget.style.background = '#eef2ff'; } }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                >
+                  <span style={{ fontSize: 16 }}>{p.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{p.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Live data snapshot */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Data in Context</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { icon: '💰', label: 'Total Sales',     value: `UGX ${data.stats.totalSales.toLocaleString()}` },
+                { icon: '🛒', label: 'Total Purchases', value: `UGX ${data.stats.totalPurchases.toLocaleString()}` },
+                { icon: '📦', label: 'Products',        value: data.stats.totalProducts },
+                { icon: '🧾', label: 'Transactions',    value: data.sales.length },
+                { icon: '⚠️',  label: 'Low Stock',       value: data.stats.lowStockCount },
+              ].map(s => (
+                <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #f8fafc' }}>
+                  <span style={{ fontSize: 13, color: '#475569' }}>{s.icon} {s.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Clear chat */}
+          <button onClick={() => setMessages([{ role: 'assistant', text: "Chat cleared. What would you like to know?" }])}
+            style={{ padding: '9px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            🗑 Clear Chat
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -6069,6 +6475,11 @@ styleSheet.textContent = `
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+
+  @keyframes aiPulse {
+    0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
   }
   
   @media (max-width: 768px) {

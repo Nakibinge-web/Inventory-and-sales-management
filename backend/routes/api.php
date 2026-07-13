@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
             Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
             Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
             Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
+            Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
         });
 
         // Cashiers and above can view and record sales
@@ -159,6 +160,9 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/monthly-report', [PurchaseController::class, 'getMonthlyReport']);
         Route::get('/{purchase}', [PurchaseController::class, 'show']);
     });
+
+    // AI Assistant
+    Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'chat']);
 
     // Stock Movements
     Route::prefix('stock-movements')->group(function () {
