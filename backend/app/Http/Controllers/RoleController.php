@@ -101,9 +101,52 @@ class RoleController extends Controller
     }
 
     /**
-     * Assign roles to a user.
-     * POST /api/roles/assign  { user_id, role_ids: [] }
+     * Create a custom role and assign permissions to it in one shot.
+     * POST /api/roles/with-permissions
+     * Body: { name, description?, permission_ids[] }
      */
+    public function storeWithPermissions(Request $request): JsonResponse
+    {
+        $tenantId = Auth::user()->tenant_id;
+
+        $request->validate([
+            'name'              => 'required|string|max:255',
+            'description'       => 'nullable|string|max:500',
+            'permission_ids'    => 'nullable|array',
+            'permission_ids.*'  => 'exists:permissions,id',
+        ]);
+
+        // Prevent name clashing with default or existing tenant roles
+        $exists = Role::where('name', $request->name)
+                      ->where(fn($q) => $q->whereNull('tenant_id')->orWhere('tenant_id', $tenantId))
+                      ->exists();
+
+        if ($exists) {
+            return response()->json(['success' => false, 'message' => 'A role with this name already exists.'], 422);
+        }
+
+        $role = Role::create([
+            'tenant_id'   => $tenantId,
+            'name'        => $request->name,
+            'description' => $request->description,
+            'is_default'  => false,
+        ]);
+
+        if (!empty($request->permission_ids)) {
+            $validIds = \App\Models\Permission::visibleTo($tenantId)
+                                              ->whereIn('id', $request->permission_ids)
+                                              ->pluck('id');
+            $role->permissions()->attach($validIds);
+        }
+
+        $role->load('permissions:id,name,display_name,group');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Custom role created successfully.',
+            'data'    => $role,
+        ], 201);
+    }
     public function assign(Request $request): JsonResponse
     {
         $tenantId = Auth::user()->tenant_id;

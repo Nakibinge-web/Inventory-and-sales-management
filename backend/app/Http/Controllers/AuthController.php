@@ -52,7 +52,7 @@ class AuthController extends Controller
             }
 
             $user = Auth::user();
-            $user->load('roles', 'tenant');
+            $user->load('roles.permissions:id,name', 'tenant');
             $token = $user->createToken('api-token')->plainTextToken;
 
             return response()->json([

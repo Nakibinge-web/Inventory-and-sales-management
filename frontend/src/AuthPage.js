@@ -171,7 +171,24 @@ export default function AuthPage() {
   useEffect(() => {
     const u = localStorage.getItem('user');
     const t = localStorage.getItem('token');
-    if (u && t) { try { setUser(JSON.parse(u)); setToken(t); } catch { localStorage.clear(); } }
+    if (u && t) {
+      try {
+        setUser(JSON.parse(u));
+        setToken(t);
+        // Refresh user data from /me to get latest roles + permissions
+        fetch(`${API}/me`, {
+          headers: { 'Authorization': `Bearer ${t}`, 'Accept': 'application/json' },
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.data) {
+              setUser(data.data);
+              localStorage.setItem('user', JSON.stringify(data.data));
+            }
+          })
+          .catch(() => {});
+      } catch { localStorage.clear(); }
+    }
   }, []);
 
   if (user && token) return <Dashboard user={user} token={token} onLogout={logout} />;

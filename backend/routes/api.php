@@ -54,12 +54,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Roles
     Route::prefix('roles')->group(function () {
         Route::get('/', [RoleController::class, 'index']);
-        Route::post('/', [RoleController::class, 'store']);
-        Route::post('/assign', [RoleController::class, 'assign']);
-        Route::delete('/revoke', [RoleController::class, 'revoke']);
         Route::get('/{role}', [RoleController::class, 'show']);
-        Route::put('/{role}', [RoleController::class, 'update']);
-        Route::delete('/{role}', [RoleController::class, 'destroy']);
+
+        // Only owners can create, modify, or assign custom roles
+        Route::middleware('role:owner')->group(function () {
+            Route::post('/', [RoleController::class, 'store']);
+            Route::post('/assign', [RoleController::class, 'assign']);
+            Route::post('/with-permissions', [RoleController::class, 'storeWithPermissions']);
+            Route::delete('/revoke', [RoleController::class, 'revoke']);
+            Route::put('/{role}', [RoleController::class, 'update']);
+            Route::delete('/{role}', [RoleController::class, 'destroy']);
+        });
     });
 
     // Permissions
@@ -94,6 +99,12 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
             Route::post('/',          [UserController::class, 'store']);
             Route::put('/{user}',     [UserController::class, 'update']);
             Route::delete('/{user}',  [UserController::class, 'destroy']);
+        });
+
+        // Only owners can create users with custom roles or modify custom role permissions
+        Route::middleware('role:owner')->group(function () {
+            Route::post('/with-custom-role',                    [UserController::class, 'storeWithCustomRole']);
+            Route::put('/{user}/custom-role-permissions',       [UserController::class, 'updateCustomRolePermissions']);
         });
     });
 
@@ -158,7 +169,10 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/', [PurchaseController::class, 'index']);
         Route::post('/', [PurchaseController::class, 'store']);
         Route::get('/monthly-report', [PurchaseController::class, 'getMonthlyReport']);
+        Route::get('/daily-report',   [PurchaseController::class, 'getDailyReport']);
         Route::get('/{purchase}', [PurchaseController::class, 'show']);
+        Route::put('/{purchase}', [PurchaseController::class, 'update']);
+        Route::delete('/{purchase}', [PurchaseController::class, 'destroy']);
     });
 
     // AI Assistant

@@ -63,6 +63,23 @@ class User extends Authenticatable
         return $this->roles()->where('name', $role)->exists();
     }
 
+    /**
+     * Check if the user has a specific permission, either directly via a
+     * tenant-scoped permission record or via any of their roles.
+     *
+     * @param string $permission  e.g. 'purchases.edit'
+     * @return bool
+     */
+    public function hasPermission(string $permission): bool
+    {
+        // Check permissions attached directly to any of the user's roles
+        return $this->roles()
+            ->whereHas('permissions', function ($q) use ($permission) {
+                $q->where('name', $permission);
+            })
+            ->exists();
+    }
+
     public function sales()
     {
         return $this->hasMany(Sale::class);

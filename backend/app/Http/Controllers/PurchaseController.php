@@ -14,6 +14,8 @@ class PurchaseController extends Controller
 {
     public function index(): JsonResponse
     {
+        $this->authorize('viewAny', Purchase::class);
+
         $purchases = Purchase::with(['supplier', 'purchaseItems.product'])->orderBy('purchase_date', 'desc')->get();
 
         return response()->json(['success' => true, 'data' => $purchases]);
@@ -21,6 +23,8 @@ class PurchaseController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->authorize('create', Purchase::class);
+
         $request->validate([
             'supplier_id'                       => 'required|exists:suppliers,id',
             'items'                             => 'required|array|min:1',
@@ -95,12 +99,11 @@ class PurchaseController extends Controller
                 Product::findOrFail($item['product_id'])->increment('stock', $item['quantity']);
 
                 StockMovement::create([
-                    'product_id'     => $item['product_id'],
-                    'type'           => 'IN',
-                    'quantity'       => $item['quantity'],
-                    'reference_id'   => $purchase->id,
-                    'reference_type' => 'purchase',
-                    'date'           => now(),
+                    'product_id'   => $item['product_id'],
+                    'type'         => 'IN',
+                    'quantity'     => $item['quantity'],
+                    'reference_id' => $purchase->id,
+                    'date'         => now(),
                 ]);
             }
 
@@ -117,9 +120,100 @@ class PurchaseController extends Controller
 
     public function show(Purchase $purchase): JsonResponse
     {
+        $this->authorize('view', $purchase);
+
         $purchase->load(['supplier', 'purchaseItems.product']);
 
         return response()->json(['success' => true, 'data' => $purchase]);
+    }
+
+    public function update(Request $request, Purchase $purchase): JsonResponse
+    {
+        $this->authorize('update', $purchase);
+
+        $request->validate([
+            'supplier_id'    => 'sometimes|required|exists:suppliers,id',
+            'purchase_date'  => 'sometimes|required|date',
+            'items'          => 'sometimes|required|array|min:1',
+            'items.*.product_id'  => 'required_with:items|exists:products,id',
+            'items.*.quantity'    => 'required_with:items|integer|min:1',
+            'items.*.cost_price'  => 'required_with:items|numeric|min:0',
+        ]);
+
+        return DB::transaction(function () use ($request, $purchase) {
+            // If items are being updated, reverse old stock movements first
+            if ($request->has('items')) {
+                foreach ($purchase->purchaseItems as $oldItem) {
+                    Product::findOrFail($oldItem->product_id)->decrement('stock', $oldItem->quantity);
+                    StockMovement::where('reference_id', $purchase->id)
+                        ->where('product_id', $oldItem->product_id)
+                        ->delete();
+                }
+
+                $purchase->purchaseItems()->delete();
+
+                $items = $request->input('items');
+                $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['cost_price'], $items));
+
+                foreach ($items as $item) {
+                    PurchaseItem::create([
+                        'purchase_id' => $purchase->id,
+                        'product_id'  => $item['product_id'],
+                        'quantity'    => $item['quantity'],
+                        'cost_price'  => $item['cost_price'],
+                    ]);
+
+                    Product::findOrFail($item['product_id'])->increment('stock', $item['quantity']);
+
+                    StockMovement::create([
+                        'product_id'   => $item['product_id'],
+                        'type'         => 'IN',
+                        'quantity'     => $item['quantity'],
+                        'reference_id' => $purchase->id,
+                        'date'         => $request->input('purchase_date', $purchase->purchase_date),
+                    ]);
+                }
+
+                $purchase->update([
+                    'supplier_id'   => $request->input('supplier_id', $purchase->supplier_id),
+                    'total_amount'  => $totalAmount,
+                    'purchase_date' => $request->input('purchase_date', $purchase->purchase_date),
+                ]);
+            } else {
+                $purchase->update($request->only('supplier_id', 'purchase_date'));
+            }
+
+            $purchase->load(['supplier', 'purchaseItems.product']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Purchase updated successfully.',
+                'data'    => $purchase,
+            ]);
+        });
+    }
+
+    public function destroy(Purchase $purchase): JsonResponse
+    {
+        $this->authorize('delete', $purchase);
+
+        return DB::transaction(function () use ($purchase) {
+            // Reverse stock for every item in this purchase
+            foreach ($purchase->purchaseItems as $item) {
+                Product::findOrFail($item->product_id)->decrement('stock', $item->quantity);
+            }
+
+            // Remove associated stock movements
+            StockMovement::where('reference_id', $purchase->id)->delete();
+
+            $purchase->purchaseItems()->delete();
+            $purchase->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Purchase deleted and stock reversed successfully.',
+            ]);
+        });
     }
 
     public function getMonthlyReport(Request $request): JsonResponse
@@ -137,6 +231,37 @@ class PurchaseController extends Controller
             'month'              => $validated['month'],
             'total_purchases'    => $purchases->sum('total_amount'),
             'total_transactions' => $purchases->count(),
+            'purchases'          => $purchases,
+        ]]);
+    }
+
+    public function getDailyReport(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['date' => 'required|date_format:Y-m-d']);
+
+        $purchases = Purchase::whereDate('purchase_date', $validated['date'])
+                             ->with(['supplier', 'purchaseItems.product'])
+                             ->orderBy('purchase_date', 'desc')
+                             ->get();
+
+        // Aggregate totals per supplier for a quick breakdown
+        $bySupplier = $purchases->groupBy(fn($p) => $p->supplier?->name ?? 'Unknown')
+            ->map(fn($group, $name) => [
+                'supplier'           => $name,
+                'transactions'       => $group->count(),
+                'total_amount'       => $group->sum('total_amount'),
+            ])
+            ->values();
+
+        // Total items purchased across all orders
+        $totalItems = $purchases->sum(fn($p) => $p->purchaseItems->count());
+
+        return response()->json(['success' => true, 'data' => [
+            'date'               => $validated['date'],
+            'total_amount'       => $purchases->sum('total_amount'),
+            'total_transactions' => $purchases->count(),
+            'total_items'        => $totalItems,
+            'by_supplier'        => $bySupplier,
             'purchases'          => $purchases,
         ]]);
     }
