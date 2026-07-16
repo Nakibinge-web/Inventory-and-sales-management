@@ -146,22 +146,21 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     });
 
     // Sales
+    // No route-level role middleware — the SaleController handles all permission
+    // checks itself, supporting both built-in roles and custom permission grants
+    // (sales.create, sales.view, sales.report).
     Route::prefix('sales')->group(function () {
-        // Reports restricted to managers and above — must be before /{sale} wildcard
-        Route::middleware('role:owner,admin,manager')->group(function () {
-            Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
-            Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
-            Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
-            Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
-        });
+        // Report routes must be declared before /{sale} wildcard
+        Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
+        Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
+        Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
+        Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
 
-        // Cashiers and above can view and record sales
-        Route::middleware('role:owner,admin,manager,cashier')->group(function () {
-            Route::get('/',        [SaleController::class, 'index']);
-            Route::post('/',       [SaleController::class, 'store']);
-            Route::get('/{sale}',  [SaleController::class, 'show']);
-            Route::put('/{sale}',  [SaleController::class, 'update']);
-        });
+        Route::get('/',        [SaleController::class, 'index']);
+        Route::post('/',       [SaleController::class, 'store']);
+        Route::get('/{sale}',  [SaleController::class, 'show']);
+        Route::put('/{sale}',  [SaleController::class, 'update']);
+        Route::delete('/{sale}', [SaleController::class, 'destroy']);
     });
 
     // Purchases

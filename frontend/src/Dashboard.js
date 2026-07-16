@@ -179,7 +179,7 @@ export default function Dashboard({ user, token, onLogout }) {
     ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
     ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
     { id: 'ai',               label: 'AI Assistant',    icon: '🤖', color: 'primary' },
-    ...(isOwnerOrAdmin ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
+    ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
   if (loading) {
@@ -311,7 +311,7 @@ export default function Dashboard({ user, token, onLogout }) {
             <div style={{ flex: 1 }} />
 
             {/* Admin section */}
-            {isOwnerOrAdmin && (
+            {(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
               <div>
                 <div style={{ height: 1, background: '#1e293b', margin: '12px 8px 14px' }} />
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>
@@ -451,7 +451,14 @@ export default function Dashboard({ user, token, onLogout }) {
               onCustomerDeleted={id => setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }))}
             />
           )}
-          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} token={token} user={user} canCreate={hasPermission('sales.create')} canEdit={hasPermission('sales.create')} />}
+          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} token={token} user={user} canCreate={hasPermission('sales.create')} canEdit={hasPermission('sales.edit')} canDelete={hasPermission('sales.delete')} onSaleDeleted={sale => setData(prev => ({
+            ...prev,
+            sales: prev.sales.filter(s => s.id !== sale.id),
+            products: prev.products.map(p => {
+              const item = (sale.sale_items || sale.saleItems || []).find(i => i.product_id === p.id);
+              return item ? { ...p, stock: p.stock + Number(item.quantity) } : p;
+            }),
+          }))} />}
           {activeTab === 'purchases' && (
             <PurchasesTab
               purchases={data.purchases}
@@ -504,8 +511,8 @@ export default function Dashboard({ user, token, onLogout }) {
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
-          {activeTab === 'users' && isOwnerOrAdmin && (
-            <UsersTab token={token} user={user} toast={toast} />
+          {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
+            <UsersTab token={token} user={user} toast={toast} canManageUsers={isOwnerOrAdmin} canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
           )}
         </main>
       </div>
@@ -2973,12 +2980,15 @@ function formatSaleDateTime(saleDate, createdAt) {
 }
 
 // Sales Tab Component
-function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, canEdit = true }) {
+function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, canEdit = true, canDelete = false, onSaleDeleted }) {
   const [viewingSale, setViewingSale]   = useState(null);
   const [editingSale, setEditingSale]   = useState(null);
   const [editForm, setEditForm]         = useState({});
   const [editSaving, setEditSaving]     = useState(false);
   const [editError, setEditError]       = useState(null);
+  const [deletingSale, setDeletingSale] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError]   = useState(null);
   const [localSales, setLocalSales]     = useState(sales);
 
   // Keep localSales in sync when parent refreshes
@@ -3023,11 +3033,20 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
 
   const openEdit = (sale) => {
     setEditingSale(sale);
+    const items = sale.sale_items || sale.saleItems || [];
     setEditForm({
-      payment_method: sale.payment_method || 'cash',
+      payment_method:  sale.payment_method || 'cash',
       discount_amount: sale.discount_amount || '',
-      tax_amount: sale.tax_amount || '',
-      notes: sale.notes || '',
+      tax_amount:      sale.tax_amount || '',
+      notes:           sale.notes || '',
+      customer_type:   sale.customer ? 'existing' : 'walk_in',
+      customer_id:     sale.customer?.id || '',
+      items: items.map(i => ({
+        product_id: i.product_id,
+        name:       i.product?.name || `Product #${i.product_id}`,
+        quantity:   i.quantity,
+        price:      i.price,
+      })),
     });
     setEditError(null);
   };
@@ -3036,6 +3055,21 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
     setEditSaving(true);
     setEditError(null);
     try {
+      const body = {
+        payment_method:  editForm.payment_method,
+        discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
+        tax_amount:      editForm.tax_amount !== ''      ? parseFloat(editForm.tax_amount)      : null,
+        notes:           editForm.notes || null,
+        customer_type:   editForm.customer_type,
+        ...(editForm.customer_type === 'existing' && editForm.customer_id
+          ? { customer_id: parseInt(editForm.customer_id) }
+          : {}),
+        items: editForm.items.map(i => ({
+          product_id: i.product_id,
+          quantity:   parseInt(i.quantity),
+          price:      parseFloat(i.price),
+        })),
+      };
       const res = await fetch(`${API}/sales/${editingSale.id}`, {
         method: 'PUT',
         headers: {
@@ -3043,12 +3077,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          payment_method:  editForm.payment_method,
-          discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
-          tax_amount:      editForm.tax_amount !== ''      ? parseFloat(editForm.tax_amount)      : null,
-          notes:           editForm.notes || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setEditError(data?.message || 'Failed to update sale.'); return; }
@@ -3058,6 +3087,30 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
       setEditError('Network error. Check your connection.');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`${API}/sales/${deletingSale.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) { setDeleteError(data?.message || 'Failed to delete sale.'); return; }
+      const deletedSale = deletingSale;
+      setLocalSales(prev => prev.filter(s => s.id !== deletedSale.id));
+      if (onSaleDeleted) onSaleDeleted(deletedSale);
+      setDeletingSale(null);
+    } catch {
+      setDeleteError('Network error. Check your connection.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -3142,6 +3195,22 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
             onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
           >
             ✏️
+          </button>
+          )}
+          {canDelete && (
+          <button
+            title="Delete sale"
+            onClick={() => { setDeleteError(null); setDeletingSale(row); }}
+            style={{
+              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #fecaca',
+              background: '#fff5f5', color: '#dc2626', cursor: 'pointer',
+              fontSize: 15, fontWeight: 600, lineHeight: 1,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff5f5'}
+          >
+            🗑️
           </button>
           )}
         </div>
@@ -3849,7 +3918,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         isOpen={!!editingSale}
         onClose={() => setEditingSale(null)}
         title={`Edit Sale #${editingSale?.id}`}
-        size="sm"
+        size="md"
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditingSale(null)}>Cancel</Button>
@@ -3858,57 +3927,177 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         }
       >
         {editingSale && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {editError && (
               <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
                 ⚠️ {editError}
               </div>
             )}
 
+            {/* ── Items ── */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Payment Method</label>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Items</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {editForm.items?.map((item, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: 6, alignItems: 'center', background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.name}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Qty</label>
+                      <input
+                        type="number" min="1"
+                        style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                        value={item.quantity}
+                        onChange={e => setEditForm(p => ({
+                          ...p,
+                          items: p.items.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it),
+                        }))}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Price (UGX)</label>
+                      <input
+                        type="number" min="0"
+                        style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                        value={item.price}
+                        onChange={e => setEditForm(p => ({
+                          ...p,
+                          items: p.items.map((it, i) => i === idx ? { ...it, price: e.target.value } : it),
+                        }))}
+                      />
+                    </div>
+                    <button
+                      title="Remove item"
+                      onClick={() => setEditForm(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
+                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 4, lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+                {editForm.items?.length === 0 && (
+                  <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: '12px 0' }}>No items. Add at least one item before saving.</div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Customer ── */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Customer</label>
               <select
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
-                value={editForm.payment_method}
-                onChange={e => setEditForm(p => ({ ...p, payment_method: e.target.value }))}
+                value={editForm.customer_type}
+                onChange={e => setEditForm(p => ({ ...p, customer_type: e.target.value, customer_id: '' }))}
               >
-                <option value="cash">💵 Cash</option>
-                <option value="card">💳 Card</option>
-                <option value="mobile_money">📱 Mobile Money</option>
-                <option value="bank_transfer">🏦 Bank Transfer</option>
+                <option value="walk_in">Walk-in Customer</option>
+                <option value="existing">Existing Customer</option>
               </select>
+              {editForm.customer_type === 'existing' && (
+                <input
+                  type="number"
+                  placeholder="Customer ID"
+                  style={{ width: '100%', marginTop: 6, padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  value={editForm.customer_id}
+                  onChange={e => setEditForm(p => ({ ...p, customer_id: e.target.value }))}
+                />
+              )}
             </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
-              <input
-                type="number" min="0"
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                value={editForm.discount_amount}
-                onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
-                placeholder="0"
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
-              <input
-                type="number" min="0"
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                value={editForm.tax_amount}
-                onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}
-                placeholder="0"
-              />
+            {/* ── Payment & Financials ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Payment Method</label>
+                <select
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                  value={editForm.payment_method}
+                  onChange={e => setEditForm(p => ({ ...p, payment_method: e.target.value }))}
+                >
+                  <option value="cash">💵 Cash</option>
+                  <option value="card">💳 Card</option>
+                  <option value="mobile_money">📱 Mobile Money</option>
+                  <option value="bank_transfer">🏦 Bank Transfer</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
+                <input
+                  type="number" min="0"
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  value={editForm.discount_amount}
+                  onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
+                <input
+                  type="number" min="0"
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  value={editForm.tax_amount}
+                  onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
             </div>
 
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Notes (Optional)</label>
               <textarea
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 72, boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 60, boxSizing: 'border-box' }}
                 value={editForm.notes}
                 onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
                 placeholder="Add any notes…"
               />
+            </div>
+
+            {/* Live total preview */}
+            {editForm.items?.length > 0 && (() => {
+              const subtotal  = editForm.items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.price) || 0), 0);
+              const discount  = parseFloat(editForm.discount_amount) || 0;
+              const tax       = parseFloat(editForm.tax_amount) || 0;
+              const total     = Math.max(0, subtotal - discount + tax);
+              return (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                    <span>Subtotal</span><span>UGX {subtotal.toLocaleString()}</span>
+                  </div>
+                  {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Discount</span><span>− UGX {discount.toLocaleString()}</span></div>}
+                  {tax > 0      && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Tax</span><span>+ UGX {tax.toLocaleString()}</span></div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, marginTop: 6, borderTop: '1px solid #bbf7d0', paddingTop: 6, color: '#15803d' }}>
+                    <span>Total</span><span>UGX {total.toLocaleString()}</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Delete Confirm Modal ── */}
+      <Modal
+        isOpen={!!deletingSale}
+        onClose={() => setDeletingSale(null)}
+        title="Delete Sale"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeletingSale(null)}>Cancel</Button>
+            <Button variant="danger" loading={deleteLoading} onClick={handleDelete}>Yes, Delete</Button>
+          </>
+        }
+      >
+        {deletingSale && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {deleteError && (
+              <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                ⚠️ {deleteError}
+              </div>
+            )}
+            <div style={{ fontSize: 14, color: '#374151', lineHeight: 1.6 }}>
+              Are you sure you want to delete <strong>Sale #{deletingSale.id}</strong> for{' '}
+              <strong>UGX {parseFloat(deletingSale.total_amount || 0).toLocaleString()}</strong>?
+            </div>
+            <div style={{ padding: '10px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, fontSize: 13, color: '#9a3412' }}>
+              ⚠️ This will permanently delete the sale and restore stock for all items. This cannot be undone.
             </div>
           </div>
         )}
@@ -6096,7 +6285,7 @@ function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleNa
 }
 
 // Users Tab Component
-function UsersTab({ token, user: currentUser, toast }) {
+function UsersTab({ token, user: currentUser, toast, canManageUsers = false, canViewRoles = false }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const EMPTY_FORM = {
@@ -6126,6 +6315,8 @@ function UsersTab({ token, user: currentUser, toast }) {
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 
   const isOwner = currentUser.roles?.some(r => r.name === 'owner');
+  const isOwnerOrAdmin = currentUser.roles?.some(r => ['owner', 'admin'].includes(r.name));
+  // canManageUsers is passed from parent (true for owner/admin), canViewRoles allows viewing roles section
 
   useEffect(() => {
     const load = async () => {
@@ -6327,11 +6518,13 @@ function UsersTab({ token, user: currentUser, toast }) {
             <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
               placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
           )}
-          <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
-            + Add User
-          </button>
+          {canManageUsers && (
+            <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+              onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+              + Add User
+            </button>
+          )}
         </div>
       </div>
       {/* Users table */}
@@ -6351,7 +6544,7 @@ function UsersTab({ token, user: currentUser, toast }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                {['User', 'Email', 'Roles', 'Joined', 'Actions'].map(h => (
+                {['User', 'Email', 'Roles', 'Joined', ...(canManageUsers ? ['Actions'] : [])].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                 ))}
               </tr>
@@ -6396,6 +6589,7 @@ function UsersTab({ token, user: currentUser, toast }) {
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                   </td>
                   {/* Actions */}
+                  {canManageUsers && (
                   <td style={{ padding: '14px 14px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => openEdit(u)} style={{
@@ -6412,6 +6606,7 @@ function UsersTab({ token, user: currentUser, toast }) {
                       )}
                     </div>
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -6421,17 +6616,17 @@ function UsersTab({ token, user: currentUser, toast }) {
         )}
       </div>
 
-      {/* ── Custom Roles Management (owner only) ─────────────────────────────── */}
-      {isOwner && (
+      {/* ── Roles section (visible to anyone with canViewRoles; delete only for owners) ─── */}
+      {canViewRoles && (
         <div style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Custom Roles</h2>
-              <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>Roles created for this business — default system roles cannot be deleted.</p>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Roles</h2>
+              <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>All roles available in this business — default system roles cannot be deleted.</p>
             </div>
           </div>
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            {roles.filter(r => !r.is_default).length === 0 ? (
+            {roles.length === 0 ? (
               <div style={{ padding: '32px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
                 No custom roles yet. Create one by adding a user with a custom role.
               </div>
@@ -6439,21 +6634,30 @@ function UsersTab({ token, user: currentUser, toast }) {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                    {['Role Name', 'Description', 'Assigned To', 'Actions'].map(h => (
+                    {['Role Name', 'Type', 'Description', 'Assigned To', ...(isOwner ? ['Actions'] : [])].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {roles.filter(r => !r.is_default).map(role => {
+                  {roles.map(role => {
                     const assignedUsers = users.filter(u => (u.roles || []).some(r => r.id === role.id));
                     return (
                       <tr key={role.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                         <td style={{ padding: '13px 16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 15 }}>✨</span>
+                            <span style={{ fontSize: 15 }}>{role.is_default ? '🛡️' : '✨'}</span>
                             <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{role.name}</span>
                           </div>
+                        </td>
+                        <td style={{ padding: '13px 16px' }}>
+                          <span style={{
+                            padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                            background: role.is_default ? '#ede9fe' : '#f0fdf4',
+                            color: role.is_default ? '#7c3aed' : '#16a34a',
+                          }}>
+                            {role.is_default ? 'System' : 'Custom'}
+                          </span>
                         </td>
                         <td style={{ padding: '13px 16px', color: '#475569', fontSize: 13 }}>{role.description || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
                         <td style={{ padding: '13px 16px' }}>
@@ -6469,19 +6673,23 @@ function UsersTab({ token, user: currentUser, toast }) {
                             </div>
                           )}
                         </td>
+                        {isOwner && (
                         <td style={{ padding: '13px 16px' }}>
-                          <button
-                            onClick={() => setConfirmDeleteRole(role)}
-                            disabled={deletingRoleId === role.id}
-                            style={{
-                              padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
-                              background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                              opacity: deletingRoleId === role.id ? 0.6 : 1,
-                            }}
-                          >
-                            {deletingRoleId === role.id ? '…' : 'Delete'}
-                          </button>
+                          {!role.is_default && (
+                            <button
+                              onClick={() => setConfirmDeleteRole(role)}
+                              disabled={deletingRoleId === role.id}
+                              style={{
+                                padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
+                                background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                                opacity: deletingRoleId === role.id ? 0.6 : 1,
+                              }}
+                            >
+                              {deletingRoleId === role.id ? '…' : 'Delete'}
+                            </button>
+                          )}
                         </td>
+                        )}
                       </tr>
                     );
                   })}

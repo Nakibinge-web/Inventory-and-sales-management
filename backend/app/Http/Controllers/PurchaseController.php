@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseController extends Controller
@@ -218,6 +219,15 @@ class PurchaseController extends Controller
 
     public function getMonthlyReport(Request $request): JsonResponse
     {
+        $user = Auth::user();
+        $isPrivileged = $user->roles()->pluck('name')
+                            ->intersect(['owner', 'admin', 'manager'])
+                            ->isNotEmpty();
+
+        if (!$isPrivileged && !$user->hasPermission('purchases.report')) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to view purchase reports.'], 403);
+        }
+
         $validated = $request->validate(['month' => 'required|date_format:Y-m']);
 
         [$year, $month] = explode('-', $validated['month']);
@@ -237,6 +247,15 @@ class PurchaseController extends Controller
 
     public function getDailyReport(Request $request): JsonResponse
     {
+        $user = Auth::user();
+        $isPrivileged = $user->roles()->pluck('name')
+                            ->intersect(['owner', 'admin', 'manager'])
+                            ->isNotEmpty();
+
+        if (!$isPrivileged && !$user->hasPermission('purchases.report')) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to view purchase reports.'], 403);
+        }
+
         $validated = $request->validate(['date' => 'required|date_format:Y-m-d']);
 
         $purchases = Purchase::whereDate('purchase_date', $validated['date'])

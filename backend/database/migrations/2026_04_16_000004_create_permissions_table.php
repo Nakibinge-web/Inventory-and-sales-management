@@ -46,6 +46,8 @@ return new class extends Migration
             // Sales
             ['name' => 'sales.view',   'display_name' => 'View Sales',   'group' => 'sales'],
             ['name' => 'sales.create', 'display_name' => 'Create Sales', 'group' => 'sales'],
+            ['name' => 'sales.edit',   'display_name' => 'Edit Sales',   'group' => 'sales'],
+            ['name' => 'sales.delete', 'display_name' => 'Delete Sales', 'group' => 'sales'],
             ['name' => 'sales.report', 'display_name' => 'Sales Reports','group' => 'sales'],
             // Purchases
             ['name' => 'purchases.view',   'display_name' => 'View Purchases',   'group' => 'purchases'],

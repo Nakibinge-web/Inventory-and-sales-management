@@ -58,10 +58,13 @@ class SalePolicy extends BasePolicy
 
     /**
      * Determine if the user can update the sale.
-     * 
+     *
+     * Owners and managers always have access. Users with the 'sales.edit'
+     * permission can also edit, but only their own sales.
+     *
      * @param User $user The authenticated user
      * @param Sale $sale The sale being updated
-     * @return bool True if user is owner or manager AND sale belongs to user's tenant
+     * @return bool
      */
     public function update(User $user, Sale $sale): bool
     {
@@ -69,15 +72,25 @@ class SalePolicy extends BasePolicy
             return false;
         }
 
-        return $this->hasAnyRole($user, ['owner', 'manager']);
+        $isPrivileged = $this->hasAnyRole($user, ['owner', 'manager']);
+
+        if ($isPrivileged) {
+            return true;
+        }
+
+        // Users with sales.edit can only edit their own sales
+        return $user->hasPermission('sales.edit') && $sale->user_id === $user->id;
     }
 
     /**
      * Determine if the user can delete the sale.
-     * 
+     *
+     * Owners and managers always have access. Users with the 'sales.delete'
+     * permission can also delete, but only their own sales.
+     *
      * @param User $user The authenticated user
      * @param Sale $sale The sale being deleted
-     * @return bool True if user is owner or manager AND sale belongs to user's tenant
+     * @return bool
      */
     public function delete(User $user, Sale $sale): bool
     {
@@ -85,6 +98,13 @@ class SalePolicy extends BasePolicy
             return false;
         }
 
-        return $this->hasAnyRole($user, ['owner', 'manager']);
+        $isPrivileged = $this->hasAnyRole($user, ['owner', 'manager']);
+
+        if ($isPrivileged) {
+            return true;
+        }
+
+        // Users with sales.delete can only delete their own sales
+        return $user->hasPermission('sales.delete') && $sale->user_id === $user->id;
     }
 }
