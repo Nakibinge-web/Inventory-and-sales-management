@@ -15,16 +15,30 @@ use Illuminate\Validation\Rules\Password;
 class UserController extends Controller
 {
     /**
-     * List all users in the current tenant.
+     * List users in the current tenant.
+     * - Owners / admins see everyone.
+     * - Users with users.view permission see only users they created.
      * GET /api/users
      */
     public function index(): JsonResponse
     {
-        $users = User::with('roles:id,name')
-                     ->select('id', 'name', 'email', 'created_at')
-                     ->get();
+        $actor = Auth::user();
+        $isPrivileged = $actor->roles()->pluck('name')
+                              ->intersect(['owner', 'admin'])
+                              ->isNotEmpty();
 
-        return response()->json(['success' => true, 'data' => $users]);
+        if (!$isPrivileged && !$actor->hasPermission('users.view')) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to view users.'], 403);
+        }
+
+        $query = User::with('roles:id,name')->select('id', 'name', 'email', 'created_by', 'created_at');
+
+        // Non-privileged users only see the users they personally created
+        if (!$isPrivileged) {
+            $query->where('created_by', $actor->id);
+        }
+
+        return response()->json(['success' => true, 'data' => $query->get()]);
     }
 
     /**
@@ -40,11 +54,20 @@ class UserController extends Controller
 
     /**
      * Create a new user within the current tenant.
-     * POST /api/users  — requires owner or admin role
+     * POST /api/users  — requires owner/admin role OR users.create permission
      */
     public function store(Request $request): JsonResponse
     {
-        $tenantId = Auth::user()->tenant_id;
+        $actor = Auth::user();
+        $isPrivileged = $actor->roles()->pluck('name')
+                              ->intersect(['owner', 'admin'])
+                              ->isNotEmpty();
+
+        if (!$isPrivileged && !$actor->hasPermission('users.create')) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to create users.'], 403);
+        }
+
+        $tenantId = $actor->tenant_id;
 
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
@@ -65,17 +88,28 @@ class UserController extends Controller
 
         // Prevent non-owners from assigning the owner role
         $ownerRole = Role::where('name', 'owner')->whereNull('tenant_id')->first();
-        $actorIsOwner = Auth::user()->hasRole('owner');
+        $actorIsOwner = $actor->hasRole('owner');
 
         if ($ownerRole && in_array($ownerRole->id, $validated['role_ids']) && !$actorIsOwner) {
             return response()->json(['success' => false, 'message' => 'Only owners can assign the owner role.'], 403);
         }
 
+        // Non-privileged users (permission-based) cannot assign owner or admin roles
+        if (!$isPrivileged) {
+            $privilegedRoles = Role::whereIn('name', ['owner', 'admin'])->pluck('id')->toArray();
+            foreach ($validated['role_ids'] as $rid) {
+                if (in_array($rid, $privilegedRoles)) {
+                    return response()->json(['success' => false, 'message' => 'You cannot assign owner or admin roles.'], 403);
+                }
+            }
+        }
+
         $user = User::create([
-            'tenant_id' => $tenantId,
-            'name'      => $validated['name'],
-            'email'     => $validated['email'],
-            'password'  => Hash::make($validated['password']),
+            'tenant_id'  => $tenantId,
+            'name'       => $validated['name'],
+            'email'      => $validated['email'],
+            'password'   => Hash::make($validated['password']),
+            'created_by' => $actor->id,
         ]);
 
         $user->roles()->attach($validRoleIds);
@@ -264,10 +298,26 @@ class UserController extends Controller
 
     /**
      * Update a user's details.
-     * PUT /api/users/{user}  — requires owner or admin role
+     * PUT /api/users/{user}  — requires owner/admin role OR users.edit permission
      */
     public function update(Request $request, User $user): JsonResponse
     {
+        $actor = Auth::user();
+        $isPrivileged = $actor->roles()->pluck('name')
+                              ->intersect(['owner', 'admin'])
+                              ->isNotEmpty();
+
+        // Permission check: privileged always allowed; others need users.edit
+        // and can only edit users they created
+        if (!$isPrivileged) {
+            if (!$actor->hasPermission('users.edit')) {
+                return response()->json(['success' => false, 'message' => 'You do not have permission to edit users.'], 403);
+            }
+            if ($user->created_by !== $actor->id) {
+                return response()->json(['success' => false, 'message' => 'You can only edit users you created.'], 403);
+            }
+        }
+
         $validated = $request->validate([
             'name'     => 'sometimes|required|string|max:255',
             'email'    => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
@@ -321,10 +371,24 @@ class UserController extends Controller
 
     /**
      * Delete a user from the current tenant.
-     * DELETE /api/users/{user}  — requires owner or admin role
+     * DELETE /api/users/{user}  — requires owner/admin role OR users.delete permission
      */
     public function destroy(User $user): JsonResponse
     {
+        $actor = Auth::user();
+        $isPrivileged = $actor->roles()->pluck('name')
+                              ->intersect(['owner', 'admin'])
+                              ->isNotEmpty();
+
+        if (!$isPrivileged) {
+            if (!$actor->hasPermission('users.delete')) {
+                return response()->json(['success' => false, 'message' => 'You do not have permission to delete users.'], 403);
+            }
+            if ($user->created_by !== $actor->id) {
+                return response()->json(['success' => false, 'message' => 'You can only delete users you created.'], 403);
+            }
+        }
+
         // Prevent self-deletion
         if ($user->id === Auth::id()) {
             return response()->json(['success' => false, 'message' => 'You cannot delete your own account.'], 403);

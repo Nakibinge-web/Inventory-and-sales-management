@@ -467,6 +467,7 @@ export default function Dashboard({ user, token, onLogout }) {
               user={user}
               suppliers={data.suppliers}
               products={data.products}
+              categories={data.categories}
               toast={toast}
               canCreate={hasPermission('purchases.create')}
               canEdit={hasPermission('purchases.edit')}
@@ -512,7 +513,11 @@ export default function Dashboard({ user, token, onLogout }) {
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
-            <UsersTab token={token} user={user} toast={toast} canManageUsers={isOwnerOrAdmin} canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
+            <UsersTab token={token} user={user} toast={toast}
+              canCreate={isOwnerOrAdmin || hasPermission('users.create')}
+              canEdit={isOwnerOrAdmin || hasPermission('users.edit')}
+              canDelete={isOwnerOrAdmin || hasPermission('users.delete')}
+              canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
           )}
         </main>
       </div>
@@ -3160,7 +3165,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
     {
       key: 'user',
       title: 'Staff',
-      render: (value) => value?.name || 'N/A'
+      render: (value) => value?.name
+        ? value.name
+        : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 12 }}>Deleted user</span>
     },
     {
       key: 'actions',
@@ -3820,7 +3827,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                     </div>
                   )}
                   <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span>👤</span> Served by: {viewingSale.user?.name || 'N/A'}
+                    <span>👤</span> Served by: {viewingSale.user?.name || 'Deleted user'}
                   </div>
                 </div>
                 <div>
@@ -4107,7 +4114,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
 }
 
 // Purchases Tab Component
-function PurchasesTab({ purchases, loading, token, user, suppliers, products, toast, onPurchaseAdded, onPurchaseUpdated, onPurchaseDeleted, canCreate = true, canEdit = true, canDelete = true }) {
+function PurchasesTab({ purchases, loading, token, user, suppliers, products, categories = [], toast, onPurchaseAdded, onPurchaseUpdated, onPurchaseDeleted, canCreate = true, canEdit = true, canDelete = true }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   // Each line can be 'existing' (select from products) or 'new' (fill in details)
@@ -4115,7 +4122,11 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
     mode: 'existing',          // 'existing' | 'new'
     product_id: '',            // used when mode === 'existing'
     // new product fields
-    np_name: '', np_sku: '', np_unit: '', np_price: '', np_reorder: '',
+    np_name: '', np_sku: '', np_barcode: '', np_unit: '',
+    np_category_id: '', np_category_mode: 'existing', np_new_category: '',
+    np_price: '', np_reorder: '',
+    np_description: '',
+    np_track_expiry: false, np_manufacture_date: '', np_expiry_date: '',
     // shared
     quantity: '', cost_price: '',
   };
@@ -4194,11 +4205,18 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
         quantity:   parseInt(l.quantity),
         cost_price: parseFloat(l.cost_price),
         new_product: {
-          name:          l.np_name,
-          sku:           l.np_sku   || undefined,
-          unit:          l.np_unit  || undefined,
-          price:         parseFloat(l.np_price),
-          reorder_level: l.np_reorder ? parseFloat(l.np_reorder) : undefined,
+          name:             l.np_name,
+          sku:              l.np_sku          || undefined,
+          barcode:          l.np_barcode      || undefined,
+          unit:             l.np_unit         || undefined,
+          category_id:      l.np_category_mode === 'existing' ? (l.np_category_id || undefined) : undefined,
+          new_category:     l.np_category_mode === 'new'      ? (l.np_new_category || undefined) : undefined,
+          price:            parseFloat(l.np_price),
+          reorder_level:    l.np_reorder ? parseFloat(l.np_reorder) : undefined,
+          description:      l.np_description  || undefined,
+          track_expiry:     l.np_track_expiry  ? 1 : 0,
+          manufacture_date: l.np_track_expiry ? (l.np_manufacture_date || undefined) : undefined,
+          expiry_date:      l.np_track_expiry ? (l.np_expiry_date      || undefined) : undefined,
         },
       };
     });
@@ -4502,6 +4520,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                 {/* New product rows */}
                 {line.mode === 'new' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                    {/* Row 1: Name + SKU + Barcode */}
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name *</span>
@@ -4514,11 +4534,61 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                           onChange={e => setLine(i, 'np_sku', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
-                        <input style={inp} placeholder="e.g. kg, pcs, box" value={line.np_unit}
-                          onChange={e => setLine(i, 'np_unit', e.target.value)} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Barcode</span>
+                        <input style={inp} placeholder="Scan or type" value={line.np_barcode}
+                          onChange={e => setLine(i, 'np_barcode', e.target.value)} />
                       </div>
                     </div>
+
+                    {/* Row 2: Unit + Category */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
+                        <select style={inp} value={line.np_unit}
+                          onChange={e => setLine(i, 'np_unit', e.target.value)}>
+                          <option value="">— Select unit —</option>
+                          {['Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)', 'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)', 'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans'].map(u => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Category</span>
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                          {['existing', 'new'].map(m => (
+                            <button
+                              key={m} type="button"
+                              onClick={() => setLine(i, 'np_category_mode', m)}
+                              style={{
+                                flex: 1, padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                                border: '1.5px solid',
+                                borderColor: line.np_category_mode === m ? '#4f46e5' : '#e2e8f0',
+                                background:  line.np_category_mode === m ? '#ede9fe' : '#f8fafc',
+                                color:       line.np_category_mode === m ? '#4f46e5' : '#94a3b8',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {m === 'existing' ? '📂 Existing' : '➕ New'}
+                            </button>
+                          ))}
+                        </div>
+                        {line.np_category_mode === 'existing' ? (
+                          <select style={inp} value={line.np_category_id}
+                            onChange={e => setLine(i, 'np_category_id', e.target.value)}>
+                            <option value="">— No category —</option>
+                            {(categories || []).map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input style={inp} placeholder="Type new category name"
+                            value={line.np_new_category}
+                            onChange={e => setLine(i, 'np_new_category', e.target.value)} />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 3: Selling Price + Reorder + Qty + Cost Price */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Selling Price (UGX) *</span>
@@ -4541,6 +4611,56 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
                     </div>
+
+                    {/* Description */}
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Description (optional)</span>
+                      <textarea style={{ ...inp, minHeight: 56, resize: 'vertical' }}
+                        placeholder="Optional product description…"
+                        value={line.np_description}
+                        onChange={e => setLine(i, 'np_description', e.target.value)} />
+                    </div>
+
+                    {/* Track expiry toggle */}
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                      padding: '10px 12px', background: '#f8fafc', borderRadius: 8,
+                      border: '1.5px solid #e2e8f0',
+                    }}>
+                      <div style={{
+                        width: 40, height: 22, borderRadius: 11, position: 'relative', flexShrink: 0,
+                        background: line.np_track_expiry ? '#4f46e5' : '#e2e8f0', transition: 'background 0.2s',
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 2, width: 18, height: 18,
+                          background: '#fff', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          transform: line.np_track_expiry ? 'translateX(20px)' : 'translateX(2px)',
+                          transition: 'transform 0.2s',
+                        }} />
+                      </div>
+                      <input type="checkbox" style={{ display: 'none' }}
+                        checked={line.np_track_expiry}
+                        onChange={e => setLine(i, 'np_track_expiry', e.target.checked)} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Track Expiry Date</span>
+                    </label>
+
+                    {/* Expiry date fields */}
+                    {line.np_track_expiry && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Manufacture Date</span>
+                          <input style={inp} type="date" value={line.np_manufacture_date}
+                            onChange={e => setLine(i, 'np_manufacture_date', e.target.value)} />
+                        </div>
+                        <div>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Expiry Date *</span>
+                          <input style={inp} type="date" value={line.np_expiry_date}
+                            min={line.np_manufacture_date || undefined}
+                            onChange={e => setLine(i, 'np_expiry_date', e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+
                     <div style={{ fontSize: 12, color: '#6366f1', background: '#eef2ff', borderRadius: 6, padding: '6px 10px' }}>
                       ✨ This product will be created in your inventory with the quantity above as its initial stock.
                     </div>
@@ -6285,7 +6405,7 @@ function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleNa
 }
 
 // Users Tab Component
-function UsersTab({ token, user: currentUser, toast, canManageUsers = false, canViewRoles = false }) {
+function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit = false, canDelete = false, canViewRoles = false }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const EMPTY_FORM = {
@@ -6316,7 +6436,6 @@ function UsersTab({ token, user: currentUser, toast, canManageUsers = false, can
 
   const isOwner = currentUser.roles?.some(r => r.name === 'owner');
   const isOwnerOrAdmin = currentUser.roles?.some(r => ['owner', 'admin'].includes(r.name));
-  // canManageUsers is passed from parent (true for owner/admin), canViewRoles allows viewing roles section
 
   useEffect(() => {
     const load = async () => {
@@ -6518,7 +6637,7 @@ function UsersTab({ token, user: currentUser, toast, canManageUsers = false, can
             <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
               placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
           )}
-          {canManageUsers && (
+          {canCreate && (
             <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
               onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
               onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
@@ -6544,7 +6663,7 @@ function UsersTab({ token, user: currentUser, toast, canManageUsers = false, can
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                {['User', 'Email', 'Roles', 'Joined', ...(canManageUsers ? ['Actions'] : [])].map(h => (
+                {['User', 'Email', 'Roles', 'Joined', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                 ))}
               </tr>
@@ -6589,14 +6708,16 @@ function UsersTab({ token, user: currentUser, toast, canManageUsers = false, can
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                   </td>
                   {/* Actions */}
-                  {canManageUsers && (
+                  {(canEdit || canDelete) && (
                   <td style={{ padding: '14px 14px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => openEdit(u)} style={{
-                        padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
-                        background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                      }}>Edit</button>
-                      {u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
+                      {canEdit && (
+                        <button onClick={() => openEdit(u)} style={{
+                          padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
+                          background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                        }}>Edit</button>
+                      )}
+                      {canDelete && u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
                         <button onClick={() => setConfirmDelete(u)} disabled={deletingId === u.id} style={{
                           padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
                           background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,

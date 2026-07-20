@@ -94,12 +94,12 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/by-role',  [UserController::class, 'getUsersByRole']);
         Route::get('/{user}',   [UserController::class, 'show']);
 
-        // Only owners and admins can create, update, or delete users
-        Route::middleware('role:owner,admin')->group(function () {
-            Route::post('/',          [UserController::class, 'store']);
-            Route::put('/{user}',     [UserController::class, 'update']);
-            Route::delete('/{user}',  [UserController::class, 'destroy']);
-        });
+        // Only owners and admins can create, update, or delete users,
+        // OR users who have the relevant granular permission.
+        // Permission checks are handled inside the controller.
+        Route::post('/',          [UserController::class, 'store']);
+        Route::put('/{user}',     [UserController::class, 'update']);
+        Route::delete('/{user}',  [UserController::class, 'destroy']);
 
         // Only owners can create users with custom roles or modify custom role permissions
         Route::middleware('role:owner')->group(function () {

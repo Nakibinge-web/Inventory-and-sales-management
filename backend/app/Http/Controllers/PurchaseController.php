@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\Product;
+use App\Models\Category;
 use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -37,9 +38,15 @@ class PurchaseController extends Controller
             'items.*.new_product.name'          => 'required_with:items.*.new_product|string|max:255',
             'items.*.new_product.price'         => 'required_with:items.*.new_product|numeric|min:0',
             'items.*.new_product.sku'           => 'nullable|string|max:100',
+            'items.*.new_product.barcode'       => 'nullable|string|max:100',
             'items.*.new_product.unit'          => 'nullable|string|max:50',
             'items.*.new_product.category_id'   => 'nullable|exists:categories,id',
+            'items.*.new_product.new_category'  => 'nullable|string|max:255',
             'items.*.new_product.reorder_level' => 'nullable|numeric|min:0',
+            'items.*.new_product.description'   => 'nullable|string|max:1000',
+            'items.*.new_product.track_expiry'  => 'nullable|boolean',
+            'items.*.new_product.manufacture_date' => 'nullable|date',
+            'items.*.new_product.expiry_date'   => 'nullable|date|after_or_equal:items.*.new_product.manufacture_date',
         ]);
 
         $items      = $request->input('items');
@@ -63,17 +70,30 @@ class PurchaseController extends Controller
             foreach ($items as &$item) {
                 if (empty($item['product_id']) && !empty($item['new_product'])) {
                     $np = $item['new_product'];
+
+                    // Create a new category on the fly if requested
+                    $categoryId = $np['category_id'] ?? null;
+                    if (empty($categoryId) && !empty($np['new_category'])) {
+                        $category   = Category::create(['name' => $np['new_category'], 'tenant_id' => $tenantId]);
+                        $categoryId = $category->id;
+                    }
+
                     $product = Product::create([
-                        'tenant_id'     => $tenantId,
-                        'name'          => $np['name'],
-                        'sku'           => $np['sku'] ?? null,
-                        'unit'          => $np['unit'] ?? null,
-                        'category_id'   => $np['category_id'] ?? null,
-                        'supplier_id'   => $supplierId,
-                        'stock'         => 0, // will be incremented below
-                        'cost_price'    => $item['cost_price'],
-                        'price'         => $np['price'],
-                        'reorder_level' => $np['reorder_level'] ?? 0,
+                        'tenant_id'        => $tenantId,
+                        'name'             => $np['name'],
+                        'sku'              => $np['sku']              ?? null,
+                        'barcode'          => $np['barcode']          ?? null,
+                        'unit'             => $np['unit']             ?? null,
+                        'category_id'      => $categoryId,
+                        'supplier_id'      => $supplierId,
+                        'stock'            => 0, // will be incremented below
+                        'cost_price'       => $item['cost_price'],
+                        'price'            => $np['price'],
+                        'reorder_level'    => $np['reorder_level']    ?? 0,
+                        'description'      => $np['description']      ?? null,
+                        'track_expiry'     => $np['track_expiry']     ?? false,
+                        'manufacture_date' => $np['track_expiry'] ? ($np['manufacture_date'] ?? null) : null,
+                        'expiry_date'      => $np['track_expiry'] ? ($np['expiry_date']       ?? null) : null,
                     ]);
                     $item['product_id'] = $product->id;
                     $newlyCreatedProducts[] = $product->load(['category', 'supplier']);
