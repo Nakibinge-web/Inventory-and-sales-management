@@ -33,6 +33,11 @@ return new class extends Migration
             ['name' => 'categories.create', 'display_name' => 'Create Categories', 'group' => 'categories'],
             ['name' => 'categories.edit',   'display_name' => 'Edit Categories',   'group' => 'categories'],
             ['name' => 'categories.delete', 'display_name' => 'Delete Categories', 'group' => 'categories'],
+            // Customers
+            ['name' => 'customers.view',   'display_name' => 'View Customers',   'group' => 'customers'],
+            ['name' => 'customers.create', 'display_name' => 'Create Customers', 'group' => 'customers'],
+            ['name' => 'customers.edit',   'display_name' => 'Edit Customers',   'group' => 'customers'],
+            ['name' => 'customers.delete', 'display_name' => 'Delete Customers', 'group' => 'customers'],
             // Suppliers
             ['name' => 'suppliers.view',   'display_name' => 'View Suppliers',   'group' => 'suppliers'],
             ['name' => 'suppliers.create', 'display_name' => 'Create Suppliers', 'group' => 'suppliers'],
@@ -41,10 +46,14 @@ return new class extends Migration
             // Sales
             ['name' => 'sales.view',   'display_name' => 'View Sales',   'group' => 'sales'],
             ['name' => 'sales.create', 'display_name' => 'Create Sales', 'group' => 'sales'],
+            ['name' => 'sales.edit',   'display_name' => 'Edit Sales',   'group' => 'sales'],
+            ['name' => 'sales.delete', 'display_name' => 'Delete Sales', 'group' => 'sales'],
             ['name' => 'sales.report', 'display_name' => 'Sales Reports','group' => 'sales'],
             // Purchases
             ['name' => 'purchases.view',   'display_name' => 'View Purchases',   'group' => 'purchases'],
             ['name' => 'purchases.create', 'display_name' => 'Create Purchases', 'group' => 'purchases'],
+            ['name' => 'purchases.edit',   'display_name' => 'Edit Purchases',   'group' => 'purchases'],
+            ['name' => 'purchases.delete', 'display_name' => 'Delete Purchases', 'group' => 'purchases'],
             ['name' => 'purchases.report', 'display_name' => 'Purchase Reports', 'group' => 'purchases'],
             // Stock
             ['name' => 'stock.view',   'display_name' => 'View Stock Movements', 'group' => 'stock'],

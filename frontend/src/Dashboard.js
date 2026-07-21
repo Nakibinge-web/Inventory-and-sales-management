@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { theme } from './styles/theme';
 import DashboardCard from './components/ui/DashboardCard';
 import DataTable from './components/ui/DataTable';
@@ -49,7 +49,10 @@ export default function Dashboard({ user, token, onLogout }) {
       };
 
       const safeJson = async (res) => {
-        if (!res.ok) return { data: [] };
+        if (!res.ok) {
+          console.warn(`API ${res.url} returned ${res.status}`);
+          return { data: [] };
+        }
         try { return await res.json(); } catch { return { data: [] }; }
       };
 
@@ -156,19 +159,27 @@ export default function Dashboard({ user, token, onLogout }) {
 
   const isOwnerOrAdmin = user.roles && user.roles.some(r => ['owner', 'admin'].includes(r.name));
 
+  // Returns true if the user has a given permission (via any role) OR is owner/admin
+  const hasPermission = (perm) => {
+    if (isOwnerOrAdmin) return true;
+    return (user.roles || []).some(role =>
+      (role.permissions || []).some(p => p.name === perm)
+    );
+  };
+
   const menuItems = [
     { id: 'overview',         label: 'Overview',        icon: '📊', color: 'primary' },
-    { id: 'pos',              label: 'POS',             icon: '🖥️', color: 'success' },
-    { id: 'products',         label: 'Products',        icon: '📦', color: 'success' },
-    { id: 'categories',       label: 'Categories',      icon: '🏷️', color: 'warning' },
-    { id: 'suppliers',        label: 'Suppliers',       icon: '🏭', color: 'neutral' },
-    { id: 'customers',        label: 'Customers',       icon: '👥', color: 'primary' },
-    { id: 'sales',            label: 'Sales',           icon: '💰', color: 'success' },
-    { id: 'purchases',        label: 'Purchases',       icon: '🛒', color: 'primary' },
-    { id: 'stock-movements',  label: 'Stock Movements', icon: '🔄', color: 'neutral' },
-    { id: 'reports',          label: 'Reports',         icon: '📈', color: 'danger' },
+    ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS', icon: '🖥️', color: 'success' }] : []),
+    ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products', icon: '📦', color: 'success' }] : []),
+    ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️', color: 'warning' }] : []),
+    ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' }] : []),
+    ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers', icon: '👥', color: 'primary' }] : []),
+    ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales', icon: '💰', color: 'success' }] : []),
+    ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' }] : []),
+    ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
+    ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
     { id: 'ai',               label: 'AI Assistant',    icon: '🤖', color: 'primary' },
-    ...(isOwnerOrAdmin ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
+    ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
   if (loading) {
@@ -300,7 +311,7 @@ export default function Dashboard({ user, token, onLogout }) {
             <div style={{ flex: 1 }} />
 
             {/* Admin section */}
-            {isOwnerOrAdmin && (
+            {(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
               <div>
                 <div style={{ height: 1, background: '#1e293b', margin: '12px 8px 14px' }} />
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>
@@ -337,7 +348,12 @@ export default function Dashboard({ user, token, onLogout }) {
             </div>
           )}
 
-          {activeTab === 'overview' && <OverviewTab data={data} loading={loading} onNavigate={setActiveTab} onAddProduct={() => setShowAddProduct(true)} />}
+          {activeTab === 'overview' && <OverviewTab data={data} loading={loading} onNavigate={setActiveTab} onAddProduct={() => setShowAddProduct(true)}
+              canSell={hasPermission('sales.create')}
+              canAddProduct={hasPermission('products.create')}
+              canAddSupplier={hasPermission('suppliers.create')}
+              canRecordPurchase={hasPermission('purchases.create')}
+            />}
           {activeTab === 'pos' && (
             <POSTab
               products={data.products}
@@ -345,6 +361,7 @@ export default function Dashboard({ user, token, onLogout }) {
               customers={data.customers}
               token={token}
               user={user}
+              canSell={hasPermission('sales.create')}
               toast={toast}
               onSaleCompleted={(sale) => {
                 setData(prev => {
@@ -381,6 +398,9 @@ export default function Dashboard({ user, token, onLogout }) {
               categories={data.categories}
               suppliers={data.suppliers}
               toast={toast}
+              canCreate={hasPermission('products.create')}
+              canEdit={hasPermission('products.edit')}
+              canDelete={hasPermission('products.delete')}
               onProductDeleted={(id) => setData(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }))}
               onProductUpdated={(updated) => setData(prev => ({
                 ...prev,
@@ -393,6 +413,9 @@ export default function Dashboard({ user, token, onLogout }) {
               categories={data.categories}
               loading={loading}
               token={token}
+              canCreate={hasPermission('categories.create')}
+              canEdit={hasPermission('categories.edit')}
+              canDelete={hasPermission('categories.delete')}
               onCategoryAdded={cat => setData(prev => ({ ...prev, categories: [...prev.categories, cat] }))}
               onCategoryUpdated={cat => setData(prev => ({ ...prev, categories: prev.categories.map(c => c.id === cat.id ? cat : c) }))}
               onCategoryDeleted={id => setData(prev => ({ ...prev, categories: prev.categories.filter(c => c.id !== id) }))}
@@ -405,6 +428,9 @@ export default function Dashboard({ user, token, onLogout }) {
               token={token}
               user={user}
               toast={toast}
+              canCreate={hasPermission('suppliers.create')}
+              canEdit={hasPermission('suppliers.edit')}
+              canDelete={hasPermission('suppliers.delete')}
               onSupplierAdded={s => setData(prev => ({ ...prev, suppliers: [...prev.suppliers, s] }))}
               onSupplierUpdated={s => setData(prev => ({ ...prev, suppliers: prev.suppliers.map(x => x.id === s.id ? s : x) }))}
               onSupplierDeleted={id => setData(prev => ({ ...prev, suppliers: prev.suppliers.filter(s => s.id !== id) }))}
@@ -417,12 +443,22 @@ export default function Dashboard({ user, token, onLogout }) {
               token={token}
               user={user}
               toast={toast}
+              canCreate={hasPermission('customers.create')}
+              canEdit={hasPermission('customers.edit')}
+              canDelete={hasPermission('customers.delete')}
               onCustomerAdded={customer => setData(prev => ({ ...prev, customers: [...prev.customers, customer] }))}
               onCustomerUpdated={customer => setData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === customer.id ? customer : c) }))}
               onCustomerDeleted={id => setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }))}
             />
           )}
-          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} />}
+          {activeTab === 'sales' && <SalesTab sales={data.sales} loading={loading} onNewSale={() => setActiveTab('pos')} token={token} user={user} canCreate={hasPermission('sales.create')} canEdit={hasPermission('sales.edit')} canDelete={hasPermission('sales.delete')} onSaleDeleted={sale => setData(prev => ({
+            ...prev,
+            sales: prev.sales.filter(s => s.id !== sale.id),
+            products: prev.products.map(p => {
+              const item = (sale.sale_items || sale.saleItems || []).find(i => i.product_id === p.id);
+              return item ? { ...p, stock: p.stock + Number(item.quantity) } : p;
+            }),
+          }))} />}
           {activeTab === 'purchases' && (
             <PurchasesTab
               purchases={data.purchases}
@@ -431,15 +467,17 @@ export default function Dashboard({ user, token, onLogout }) {
               user={user}
               suppliers={data.suppliers}
               products={data.products}
+              categories={data.categories}
               toast={toast}
+              canCreate={hasPermission('purchases.create')}
+              canEdit={hasPermission('purchases.edit')}
+              canDelete={hasPermission('purchases.delete')}
               onPurchaseAdded={(p, newProducts) => {
                 setData(prev => {
-                  // Update stock for existing products that were purchased
                   const updatedProducts = prev.products.map(prod => {
                     const item = p.purchase_items?.find(i => i.product_id === prod.id);
                     return item ? { ...prod, stock: prod.stock + item.quantity } : prod;
                   });
-                  // Append any brand-new products created during this purchase
                   const mergedProducts = newProducts && newProducts.length > 0
                     ? [...updatedProducts, ...newProducts.filter(np => !updatedProducts.some(ep => ep.id === np.id))]
                     : updatedProducts;
@@ -451,13 +489,35 @@ export default function Dashboard({ user, token, onLogout }) {
                   };
                 });
               }}
+              onPurchaseUpdated={(updated) => {
+                setData(prev => ({
+                  ...prev,
+                  purchases: prev.purchases.map(p => p.id === updated.id ? updated : p),
+                }));
+              }}
+              onPurchaseDeleted={(id, deletedPurchase) => {
+                setData(prev => ({
+                  ...prev,
+                  purchases: prev.purchases.filter(p => p.id !== id),
+                  stats: { ...prev.stats, totalPurchases: prev.stats.totalPurchases - parseFloat(deletedPurchase?.total_amount || 0) },
+                  // Reverse stock
+                  products: prev.products.map(prod => {
+                    const item = (deletedPurchase?.purchase_items || []).find(i => i.product_id === prod.id);
+                    return item ? { ...prod, stock: Math.max(0, prod.stock - item.quantity) } : prod;
+                  }),
+                }));
+              }}
             />
           )}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
-          {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} />}
-          {activeTab === 'users' && isOwnerOrAdmin && (
-            <UsersTab token={token} user={user} toast={toast} />
+          {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
+          {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
+            <UsersTab token={token} user={user} toast={toast}
+              canCreate={isOwnerOrAdmin || hasPermission('users.create')}
+              canEdit={isOwnerOrAdmin || hasPermission('users.edit')}
+              canDelete={isOwnerOrAdmin || hasPermission('users.delete')}
+              canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
           )}
         </main>
       </div>
@@ -486,7 +546,7 @@ export default function Dashboard({ user, token, onLogout }) {
 }
 
 // Overview Tab Component
-function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
+function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, canAddProduct = true, canAddSupplier = true, canRecordPurchase = true }) {
   const today = new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const hour  = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -511,10 +571,10 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
   ];
 
   const quickActions = [
-    { label: 'New Sale',        sub: 'Process a sale transaction', action: () => onNavigate('pos'),       accent: '#4f46e5' },
-    { label: 'Add Product',     sub: 'Add to your inventory',       action: onAddProduct,                  accent: '#16a34a' },
-    { label: 'Add Supplier',    sub: 'Register a new vendor',       action: () => onNavigate('suppliers'), accent: '#0891b2' },
-    { label: 'Record Purchase', sub: 'Log a supplier order',        action: () => onNavigate('purchases'), accent: '#d97706' },
+    ...(canSell           ? [{ label: 'New Sale',        sub: 'Process a sale transaction', action: () => onNavigate('pos'),       accent: '#4f46e5' }] : []),
+    ...(canAddProduct     ? [{ label: 'Add Product',     sub: 'Add to your inventory',       action: onAddProduct,                  accent: '#16a34a' }] : []),
+    ...(canAddSupplier    ? [{ label: 'Add Supplier',    sub: 'Register a new vendor',       action: () => onNavigate('suppliers'), accent: '#0891b2' }] : []),
+    ...(canRecordPurchase ? [{ label: 'Record Purchase', sub: 'Log a supplier order',        action: () => onNavigate('purchases'), accent: '#d97706' }] : []),
   ];
 
   return (
@@ -560,7 +620,8 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
         <h2 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
           Quick Actions
         </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        {quickActions.length > 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${quickActions.length}, 1fr)`, gap: 12 }}>
           {quickActions.map(q => (
             <button key={q.label} onClick={q.action} style={{
               padding: '18px 20px', borderRadius: 12,
@@ -587,6 +648,9 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
             </button>
           ))}
         </div>
+        ) : (
+          <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>No quick actions available for your role.</p>
+        )}
       </div>
 
       {/* ── Bottom row: Recent Sales + Low Stock ──────────── */}
@@ -667,7 +731,7 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct }) {
 }
 
 // Products Tab Component
-function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated, toast }) {
+function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated, toast, canCreate = true, canEdit = true, canDelete = true }) {
   const API_BASE = process.env.REACT_APP_API_URL
     ? process.env.REACT_APP_API_URL.replace('/api', '')
     : 'http://localhost:8000';
@@ -819,6 +883,7 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
       title: 'Actions',
       render: (_, row) => (
         <div style={{ display: 'flex', gap: 8 }}>
+          {canEdit && (
           <button
             onClick={() => setEditingProduct(row)}
             style={{
@@ -828,6 +893,8 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           >
             Edit
           </button>
+          )}
+          {canDelete && (
           <button
             onClick={() => { setDeleteError(null); setDeletingProduct(row); }}
             style={{
@@ -837,6 +904,7 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           >
             Delete
           </button>
+          )}
         </div>
       )
     }
@@ -868,6 +936,7 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}>
             Expiry Tracker
           </button>
+          {canCreate && (
           <button onClick={onAddProduct} style={{
             padding: '9px 20px', borderRadius: 8, border: 'none',
             background: '#4f46e5', color: '#fff', cursor: 'pointer',
@@ -877,6 +946,7 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           onMouseLeave={e => { e.currentTarget.style.background = '#4f46e5'; }}>
             + Add Product
           </button>
+          )}
         </div>
       </div>
 
@@ -1169,7 +1239,7 @@ const supS = {
 };
 
 // Categories Tab Component
-function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategoryUpdated, onCategoryDeleted }) {
+function CategoriesTab({ categories, loading, token, canCreate = true, canEdit = true, canDelete = true, onCategoryAdded, onCategoryUpdated, onCategoryDeleted }) {
   const [showAddModal, setShowAddModal]       = useState(false);
   const [editingCat, setEditingCat]           = useState(null);
   const [deletingCat, setDeletingCat]         = useState(null);
@@ -1283,6 +1353,7 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
             {categories.length} {categories.length === 1 ? 'category' : 'categories'} — organise your products into logical groups
           </p>
         </div>
+        {canCreate && (
         <button onClick={openAdd} style={{
           padding: '9px 20px', borderRadius: 8, border: 'none',
           background: '#4f46e5', color: '#fff', cursor: 'pointer',
@@ -1292,6 +1363,7 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
         onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
           + Add Category
         </button>
+        )}
       </div>
 
       {loading ? (
@@ -1303,8 +1375,8 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
           <EmptyState
             title="No categories yet"
             description="Create categories to organise your products better."
-            actionLabel="Add First Category"
-            onAction={openAdd}
+            actionLabel={canCreate ? "Add First Category" : undefined}
+            onAction={canCreate ? openAdd : undefined}
           />
         </div>
       ) : (
@@ -1326,8 +1398,8 @@ function CategoriesTab({ categories, loading, token, onCategoryAdded, onCategory
                     {new Date(category.created_at).toLocaleDateString()}
                   </span>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => openEdit(category)} style={catS.editBtn}>Edit</button>
-                    <button onClick={() => { setDeleteError(null); setDeletingCat(category); }} style={catS.deleteBtn}>Delete</button>
+                    {canEdit && <button onClick={() => openEdit(category)} style={catS.editBtn}>Edit</button>}
+                    {canDelete && <button onClick={() => { setDeleteError(null); setDeletingCat(category); }} style={catS.deleteBtn}>Delete</button>}
                   </div>
                 </div>
               </div>
@@ -1476,7 +1548,7 @@ function focusInputWrap(e, focused) {
 }
 
 // Suppliers Tab Component
-function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded, onSupplierUpdated, onSupplierDeleted }) {
+function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded, onSupplierUpdated, onSupplierDeleted, canCreate = true, canEdit = true, canDelete = true }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const EMPTY_FORM = { name: '', contact: '', email: '', address: '' };
@@ -1575,6 +1647,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
               onChange={e => setSearch(e.target.value)}
             />
           )}
+          {canCreate && (
           <button onClick={openAdd} style={{
             padding: '9px 20px', borderRadius: 8, border: 'none',
             background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
@@ -1583,6 +1656,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
           onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
             + Add Supplier
           </button>
+          )}
         </div>
       </div>
 
@@ -1592,7 +1666,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
         </div>
       ) : suppliers.length === 0 ? (
         <div style={styles.contentCard}>
-          <EmptyState title="No suppliers yet" description="Add suppliers to track where you purchase your products." actionLabel="Add First Supplier" onAction={openAdd} />
+          <EmptyState title="No suppliers yet" description="Add suppliers to track where you purchase your products." actionLabel={canCreate ? "Add First Supplier" : undefined} onAction={canCreate ? openAdd : undefined} />
         </div>
       ) : filtered.length === 0 ? (
         <div style={styles.contentCard}>
@@ -1626,12 +1700,16 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
               </div>
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+                {canEdit && (
                 <button onClick={() => openEdit(supplier)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                   Edit
                 </button>
+                )}
+                {canDelete && (
                 <button onClick={() => handleDelete(supplier)} disabled={deletingId === supplier.id} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                   {deletingId === supplier.id ? 'Deleting…' : 'Delete'}
                 </button>
+                )}
               </div>
             </div>
           ))}
@@ -1693,7 +1771,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
 }
 
 // Customers Tab Component
-function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded, onCustomerUpdated, onCustomerDeleted }) {
+function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded, onCustomerUpdated, onCustomerDeleted, canCreate = true, canEdit = true, canDelete = true }) {
   const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const [showModal, setShowModal]   = useState(false);
@@ -1702,6 +1780,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // customer pending deletion
   const [search, setSearch]         = useState('');
 
   const openAdd = () => {
@@ -1719,7 +1798,6 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
   };
 
   const handleDelete = async (customer) => {
-    if (!window.confirm(`Delete customer "${customer.name}"? This cannot be undone.`)) return;
     setDeletingId(customer.id);
     try {
       const res = await fetch(`${API}/customers/${customer.id}?tenant_id=${user.tenant_id}`, {
@@ -1730,7 +1808,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
       onCustomerDeleted(customer.id);
       toast.success('Customer deleted', `"${customer.name}" has been removed.`);
     } catch { toast.error('Delete failed', 'Could not reach the server.'); }
-    finally { setDeletingId(null); }
+    finally { setDeletingId(null); setConfirmDelete(null); }
   };
 
   const handleSubmit = async (e) => {
@@ -1786,6 +1864,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
               onChange={e => setSearch(e.target.value)}
             />
           )}
+          {canCreate && (
           <button onClick={openAdd} style={{
             padding: '9px 20px', borderRadius: 8, border: 'none',
             background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
@@ -1794,6 +1873,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
           onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
             + Add Customer
           </button>
+          )}
         </div>
       </div>
 
@@ -1952,7 +2032,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
           {!search && (
             <div style={{ fontSize: 13, marginBottom: 16 }}>Add your first customer to get started.</div>
           )}
-          {!search && (
+          {!search && canCreate && (
             <Button variant="primary" icon="+" iconPosition="left" onClick={openAdd}>Add Customer</Button>
           )}
         </div>
@@ -2002,6 +2082,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  {canEdit && (
                   <button
                     onClick={() => openEdit(c)}
                     style={{
@@ -2012,8 +2093,10 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
                   >
                     Edit
                   </button>
+                  )}
+                  {canDelete && (
                   <button
-                    onClick={() => handleDelete(c)}
+                    onClick={() => setConfirmDelete(c)}
                     disabled={deletingId === c.id}
                     style={{
                       padding: '8px 18px', borderRadius: 10, border: 'none',
@@ -2024,7 +2107,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
                   >
                     {deletingId === c.id ? 'Deleting…' : 'Delete'}
                   </button>
-                </div>
+                  )}                </div>
               </div>
             ))}
           </div>
@@ -2045,10 +2128,62 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
           )}
         </>
       )}
+
+      {/* Delete Customer Confirmation Modal */}
+      <Modal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="Delete Customer"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setConfirmDelete(null)} style={{ minWidth: 90 }}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={deletingId === confirmDelete?.id}
+              onClick={() => handleDelete(confirmDelete)}
+              style={{ minWidth: 120 }}
+            >
+              Delete
+            </Button>
+          </div>
+        }
+      >
+        {confirmDelete && (
+          <div style={{ padding: '8px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{
+                width: 46, height: 46, borderRadius: '50%',
+                background: '#fef2f2', border: '2px solid #fecaca',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 22, flexShrink: 0,
+              }}>
+                🗑️
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                  Delete "{confirmDelete.name}"?
+                </p>
+                {confirmDelete.email && (
+                  <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>{confirmDelete.email}</p>
+                )}
+              </div>
+            </div>
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fecaca',
+              borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#b91c1c',
+            }}>
+              ⚠️ This action is permanent and cannot be undone.
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
-function POSTab({ products, categories, customers, token, user, onSaleCompleted }) {
+function POSTab({ products, categories, customers, token, user, onSaleCompleted, canSell = true }) {
   const [search, setSearch]           = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart, setCart]               = useState([]);
@@ -2695,18 +2830,18 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted 
 
               <button
                 onClick={handleCheckout}
-                disabled={cart.length === 0 || submitting}
+                disabled={cart.length === 0 || submitting || !canSell}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: cart.length === 0 ? '#e2e8f0' : '#16a34a',
-                  color: cart.length === 0 ? '#94a3b8' : '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#16a34a',
+                  color: (cart.length === 0 || !canSell) ? '#94a3b8' : '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell) ? 'not-allowed' : 'pointer',
                   transition: 'background 0.15s', letterSpacing: '0.02em',
                 }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting) e.currentTarget.style.background = '#15803d'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting) e.currentTarget.style.background = '#16a34a'; }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#15803d'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#16a34a'; }}
               >
-                {submitting ? 'Processing…' : 'Complete Sale'}
+                {!canSell ? 'No permission to sell' : submitting ? 'Processing…' : 'Complete Sale'}
               </button>
             </div>
           </div>
@@ -2850,12 +2985,15 @@ function formatSaleDateTime(saleDate, createdAt) {
 }
 
 // Sales Tab Component
-function SalesTab({ sales, loading, onNewSale, token, user }) {
+function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, canEdit = true, canDelete = false, onSaleDeleted }) {
   const [viewingSale, setViewingSale]   = useState(null);
   const [editingSale, setEditingSale]   = useState(null);
   const [editForm, setEditForm]         = useState({});
   const [editSaving, setEditSaving]     = useState(false);
   const [editError, setEditError]       = useState(null);
+  const [deletingSale, setDeletingSale] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError]   = useState(null);
   const [localSales, setLocalSales]     = useState(sales);
 
   // Keep localSales in sync when parent refreshes
@@ -2903,11 +3041,20 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
 
   const openEdit = (sale) => {
     setEditingSale(sale);
+    const items = sale.sale_items || sale.saleItems || [];
     setEditForm({
-      payment_method: sale.payment_method || 'cash',
+      payment_method:  sale.payment_method || 'cash',
       discount_amount: sale.discount_amount || '',
-      tax_amount: sale.tax_amount || '',
-      notes: sale.notes || '',
+      tax_amount:      sale.tax_amount || '',
+      notes:           sale.notes || '',
+      customer_type:   sale.customer ? 'existing' : 'walk_in',
+      customer_id:     sale.customer?.id || '',
+      items: items.map(i => ({
+        product_id: i.product_id,
+        name:       i.product?.name || `Product #${i.product_id}`,
+        quantity:   i.quantity,
+        price:      i.price,
+      })),
     });
     setEditError(null);
   };
@@ -2916,6 +3063,21 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
     setEditSaving(true);
     setEditError(null);
     try {
+      const body = {
+        payment_method:  editForm.payment_method,
+        discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
+        tax_amount:      editForm.tax_amount !== ''      ? parseFloat(editForm.tax_amount)      : null,
+        notes:           editForm.notes || null,
+        customer_type:   editForm.customer_type,
+        ...(editForm.customer_type === 'existing' && editForm.customer_id
+          ? { customer_id: parseInt(editForm.customer_id) }
+          : {}),
+        items: editForm.items.map(i => ({
+          product_id: i.product_id,
+          quantity:   parseInt(i.quantity),
+          price:      parseFloat(i.price),
+        })),
+      };
       const res = await fetch(`${API}/sales/${editingSale.id}`, {
         method: 'PUT',
         headers: {
@@ -2923,12 +3085,7 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          payment_method:  editForm.payment_method,
-          discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
-          tax_amount:      editForm.tax_amount !== ''      ? parseFloat(editForm.tax_amount)      : null,
-          notes:           editForm.notes || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setEditError(data?.message || 'Failed to update sale.'); return; }
@@ -2938,6 +3095,30 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
       setEditError('Network error. Check your connection.');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`${API}/sales/${deletingSale.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) { setDeleteError(data?.message || 'Failed to delete sale.'); return; }
+      const deletedSale = deletingSale;
+      setLocalSales(prev => prev.filter(s => s.id !== deletedSale.id));
+      if (onSaleDeleted) onSaleDeleted(deletedSale);
+      setDeletingSale(null);
+    } catch {
+      setDeleteError('Network error. Check your connection.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -2987,7 +3168,9 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
     {
       key: 'user',
       title: 'Staff',
-      render: (value) => value?.name || 'N/A'
+      render: (value) => value?.name
+        ? value.name
+        : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 12 }}>Deleted user</span>
     },
     {
       key: 'actions',
@@ -3008,6 +3191,7 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
           >
             👁
           </button>
+          {canEdit && (
           <button
             title="Edit sale"
             onClick={() => openEdit(row)}
@@ -3022,6 +3206,23 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
           >
             ✏️
           </button>
+          )}
+          {canDelete && (
+          <button
+            title="Delete sale"
+            onClick={() => { setDeleteError(null); setDeletingSale(row); }}
+            style={{
+              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #fecaca',
+              background: '#fff5f5', color: '#dc2626', cursor: 'pointer',
+              fontSize: 15, fontWeight: 600, lineHeight: 1,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff5f5'}
+          >
+            🗑️
+          </button>
+          )}
         </div>
       )
     },
@@ -3050,12 +3251,14 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
           <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Sales</h1>
           <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Track all your sales transactions and revenue</p>
         </div>
+        {canCreate && (
         <button onClick={onNewSale}
           style={{ padding: '10px 22px', borderRadius: 9, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: 7 }}
           onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
           onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}>
           <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New Sale
         </button>
+        )}
       </div>
 
       {/* ── KPI cards ── */}
@@ -3623,7 +3826,7 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
                     </div>
                   )}
                   <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span>👤</span> Served by: {viewingSale.user?.name || 'N/A'}
+                    <span>👤</span> Served by: {viewingSale.user?.name || 'Deleted user'}
                   </div>
                 </div>
                 <div>
@@ -3721,7 +3924,7 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
         isOpen={!!editingSale}
         onClose={() => setEditingSale(null)}
         title={`Edit Sale #${editingSale?.id}`}
-        size="sm"
+        size="md"
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditingSale(null)}>Cancel</Button>
@@ -3730,57 +3933,177 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
         }
       >
         {editingSale && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {editError && (
               <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
                 ⚠️ {editError}
               </div>
             )}
 
+            {/* ── Items ── */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Payment Method</label>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Items</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {editForm.items?.map((item, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: 6, alignItems: 'center', background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.name}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Qty</label>
+                      <input
+                        type="number" min="1"
+                        style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                        value={item.quantity}
+                        onChange={e => setEditForm(p => ({
+                          ...p,
+                          items: p.items.map((it, i) => i === idx ? { ...it, quantity: e.target.value } : it),
+                        }))}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Price (UGX)</label>
+                      <input
+                        type="number" min="0"
+                        style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                        value={item.price}
+                        onChange={e => setEditForm(p => ({
+                          ...p,
+                          items: p.items.map((it, i) => i === idx ? { ...it, price: e.target.value } : it),
+                        }))}
+                      />
+                    </div>
+                    <button
+                      title="Remove item"
+                      onClick={() => setEditForm(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
+                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 4, lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+                {editForm.items?.length === 0 && (
+                  <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: '12px 0' }}>No items. Add at least one item before saving.</div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Customer ── */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Customer</label>
               <select
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
-                value={editForm.payment_method}
-                onChange={e => setEditForm(p => ({ ...p, payment_method: e.target.value }))}
+                value={editForm.customer_type}
+                onChange={e => setEditForm(p => ({ ...p, customer_type: e.target.value, customer_id: '' }))}
               >
-                <option value="cash">💵 Cash</option>
-                <option value="card">💳 Card</option>
-                <option value="mobile_money">📱 Mobile Money</option>
-                <option value="bank_transfer">🏦 Bank Transfer</option>
+                <option value="walk_in">Walk-in Customer</option>
+                <option value="existing">Existing Customer</option>
               </select>
+              {editForm.customer_type === 'existing' && (
+                <input
+                  type="number"
+                  placeholder="Customer ID"
+                  style={{ width: '100%', marginTop: 6, padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  value={editForm.customer_id}
+                  onChange={e => setEditForm(p => ({ ...p, customer_id: e.target.value }))}
+                />
+              )}
             </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
-              <input
-                type="number" min="0"
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                value={editForm.discount_amount}
-                onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
-                placeholder="0"
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
-              <input
-                type="number" min="0"
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                value={editForm.tax_amount}
-                onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}
-                placeholder="0"
-              />
+            {/* ── Payment & Financials ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Payment Method</label>
+                <select
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                  value={editForm.payment_method}
+                  onChange={e => setEditForm(p => ({ ...p, payment_method: e.target.value }))}
+                >
+                  <option value="cash">💵 Cash</option>
+                  <option value="card">💳 Card</option>
+                  <option value="mobile_money">📱 Mobile Money</option>
+                  <option value="bank_transfer">🏦 Bank Transfer</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
+                <input
+                  type="number" min="0"
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  value={editForm.discount_amount}
+                  onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
+                <input
+                  type="number" min="0"
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  value={editForm.tax_amount}
+                  onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
             </div>
 
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Notes (Optional)</label>
               <textarea
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 72, boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 60, boxSizing: 'border-box' }}
                 value={editForm.notes}
                 onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
                 placeholder="Add any notes…"
               />
+            </div>
+
+            {/* Live total preview */}
+            {editForm.items?.length > 0 && (() => {
+              const subtotal  = editForm.items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.price) || 0), 0);
+              const discount  = parseFloat(editForm.discount_amount) || 0;
+              const tax       = parseFloat(editForm.tax_amount) || 0;
+              const total     = Math.max(0, subtotal - discount + tax);
+              return (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                    <span>Subtotal</span><span>UGX {subtotal.toLocaleString()}</span>
+                  </div>
+                  {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Discount</span><span>− UGX {discount.toLocaleString()}</span></div>}
+                  {tax > 0      && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Tax</span><span>+ UGX {tax.toLocaleString()}</span></div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, marginTop: 6, borderTop: '1px solid #bbf7d0', paddingTop: 6, color: '#15803d' }}>
+                    <span>Total</span><span>UGX {total.toLocaleString()}</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Delete Confirm Modal ── */}
+      <Modal
+        isOpen={!!deletingSale}
+        onClose={() => setDeletingSale(null)}
+        title="Delete Sale"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeletingSale(null)}>Cancel</Button>
+            <Button variant="danger" loading={deleteLoading} onClick={handleDelete}>Yes, Delete</Button>
+          </>
+        }
+      >
+        {deletingSale && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {deleteError && (
+              <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                ⚠️ {deleteError}
+              </div>
+            )}
+            <div style={{ fontSize: 14, color: '#374151', lineHeight: 1.6 }}>
+              Are you sure you want to delete <strong>Sale #{deletingSale.id}</strong> for{' '}
+              <strong>UGX {parseFloat(deletingSale.total_amount || 0).toLocaleString()}</strong>?
+            </div>
+            <div style={{ padding: '10px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, fontSize: 13, color: '#9a3412' }}>
+              ⚠️ This will permanently delete the sale and restore stock for all items. This cannot be undone.
             </div>
           </div>
         )}
@@ -3790,7 +4113,7 @@ function SalesTab({ sales, loading, onNewSale, token, user }) {
 }
 
 // Purchases Tab Component
-function PurchasesTab({ purchases, loading, token, user, suppliers, products, toast, onPurchaseAdded }) {
+function PurchasesTab({ purchases, loading, token, user, suppliers, products, categories = [], toast, onPurchaseAdded, onPurchaseUpdated, onPurchaseDeleted, canCreate = true, canEdit = true, canDelete = true }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   // Each line can be 'existing' (select from products) or 'new' (fill in details)
@@ -3798,7 +4121,11 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
     mode: 'existing',          // 'existing' | 'new'
     product_id: '',            // used when mode === 'existing'
     // new product fields
-    np_name: '', np_sku: '', np_unit: '', np_price: '', np_reorder: '',
+    np_name: '', np_sku: '', np_barcode: '', np_unit: '',
+    np_category_id: '', np_category_mode: 'existing', np_new_category: '',
+    np_price: '', np_reorder: '',
+    np_description: '',
+    np_track_expiry: false, np_manufacture_date: '', np_expiry_date: '',
     // shared
     quantity: '', cost_price: '',
   };
@@ -3811,7 +4138,23 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch]         = useState('');
 
+  // Edit state
+  const [editingPurchase, setEditingPurchase]   = useState(null);
+  const [editSupplierId, setEditSupplierId]     = useState('');
+  const [editLines, setEditLines]               = useState([]);
+  const [editSaving, setEditSaving]             = useState(false);
+  const [editError, setEditError]               = useState(null);
+  // Delete state
+  const [confirmDelete, setConfirmDelete]       = useState(null);
+  const [deleting, setDeleting]                 = useState(false);
+
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+
+  const inp = {
+    width: '100%', padding: '8px 10px', border: '1.5px solid #e2e8f0',
+    borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+    background: '#fff', boxSizing: 'border-box',
+  };
 
   const openModal = () => {
     setSupplierId('');
@@ -3861,11 +4204,18 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
         quantity:   parseInt(l.quantity),
         cost_price: parseFloat(l.cost_price),
         new_product: {
-          name:          l.np_name,
-          sku:           l.np_sku   || undefined,
-          unit:          l.np_unit  || undefined,
-          price:         parseFloat(l.np_price),
-          reorder_level: l.np_reorder ? parseFloat(l.np_reorder) : undefined,
+          name:             l.np_name,
+          sku:              l.np_sku          || undefined,
+          barcode:          l.np_barcode      || undefined,
+          unit:             l.np_unit         || undefined,
+          category_id:      l.np_category_mode === 'existing' ? (l.np_category_id || undefined) : undefined,
+          new_category:     l.np_category_mode === 'new'      ? (l.np_new_category || undefined) : undefined,
+          price:            parseFloat(l.np_price),
+          reorder_level:    l.np_reorder ? parseFloat(l.np_reorder) : undefined,
+          description:      l.np_description  || undefined,
+          track_expiry:     l.np_track_expiry  ? 1 : 0,
+          manufacture_date: l.np_track_expiry ? (l.np_manufacture_date || undefined) : undefined,
+          expiry_date:      l.np_track_expiry ? (l.np_expiry_date      || undefined) : undefined,
         },
       };
     });
@@ -3892,7 +4242,63 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
     new Date(p.purchase_date).toLocaleDateString().includes(search)
   );
 
-  const inp = { ...supS.input };
+  const openEdit = (p) => {
+    setEditingPurchase(p);
+    setEditSupplierId(String(p.supplier_id || p.supplier?.id || ''));
+    setEditLines((p.purchase_items || []).map(item => ({
+      ...EMPTY_LINE,
+      mode: 'existing',
+      product_id: String(item.product_id),
+      quantity:   String(item.quantity),
+      cost_price: String(item.cost_price),
+    })));
+    setEditError(null);
+  };
+
+  const setEditLine = (i, key, val) =>
+    setEditLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editSupplierId) { setEditError('Please select a supplier.'); return; }
+    const validLines = editLines.filter(l => l.product_id && l.quantity && l.cost_price);
+    if (validLines.length === 0) { setEditError('Add at least one complete product line.'); return; }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const res  = await fetch(`${API_URL}/purchases/${editingPurchase.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          supplier_id: editSupplierId,
+          items: validLines.map(l => ({
+            product_id: parseInt(l.product_id),
+            quantity:   parseInt(l.quantity),
+            cost_price: parseFloat(l.cost_price),
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setEditError(json?.message || 'Failed to update purchase.'); return; }
+      onPurchaseUpdated(json.data);
+      toast.success('Purchase updated', 'The purchase has been corrected successfully.');
+      setEditingPurchase(null);
+    } catch { setEditError('Could not reach the server.'); }
+    finally { setEditSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/purchases/${confirmDelete.id}`, { method: 'DELETE', headers });
+      if (!res.ok) { const j = await res.json(); toast.error('Delete failed', j?.message || 'Failed to delete purchase.'); return; }
+      onPurchaseDeleted(confirmDelete.id, confirmDelete);
+      toast.success('Purchase deleted', 'Stock levels have been reversed.');
+      setConfirmDelete(null);
+    } catch { toast.error('Delete failed', 'Could not reach the server.'); }
+    finally { setDeleting(false); }
+  };
 
   return (
     <div style={styles.pageContainer}>
@@ -3917,6 +4323,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
               onChange={e => setSearch(e.target.value)}
             />
           )}
+          {canCreate && (
           <button
             onClick={openModal}
             style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
@@ -3925,6 +4332,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
           >
             + Record Purchase
           </button>
+          )}
         </div>
       </div>
 
@@ -3936,22 +4344,22 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
           <EmptyState
             title={search ? 'No purchases match your search' : 'No purchases yet'}
             description={search ? 'Try a different supplier or date.' : 'Record purchases from suppliers to track inventory costs.'}
-            actionLabel={search ? 'Clear Search' : 'Record First Purchase'}
-            onAction={search ? () => setSearch('') : openModal}
+            actionLabel={search ? 'Clear Search' : (canCreate ? 'Record First Purchase' : undefined)}
+            onAction={search ? () => setSearch('') : (canCreate ? openModal : undefined)}
           />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                {['Date', 'Supplier', 'Items', 'Total Amount', 'Details'].map(h => (
+                {['Date', 'Supplier', 'Items', 'Total Amount', 'Details', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(p => (
-                <>
-                  <tr key={p.id} style={{ borderBottom: expandedId === p.id ? 'none' : '1px solid #f8fafc', background: expandedId === p.id ? '#fafbff' : 'transparent' }}>
+                <React.Fragment key={p.id}>
+                  <tr style={{ borderBottom: expandedId === p.id ? 'none' : '1px solid #f8fafc', background: expandedId === p.id ? '#fafbff' : 'transparent' }}>
                     <td style={{ padding: '14px', color: '#475569', fontSize: 14 }}>{new Date(p.purchase_date).toLocaleDateString()}</td>
                     <td style={{ padding: '14px' }}>
                       <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
@@ -3972,10 +4380,32 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                         {expandedId === p.id ? '▲ Hide' : '▼ View'}
                       </button>
                     </td>
+                    {(canEdit || canDelete) && (
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {canEdit && (
+                          <button
+                            onClick={() => openEdit(p)}
+                            style={{ padding: '5px 11px', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => setConfirmDelete(p)}
+                            style={{ padding: '5px 11px', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    )}
                   </tr>
                   {expandedId === p.id && (
                     <tr key={`${p.id}-exp`}>
-                      <td colSpan={5} style={{ padding: '0 14px 16px', background: '#fafbff' }}>
+                      <td colSpan={canEdit || canDelete ? 6 : 5} style={{ padding: '0 14px 16px', background: '#fafbff' }}>
                         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
@@ -4000,7 +4430,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -4089,6 +4519,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                 {/* New product rows */}
                 {line.mode === 'new' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                    {/* Row 1: Name + SKU + Barcode */}
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name *</span>
@@ -4101,11 +4533,61 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                           onChange={e => setLine(i, 'np_sku', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
-                        <input style={inp} placeholder="e.g. kg, pcs, box" value={line.np_unit}
-                          onChange={e => setLine(i, 'np_unit', e.target.value)} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Barcode</span>
+                        <input style={inp} placeholder="Scan or type" value={line.np_barcode}
+                          onChange={e => setLine(i, 'np_barcode', e.target.value)} />
                       </div>
                     </div>
+
+                    {/* Row 2: Unit + Category */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
+                        <select style={inp} value={line.np_unit}
+                          onChange={e => setLine(i, 'np_unit', e.target.value)}>
+                          <option value="">— Select unit —</option>
+                          {['Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)', 'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)', 'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans'].map(u => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Category</span>
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                          {['existing', 'new'].map(m => (
+                            <button
+                              key={m} type="button"
+                              onClick={() => setLine(i, 'np_category_mode', m)}
+                              style={{
+                                flex: 1, padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                                border: '1.5px solid',
+                                borderColor: line.np_category_mode === m ? '#4f46e5' : '#e2e8f0',
+                                background:  line.np_category_mode === m ? '#ede9fe' : '#f8fafc',
+                                color:       line.np_category_mode === m ? '#4f46e5' : '#94a3b8',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {m === 'existing' ? '📂 Existing' : '➕ New'}
+                            </button>
+                          ))}
+                        </div>
+                        {line.np_category_mode === 'existing' ? (
+                          <select style={inp} value={line.np_category_id}
+                            onChange={e => setLine(i, 'np_category_id', e.target.value)}>
+                            <option value="">— No category —</option>
+                            {(categories || []).map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input style={inp} placeholder="Type new category name"
+                            value={line.np_new_category}
+                            onChange={e => setLine(i, 'np_new_category', e.target.value)} />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 3: Selling Price + Reorder + Qty + Cost Price */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Selling Price (UGX) *</span>
@@ -4128,6 +4610,56 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
                     </div>
+
+                    {/* Description */}
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Description (optional)</span>
+                      <textarea style={{ ...inp, minHeight: 56, resize: 'vertical' }}
+                        placeholder="Optional product description…"
+                        value={line.np_description}
+                        onChange={e => setLine(i, 'np_description', e.target.value)} />
+                    </div>
+
+                    {/* Track expiry toggle */}
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                      padding: '10px 12px', background: '#f8fafc', borderRadius: 8,
+                      border: '1.5px solid #e2e8f0',
+                    }}>
+                      <div style={{
+                        width: 40, height: 22, borderRadius: 11, position: 'relative', flexShrink: 0,
+                        background: line.np_track_expiry ? '#4f46e5' : '#e2e8f0', transition: 'background 0.2s',
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 2, width: 18, height: 18,
+                          background: '#fff', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          transform: line.np_track_expiry ? 'translateX(20px)' : 'translateX(2px)',
+                          transition: 'transform 0.2s',
+                        }} />
+                      </div>
+                      <input type="checkbox" style={{ display: 'none' }}
+                        checked={line.np_track_expiry}
+                        onChange={e => setLine(i, 'np_track_expiry', e.target.checked)} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Track Expiry Date</span>
+                    </label>
+
+                    {/* Expiry date fields */}
+                    {line.np_track_expiry && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '10px 12px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Manufacture Date</span>
+                          <input style={inp} type="date" value={line.np_manufacture_date}
+                            onChange={e => setLine(i, 'np_manufacture_date', e.target.value)} />
+                        </div>
+                        <div>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Expiry Date *</span>
+                          <input style={inp} type="date" value={line.np_expiry_date}
+                            min={line.np_manufacture_date || undefined}
+                            onChange={e => setLine(i, 'np_expiry_date', e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+
                     <div style={{ fontSize: 12, color: '#6366f1', background: '#eef2ff', borderRadius: 6, padding: '6px 10px' }}>
                       ✨ This product will be created in your inventory with the quantity above as its initial stock.
                     </div>
@@ -4167,12 +4699,173 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, to
           </div>
         </form>
       </Modal>
+
+      {/* ── Edit Purchase Modal ── */}
+      <Modal isOpen={!!editingPurchase} onClose={() => setEditingPurchase(null)} title="Edit Purchase" size="lg">
+        {editingPurchase && (
+          <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Supplier */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 5 }}>Supplier *</label>
+              <select
+                style={{ ...inp, padding: '10px 12px', borderRadius: 10, fontSize: 14 }}
+                value={editSupplierId}
+                onChange={e => setEditSupplierId(e.target.value)}
+                required
+              >
+                <option value="">— Select supplier —</option>
+                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+
+            {/* Line items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Items *</label>
+                <button
+                  type="button"
+                  onClick={() => setEditLines(prev => [...prev, { ...EMPTY_LINE }])}
+                  style={{ fontSize: 13, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  + Add Line
+                </button>
+              </div>
+
+              {editLines.map((line, i) => (
+                <div key={i} style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px', background: '#fff' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product *</span>
+                      <select
+                        style={inp}
+                        value={line.product_id}
+                        onChange={e => setEditLine(i, 'product_id', e.target.value)}
+                        required
+                      >
+                        <option value="">— Select product —</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty *</span>
+                      <input
+                        style={inp}
+                        type="number" min="1" placeholder="0"
+                        value={line.quantity}
+                        onChange={e => setEditLine(i, 'quantity', e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                      <input
+                        style={inp}
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        value={line.cost_price}
+                        onChange={e => setEditLine(i, 'cost_price', e.target.value)}
+                        required
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditLines(prev => prev.filter((_, idx) => idx !== i))}
+                      disabled={editLines.length === 1}
+                      style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: editLines.length === 1 ? 'not-allowed' : 'pointer', opacity: editLines.length === 1 ? 0.4 : 1, fontSize: 13, alignSelf: 'flex-end' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {/* line subtotal */}
+                  {(parseFloat(line.quantity) || 0) * (parseFloat(line.cost_price) || 0) > 0 && (
+                    <div style={{ marginTop: 8, textAlign: 'right', fontSize: 12, color: '#64748b' }}>
+                      Subtotal: <strong style={{ color: '#0f172a' }}>
+                        UGX {((parseFloat(line.quantity) || 0) * (parseFloat(line.cost_price) || 0)).toLocaleString()}
+                      </strong>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Grand total */}
+              {editLines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0), 0) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6, borderTop: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                    Total: UGX {editLines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0), 0).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {editError && (
+              <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                ⚠️ {editError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+              <Button type="button" variant="secondary" onClick={() => setEditingPurchase(null)} style={{ flex: 1 }}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={editSaving} style={{ flex: 1 }}>
+                {editSaving ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ── Delete Confirmation Modal ── */}
+      <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Delete Purchase">
+        {confirmDelete && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10 }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 600, color: '#991b1b', fontSize: 15 }}>
+                ⚠️ This action cannot be undone
+              </p>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: 14 }}>
+                Deleting this purchase will <strong>reverse all stock levels</strong> for the items in this order. The following purchase will be permanently removed:
+              </p>
+            </div>
+
+            <div style={{ background: '#f8fafc', borderRadius: 10, padding: '14px 16px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Supplier</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{confirmDelete.supplier?.name || 'N/A'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Date</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{new Date(confirmDelete.purchase_date).toLocaleDateString()}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Items</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{confirmDelete.purchase_items?.length || 0}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Total Amount</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#dc2626' }}>UGX {parseFloat(confirmDelete.total_amount || 0).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button type="button" variant="secondary" onClick={() => setConfirmDelete(null)} style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ flex: 1, padding: '10px 20px', borderRadius: 8, border: 'none', background: deleting ? '#fca5a5' : '#ef4444', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600 }}
+              >
+                {deleting ? 'Deleting…' : 'Yes, Delete Purchase'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
 
 // Stock Tab Component
-function StockTab({ products, stockMovements, token, onAdjusted }) {
+function StockTab({ products, stockMovements, token, onAdjusted, canCreate = true }) {
   const [form, setForm]               = useState({ product_id: '', type: 'IN', quantity: '', reason: '', date: '' });
   const [submitting, setSubmitting]   = useState(false);
   const [formError, setFormError]     = useState(null);
@@ -4269,9 +4962,10 @@ function StockTab({ products, stockMovements, token, onAdjusted }) {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: canCreate ? '340px 1fr' : '1fr', gap: 20, alignItems: 'start' }}>
 
         {/* ── Left: Adjust Stock form ── */}
+        {canCreate && (
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
             🗒️ Adjust Stock
@@ -4355,6 +5049,7 @@ function StockTab({ products, stockMovements, token, onAdjusted }) {
             </div>
           )}
         </div>
+        )}
 
         {/* ── Right: Movement History ── */}
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px' }}>
@@ -4454,10 +5149,11 @@ function ReportsTab({ data, loading, token }) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
   const [activeReport, setActiveReport] = useState('overview');
-  const [dailyDate, setDailyDate]       = useState(new Date().toISOString().split('T')[0]);
-  const [weeklyDate, setWeeklyDate]     = useState(new Date().toISOString().split('T')[0]);
-  const [monthlyMonth, setMonthlyMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [yearlyYear, setYearlyYear]     = useState(new Date().getFullYear().toString());
+  const [dailyDate, setDailyDate]             = useState(new Date().toISOString().split('T')[0]);
+  const [weeklyDate, setWeeklyDate]           = useState(new Date().toISOString().split('T')[0]);
+  const [monthlyMonth, setMonthlyMonth]       = useState(new Date().toISOString().slice(0, 7));
+  const [yearlyYear, setYearlyYear]           = useState(new Date().getFullYear().toString());
+  const [dailyPurchasesDate, setDailyPurchasesDate] = useState(new Date().toISOString().split('T')[0]);
   const [reportData, setReportData]     = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError]   = useState(null);
@@ -4507,6 +5203,7 @@ function ReportsTab({ data, loading, token }) {
       else if (activeReport === 'weekly') url = `${API_URL}/sales/weekly-report?date=${weeklyDate}`;
       else if (activeReport === 'monthly-sales') url = `${API_URL}/sales/monthly-report?month=${monthlyMonth}`;
       else if (activeReport === 'yearly') url = `${API_URL}/sales/yearly-report?year=${yearlyYear}`;
+      else if (activeReport === 'daily-purchases') url = `${API_URL}/purchases/daily-report?date=${dailyPurchasesDate}`;
       else url = `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
 
       const res  = await fetch(url, { headers });
@@ -4521,11 +5218,12 @@ function ReportsTab({ data, loading, token }) {
   const getPayColor = (m) => paymentColors[m] || '#64748b';
 
   const tabs = [
-    { id: 'overview',       label: 'Overview'         },
-    { id: 'daily',          label: 'Daily Sales'       },
-    { id: 'weekly',         label: 'Weekly Sales'      },
-    { id: 'monthly-sales',  label: 'Monthly Sales'     },
-    { id: 'yearly',         label: 'Yearly Report'     },
+    { id: 'overview',          label: 'Overview'           },
+    { id: 'daily',             label: 'Daily Sales'        },
+    { id: 'weekly',            label: 'Weekly Sales'       },
+    { id: 'monthly-sales',     label: 'Monthly Sales'      },
+    { id: 'yearly',            label: 'Yearly Report'      },
+    { id: 'daily-purchases',   label: 'Daily Purchases'    },
   ];
 
   return (
@@ -5221,6 +5919,161 @@ function ReportsTab({ data, loading, token }) {
           )}
         </div>
       )}
+
+      {/* ── DAILY PURCHASES REPORT ── */}
+      {activeReport === 'daily-purchases' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Date picker + button */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={supS.label}>Select Date</label>
+              <input
+                type="date"
+                value={dailyPurchasesDate}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={e => { setDailyPurchasesDate(e.target.value); setReportData(null); }}
+                style={{ ...supS.input, width: 180 }}
+              />
+            </div>
+            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+          </div>
+
+          {reportError && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+              ⚠️ {reportError}
+            </div>
+          )}
+
+          {reportData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+              {/* KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                {[
+                  { label: 'Date',         value: new Date(reportData.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
+                  { label: 'Transactions', value: reportData.total_transactions,                                                                                                              icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
+                  { label: 'Total Spent',  value: `UGX ${parseFloat(reportData.total_amount || 0).toLocaleString()}`,                                                                         icon: '💸', color: '#dc2626', bg: '#fef2f2' },
+                ].map(k => (
+                  <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{k.icon}</div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
+                      <p style={{ margin: '4px 0 0', fontSize: k.label === 'Date' ? 13 : 20, fontWeight: 700, color: k.color }}>{k.value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* No purchases message */}
+              {reportData.total_transactions === 0 && (
+                <div style={{ padding: '32px', textAlign: 'center', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                  <p style={{ fontSize: 32, margin: '0 0 8px' }}>🛒</p>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#334155' }}>No purchases on this day</p>
+                  <p style={{ margin: '6px 0 0', fontSize: 13, color: '#94a3b8' }}>Try selecting a different date.</p>
+                </div>
+              )}
+
+              {reportData.total_transactions > 0 && (
+                <>
+                  {/* Supplier breakdown */}
+                  {reportData.by_supplier && reportData.by_supplier.length > 0 && (
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
+                      <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Spend by Supplier</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {(() => {
+                          const maxSpend = Math.max(...reportData.by_supplier.map(s => parseFloat(s.total_amount || 0)), 1);
+                          return reportData.by_supplier.map(s => (
+                            <div key={s.supplier}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{s.supplier}</span>
+                                <span style={{ fontSize: 13, color: '#64748b' }}>
+                                  {s.transactions} order{s.transactions !== 1 ? 's' : ''}
+                                  &nbsp;·&nbsp;
+                                  <strong style={{ color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</strong>
+                                </span>
+                              </div>
+                              <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${(parseFloat(s.total_amount || 0) / maxSpend) * 100}%`, background: '#4f46e5', borderRadius: 4, transition: 'width 0.4s ease' }} />
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Detailed purchases table */}
+                  <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ padding: '18px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Purchase Details</h3>
+                      <span style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 20, padding: '3px 10px' }}>
+                        {reportData.total_transactions} order{reportData.total_transactions !== 1 ? 's' : ''} · {reportData.total_items} item{reportData.total_items !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    {(reportData.purchases || []).map((purchase, pi) => (
+                      <div key={purchase.id} style={{ borderBottom: pi < reportData.purchases.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                        {/* Purchase header */}
+                        <div style={{ padding: '14px 24px', background: '#fafbff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <span style={{ width: 28, height: 28, borderRadius: 8, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#4f46e5', flexShrink: 0 }}>
+                              #{pi + 1}
+                            </span>
+                            <div>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                                {purchase.supplier?.name || 'Unknown Supplier'}
+                              </span>
+                              <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 8 }}>
+                                Order #{purchase.id}
+                              </span>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#4f46e5' }}>
+                            UGX {parseFloat(purchase.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {/* Line items */}
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc' }}>
+                              {['Product', 'Qty', 'Unit Cost', 'Subtotal'].map(h => (
+                                <th key={h} style={{ padding: '8px 24px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(purchase.purchase_items || []).map((item, idx) => (
+                              <tr key={idx} style={{ borderTop: '1px solid #f8fafc' }}>
+                                <td style={{ padding: '10px 24px', fontSize: 13, color: '#0f172a', fontWeight: 500 }}>
+                                  {item.product?.name || `Product #${item.product_id}`}
+                                  {item.product?.sku && <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8' }}>({item.product.sku})</span>}
+                                </td>
+                                <td style={{ padding: '10px 24px', fontSize: 13, color: '#475569' }}>{item.quantity}</td>
+                                <td style={{ padding: '10px 24px', fontSize: 13, color: '#475569' }}>UGX {parseFloat(item.cost_price || 0).toLocaleString()}</td>
+                                <td style={{ padding: '10px 24px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                                  UGX {(item.quantity * parseFloat(item.cost_price || 0)).toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+
+                    {/* Grand total footer */}
+                    <div style={{ padding: '16px 24px', background: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>TOTAL SPENT ON {new Date(reportData.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()}</span>
+                      <span style={{ fontSize: 18, fontWeight: 800, color: '#f8fafc' }}>UGX {parseFloat(reportData.total_amount || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -5447,36 +6300,157 @@ function AiTab({ token, data }) {
   );
 }
 
+// ── Reusable grouped permission picker for custom roles ─────────────────────
+function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleName }) {
+  const GROUP_ICONS = {
+    products: '📦', categories: '🏷️', suppliers: '🏭', sales: '🧾',
+    purchases: '🛒', stock: '📊', users: '👥', roles: '🔐',
+  };
+
+  const allIds = Object.values(permissions).flat().map(p => p.id);
+
+  const selectAll = () => onChange(allIds);
+  const clearAll  = () => onChange([]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <label style={supS.label}>
+          {roleName ? `Permissions for "${roleName}" *` : 'Permissions *'}
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={selectAll}
+            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid #7c3aed', background: '#f5f3ff', color: '#7c3aed', cursor: 'pointer', fontWeight: 600 }}>
+            Select All
+          </button>
+          <button type="button" onClick={clearAll}
+            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+        {Object.entries(permissions).map(([group, perms], gi) => {
+          const groupIds = perms.map(p => p.id);
+          const allSel   = groupIds.every(id => selectedIds.includes(id));
+          const someSel  = groupIds.some(id => selectedIds.includes(id));
+
+          const toggleGroup = () => {
+            if (allSel) {
+              onChange(selectedIds.filter(id => !groupIds.includes(id)));
+            } else {
+              onChange([...new Set([...selectedIds, ...groupIds])]);
+            }
+          };
+
+          return (
+            <div key={group} style={{ borderBottom: gi < Object.entries(permissions).length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+              <button type="button" onClick={toggleGroup} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                background: allSel ? '#f5f3ff' : someSel ? '#fafbff' : '#fff',
+                transition: 'background 0.12s',
+              }}>
+                <div style={{
+                  width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                  border: `2px solid ${allSel ? '#7c3aed' : someSel ? '#a78bfa' : '#cbd5e1'}`,
+                  background: allSel ? '#7c3aed' : someSel ? '#ede9fe' : '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {allSel  && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                  {!allSel && someSel && <span style={{ color: '#7c3aed', fontSize: 11, lineHeight: 1, fontWeight: 900 }}>–</span>}
+                </div>
+                <span style={{ fontSize: 13 }}>{GROUP_ICONS[group] || '⚙️'}</span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize' }}>{group}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  {groupIds.filter(id => selectedIds.includes(id)).length}/{perms.length} selected
+                </span>
+              </button>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 14px 12px 42px' }}>
+                {perms.map(p => {
+                  const checked = selectedIds.includes(p.id);
+                  return (
+                    <button key={p.id} type="button"
+                      onClick={() => onChange(checked ? selectedIds.filter(id => id !== p.id) : [...selectedIds, p.id])}
+                      style={{
+                        padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                        border: `1.5px solid ${checked ? '#7c3aed' : '#e2e8f0'}`,
+                        background: checked ? '#7c3aed' : '#f8fafc',
+                        color: checked ? '#fff' : '#475569',
+                        transition: 'all 0.12s',
+                      }}>
+                      {checked && '✓ '}{p.display_name || p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {selectedIds.length === 0 && (
+        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Select at least one permission</p>
+      )}
+      {selectedIds.length > 0 && (
+        <p style={{ fontSize: 12, color: '#7c3aed', margin: 0, fontWeight: 500 }}>
+          {selectedIds.length} permission{selectedIds.length !== 1 ? 's' : ''} selected
+        </p>
+      )}
+    </div>
+  );
+}
+
 // Users Tab Component
-function UsersTab({ token, user: currentUser, toast }) {
+function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit = false, canDelete = false, canViewRoles = false }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-  const EMPTY_FORM = { name: '', email: '', password: '', role_ids: [] };
+  const EMPTY_FORM = {
+    name: '', email: '', password: '',
+    role_ids: [],
+    useCustomRole: false,
+    customRoleName: '', customRoleDesc: '', customPermIds: [],
+    // for editing existing custom role permissions
+    editCustomRoleId: null, editCustomPermIds: [],
+  };
   const [users, setUsers]           = useState([]);
   const [roles, setRoles]           = useState([]);
+  const [permissions, setPermissions] = useState({}); // grouped by category
   const [loading, setLoading]       = useState(true);
   const [showModal, setShowModal]   = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
-  const [search, setSearch]         = useState('');
+  const [editTarget, setEditTarget]         = useState(null);
+  const [form, setForm]                     = useState(EMPTY_FORM);
+  const [saving, setSaving]                 = useState(false);
+  const [formError, setFormError]           = useState(null);
+  const [deletingId, setDeletingId]         = useState(null);
+  const [confirmDelete, setConfirmDelete]   = useState(null); // holds user object pending deletion
+  const [confirmDeleteRole, setConfirmDeleteRole] = useState(null); // holds role object pending deletion
+  const [deletingRoleId, setDeletingRoleId] = useState(null);
+  const [search, setSearch]                 = useState('');
+  const [loadingUserDetail, setLoadingUserDetail] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+
+  const isOwner = currentUser.roles?.some(r => r.name === 'owner');
+  const isOwnerOrAdmin = currentUser.roles?.some(r => ['owner', 'admin'].includes(r.name));
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [uRes, rRes] = await Promise.all([
+        const [uRes, rRes, pRes] = await Promise.all([
           fetch(`${API_URL}/users`, { headers }),
           fetch(`${API_URL}/roles`, { headers }),
+          fetch(`${API_URL}/permissions`, { headers }),
         ]);
         const uJson = await uRes.json();
         const rJson = await rRes.json();
+        const pJson = await pRes.json();
         setUsers(uJson.data || []);
         setRoles(rJson.data || []);
+        setPermissions(pJson.data || {});
       } catch { /* silent */ }
       finally { setLoading(false); }
     };
@@ -5490,11 +6464,35 @@ function UsersTab({ token, user: currentUser, toast }) {
     setShowModal(true);
   };
 
-  const openEdit = (u) => {
-    setEditTarget(u);
-    setForm({ name: u.name, email: u.email, password: '', role_ids: (u.roles || []).map(r => r.id) });
+  // Load full user details (including custom role permissions) before opening edit modal
+  const openEdit = async (u) => {
     setFormError(null);
+    setLoadingUserDetail(true);
     setShowModal(true);
+    try {
+      const res  = await fetch(`${API_URL}/users/${u.id}`, { headers });
+      const json = await res.json();
+      const fullUser = res.ok ? json.data : u;
+
+      // Detect if any of the user's roles is a custom (non-default, tenant-owned) role
+      const customRole = (fullUser.roles || []).find(r => r.is_custom);
+      const editCustomPermIds = customRole ? (customRole.permissions || []).map(p => p.id) : [];
+
+      setEditTarget(fullUser);
+      setForm({
+        ...EMPTY_FORM,
+        name:    fullUser.name,
+        email:   fullUser.email,
+        role_ids: (fullUser.roles || []).map(r => r.id),
+        editCustomRoleId:  customRole ? customRole.id : null,
+        editCustomPermIds,
+      });
+    } catch {
+      setEditTarget(u);
+      setForm({ ...EMPTY_FORM, name: u.name, email: u.email, role_ids: (u.roles || []).map(r => r.id) });
+    } finally {
+      setLoadingUserDetail(false);
+    }
   };
 
   const toggleRole = (id) => {
@@ -5506,12 +6504,65 @@ function UsersTab({ token, user: currentUser, toast }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.role_ids.length === 0) { setFormError('Please assign at least one role.'); return; }
+
+    // ── ADD USER: Custom role path (atomic endpoint) ──────────────────────────
+    if (!editTarget && form.useCustomRole) {
+      if (!form.customRoleName.trim()) { setFormError('Please enter a name for the custom role.'); return; }
+      if (form.customPermIds.length === 0) { setFormError('Please select at least one permission for the custom role.'); return; }
+      setSaving(true);
+      setFormError(null);
+      try {
+        const res  = await fetch(`${API_URL}/users/with-custom-role`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            name:             form.name,
+            email:            form.email,
+            password:         form.password,
+            role_name:        form.customRoleName.trim(),
+            role_description: form.customRoleDesc.trim() || null,
+            permission_ids:   form.customPermIds,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) { setFormError(json?.message || 'Failed to create user with custom role.'); return; }
+
+        const newUser = json.data;
+        const newRole = json.data.custom_role;
+        setUsers(prev => [...prev, newUser]);
+        if (newRole) setRoles(prev => [...prev, newRole]);
+        toast.success('User added', `"${newUser.name}" has been added with custom role "${newRole?.name || form.customRoleName}".`);
+        setShowModal(false);
+      } catch { setFormError('Could not reach the server.'); }
+      finally { setSaving(false); }
+      return;
+    }
+
+    // ── ADD USER: Standard role path ─────────────────────────────────────────
+    if (!editTarget && !form.useCustomRole && form.role_ids.length === 0) {
+      setFormError('Please assign at least one role.');
+      return;
+    }
+
+    // ── EDIT USER ─────────────────────────────────────────────────────────────
     setSaving(true);
     setFormError(null);
     try {
       const isEdit = !!editTarget;
-      const body   = isEdit
+
+      // If editing and there's a custom role with changed permissions, update them first
+      if (isEdit && form.editCustomRoleId && isOwner) {
+        const permRes = await fetch(`${API_URL}/users/${editTarget.id}/custom-role-permissions`, {
+          method: 'PUT', headers,
+          body: JSON.stringify({
+            role_id:        form.editCustomRoleId,
+            permission_ids: form.editCustomPermIds,
+          }),
+        });
+        const permJson = await permRes.json();
+        if (!permRes.ok) { setFormError(permJson?.message || 'Failed to update custom role permissions.'); setSaving(false); return; }
+      }
+
+      const body = isEdit
         ? { name: form.name, email: form.email, role_ids: form.role_ids, ...(form.password ? { password: form.password } : {}) }
         : { name: form.name, email: form.email, password: form.password, role_ids: form.role_ids };
 
@@ -5535,7 +6586,6 @@ function UsersTab({ token, user: currentUser, toast }) {
   };
 
   const handleDelete = async (u) => {
-    if (!window.confirm(`Delete user "${u.name}"? This cannot be undone.`)) return;
     setDeletingId(u.id);
     try {
       const res = await fetch(`${API_URL}/users/${u.id}`, { method: 'DELETE', headers });
@@ -5543,7 +6593,20 @@ function UsersTab({ token, user: currentUser, toast }) {
       setUsers(prev => prev.filter(x => x.id !== u.id));
       toast.success('User deleted', `"${u.name}" has been removed.`);
     } catch { toast.error('Delete failed', 'Could not reach the server.'); }
-    finally { setDeletingId(null); }
+    finally { setDeletingId(null); setConfirmDelete(null); }
+  };
+
+  const handleDeleteRole = async (role) => {
+    setDeletingRoleId(role.id);
+    try {
+      const res = await fetch(`${API_URL}/roles/${role.id}`, { method: 'DELETE', headers });
+      if (!res.ok) { const j = await res.json(); toast.error('Delete failed', j?.message || 'Failed to delete role.'); return; }
+      setRoles(prev => prev.filter(r => r.id !== role.id));
+      // Also clear the role from any users displayed in the table
+      setUsers(prev => prev.map(u => ({ ...u, roles: (u.roles || []).filter(r => r.id !== role.id) })));
+      toast.success('Role deleted', `"${role.name}" has been removed.`);
+    } catch { toast.error('Delete failed', 'Could not reach the server.'); }
+    finally { setDeletingRoleId(null); setConfirmDeleteRole(null); }
   };
 
   const filtered = users.filter(u =>
@@ -5551,8 +6614,6 @@ function UsersTab({ token, user: currentUser, toast }) {
     u.email?.toLowerCase().includes(search.toLowerCase())
   );
   const { paged: pagedUsers, page: uPage, setPage: setUPage, totalPages: uTotalPages, total: uTotal, pageSize: uPageSize } = usePagination(filtered);
-
-  const isOwner = currentUser.roles?.some(r => r.name === 'owner');
 
   const roleColors = { owner: '#7c3aed', admin: '#2563eb', manager: '#0891b2', cashier: '#16a34a' };
   const getRoleColor = (name) => roleColors[name] || '#64748b';
@@ -5575,11 +6636,13 @@ function UsersTab({ token, user: currentUser, toast }) {
             <input style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f1f5f9', fontSize: 13, outline: 'none', width: 220 }}
               placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} />
           )}
-          <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
-            + Add User
-          </button>
+          {canCreate && (
+            <button onClick={openAdd} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+              onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+              + Add User
+            </button>
+          )}
         </div>
       </div>
       {/* Users table */}
@@ -5599,7 +6662,7 @@ function UsersTab({ token, user: currentUser, toast }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                {['User', 'Email', 'Roles', 'Joined', 'Actions'].map(h => (
+                {['User', 'Email', 'Roles', 'Joined', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                 ))}
               </tr>
@@ -5644,14 +6707,17 @@ function UsersTab({ token, user: currentUser, toast }) {
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                   </td>
                   {/* Actions */}
+                  {(canEdit || canDelete) && (
                   <td style={{ padding: '14px 14px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => openEdit(u)} style={{
-                        padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
-                        background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                      }}>Edit</button>
-                      {u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
-                        <button onClick={() => handleDelete(u)} disabled={deletingId === u.id} style={{
+                      {canEdit && (
+                        <button onClick={() => openEdit(u)} style={{
+                          padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
+                          background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                        }}>Edit</button>
+                      )}
+                      {canDelete && u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
+                        <button onClick={() => setConfirmDelete(u)} disabled={deletingId === u.id} style={{
                           padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
                           background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
                         }}>
@@ -5660,6 +6726,7 @@ function UsersTab({ token, user: currentUser, toast }) {
                       )}
                     </div>
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -5669,6 +6736,173 @@ function UsersTab({ token, user: currentUser, toast }) {
         )}
       </div>
 
+      {/* ── Roles section (visible to anyone with canViewRoles; delete only for owners) ─── */}
+      {canViewRoles && (
+        <div style={{ marginTop: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Roles</h2>
+              <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>All roles available in this business — default system roles cannot be deleted.</p>
+            </div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            {roles.length === 0 ? (
+              <div style={{ padding: '32px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                No custom roles yet. Create one by adding a user with a custom role.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                    {['Role Name', 'Type', 'Description', 'Assigned To', ...(isOwner ? ['Actions'] : [])].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {roles.map(role => {
+                    const assignedUsers = users.filter(u => (u.roles || []).some(r => r.id === role.id));
+                    return (
+                      <tr key={role.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                        <td style={{ padding: '13px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 15 }}>{role.is_default ? '🛡️' : '✨'}</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{role.name}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '13px 16px' }}>
+                          <span style={{
+                            padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                            background: role.is_default ? '#ede9fe' : '#f0fdf4',
+                            color: role.is_default ? '#7c3aed' : '#16a34a',
+                          }}>
+                            {role.is_default ? 'System' : 'Custom'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '13px 16px', color: '#475569', fontSize: 13 }}>{role.description || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                        <td style={{ padding: '13px 16px' }}>
+                          {assignedUsers.length === 0 ? (
+                            <span style={{ color: '#94a3b8', fontSize: 13 }}>Unassigned</span>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {assignedUsers.map(u => (
+                                <span key={u.id} style={{ padding: '2px 9px', borderRadius: 20, fontSize: 12, fontWeight: 500, background: '#f1f5f9', color: '#475569' }}>
+                                  {u.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        {isOwner && (
+                        <td style={{ padding: '13px 16px' }}>
+                          {!role.is_default && (
+                            <button
+                              onClick={() => setConfirmDeleteRole(role)}
+                              disabled={deletingRoleId === role.id}
+                              style={{
+                                padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
+                                background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                                opacity: deletingRoleId === role.id ? 0.6 : 1,
+                              }}
+                            >
+                              {deletingRoleId === role.id ? '…' : 'Delete'}
+                            </button>
+                          )}
+                        </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Role Confirmation Modal */}
+      <Modal
+        isOpen={!!confirmDeleteRole}
+        onClose={() => setConfirmDeleteRole(null)}
+        title="Delete Custom Role"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setConfirmDeleteRole(null)} style={{ minWidth: 90 }}>Cancel</Button>
+            <Button
+              variant="danger"
+              loading={deletingRoleId === confirmDeleteRole?.id}
+              onClick={() => handleDeleteRole(confirmDeleteRole)}
+              style={{ minWidth: 120 }}
+            >
+              Delete Role
+            </Button>
+          </div>
+        }
+      >
+        {confirmDeleteRole && (
+          <div style={{ padding: '8px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+              <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#fef2f2', border: '2px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                🗑️
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Delete "{confirmDeleteRole.name}"?</p>
+                <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>{confirmDeleteRole.description || 'Custom role'}</p>
+              </div>
+            </div>
+            {users.filter(u => (u.roles || []).some(r => r.id === confirmDeleteRole.id)).length > 0 && (
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', marginBottom: 12 }}>
+                ⚠️ This role is currently assigned to {users.filter(u => (u.roles || []).some(r => r.id === confirmDeleteRole.id)).length} user(s). They will lose this role immediately.
+              </div>
+            )}
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#b91c1c' }}>
+              ⚠️ This action is permanent and cannot be undone.
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete User Confirmation Modal */}
+      <Modal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="Delete User"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setConfirmDelete(null)} style={{ minWidth: 90 }}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={deletingId === confirmDelete?.id}
+              onClick={() => handleDelete(confirmDelete)}
+              style={{ minWidth: 110 }}
+            >
+              Delete
+            </Button>
+          </div>
+        }
+      >
+        {confirmDelete && (
+          <div style={{ padding: '8px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+              <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#fef2f2', border: '2px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                🗑️
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Delete "{confirmDelete.name}"?</p>
+                <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b' }}>{confirmDelete.email}</p>
+              </div>
+            </div>
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#b91c1c' }}>
+              ⚠️ This action is permanent. The user will lose access immediately and cannot be recovered.
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Add / Edit Modal */}
       <Modal
         isOpen={showModal}
@@ -5676,6 +6910,12 @@ function UsersTab({ token, user: currentUser, toast }) {
         title={editTarget ? 'Edit User' : 'Add New User'}
         size="lg"
       >
+        {loadingUserDetail ? (
+          <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
+            <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTop: '3px solid #7c3aed', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+            Loading user details…
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {/* Row 1: Name + Email */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -5699,30 +6939,159 @@ function UsersTab({ token, user: currentUser, toast }) {
               required={!editTarget} minLength={editTarget ? 0 : 8} />
           </div>
 
-          {/* Roles */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <label style={supS.label}>Assign Roles *</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              {roles.map(r => {
-                const selected = form.role_ids.includes(r.id);
-                const color    = getRoleColor(r.name);
-                return (
-                  <button key={r.id} type="button" onClick={() => toggleRole(r.id)} style={{
-                    padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    border: `2px solid ${selected ? color : '#e2e8f0'}`,
-                    background: selected ? color + '18' : '#f8fafc',
-                    color: selected ? color : '#64748b',
-                    transition: 'all 0.15s',
-                  }}>
-                    {selected ? '✓ ' : ''}{r.name}
-                  </button>
-                );
-              })}
+          {/* Role Mode Toggle — only shown when adding a new user (owners only can create custom roles) */}
+          {!editTarget && isOwner && (
+            <div style={{ display: 'flex', gap: 0, borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, useCustomRole: false, customRoleName: '', customRoleDesc: '', customPermIds: [] }))}
+                style={{
+                  flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  border: 'none', borderRight: '1px solid #e2e8f0',
+                  background: !form.useCustomRole ? '#4f46e5' : '#f8fafc',
+                  color: !form.useCustomRole ? '#fff' : '#64748b',
+                  transition: 'all 0.15s',
+                }}
+              >
+                🎭 Predefined Role
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, useCustomRole: true, role_ids: [] }))}
+                style={{
+                  flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  border: 'none',
+                  background: form.useCustomRole ? '#7c3aed' : '#f8fafc',
+                  color: form.useCustomRole ? '#fff' : '#64748b',
+                  transition: 'all 0.15s',
+                }}
+              >
+                ✨ Custom Role
+              </button>
             </div>
-            {form.role_ids.length === 0 && (
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Select at least one role</p>
-            )}
-          </div>
+          )}
+
+          {/* ── PREDEFINED ROLE PICKER ── */}
+          {(!form.useCustomRole || editTarget) && !(editTarget && form.editCustomRoleId) && (            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label style={supS.label}>Assign Roles *</label>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {roles.map(r => {
+                  const selected = form.role_ids.includes(r.id);
+                  const color    = getRoleColor(r.name);
+
+                  const ROLE_META = {
+                    owner:   { icon: '👑', desc: 'Full access to everything — settings, users, all reports, all data.', perms: ['Manage users & roles', 'All reports & analytics', 'View & edit all sales', 'Manage products & inventory', 'Manage suppliers & customers', 'All purchases'] },
+                    admin:   { icon: '🛡️', desc: 'Same as owner except cannot delete the owner account.', perms: ['Manage users & roles', 'All reports & analytics', 'View & edit all sales', 'Manage products & inventory', 'Manage suppliers & customers', 'All purchases'] },
+                    manager: { icon: '📋', desc: 'Operational access — can see all sales, run reports, manage stock.', perms: ['View all sales (any staff)', 'Daily, weekly, monthly & yearly reports', 'Manage products & inventory', 'Manage suppliers & customers', 'View purchases'] },
+                    cashier: { icon: '🧾', desc: 'POS-only access — can process sales and view only their own transactions.', perms: ['Process sales (POS)', 'View own sales only', 'View products & stock levels', 'View customers'] },
+                  };
+
+                  const meta = ROLE_META[r.name?.toLowerCase()] || { icon: '👤', desc: r.description || 'Custom role.', perms: [] };
+
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => toggleRole(r.id)}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 14,
+                        padding: '14px 16px', borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                        border: `2px solid ${selected ? color : '#e2e8f0'}`,
+                        background: selected ? color + '0d' : '#fafbff',
+                        transition: 'all 0.15s',
+                        width: '100%',
+                      }}
+                    >
+                      <div style={{
+                        width: 22, height: 22, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+                        border: `2px solid ${selected ? color : '#cbd5e1'}`,
+                        background: selected ? color : '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}>
+                        {selected && <span style={{ color: '#fff', fontSize: 12, lineHeight: 1 }}>✓</span>}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 16 }}>{meta.icon}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: selected ? color : '#0f172a', textTransform: 'capitalize' }}>{r.name}</span>
+                          {selected && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: color + '20', color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Selected</span>}
+                        </div>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>{meta.desc}</p>
+                        {meta.perms.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            {meta.perms.map(p => (
+                              <span key={p} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: selected ? color + '15' : '#f1f5f9', color: selected ? color : '#475569', fontWeight: 500 }}>
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {form.role_ids.length === 0 && (
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Select at least one role</p>
+              )}
+            </div>
+          )}
+
+          {/* ── EDIT: Custom Role Permission Manager (owner only) ── */}
+          {editTarget && form.editCustomRoleId && isOwner && (
+            <CustomRolePermissionEditor
+              permissions={permissions}
+              selectedIds={form.editCustomPermIds}
+              onChange={ids => setForm(f => ({ ...f, editCustomPermIds: ids }))}
+              roleName={(editTarget.roles || []).find(r => r.id === form.editCustomRoleId)?.name}
+            />
+          )}
+
+          {/* ── EDIT: Custom role info for non-owners (read-only notice) ── */}
+          {editTarget && form.editCustomRoleId && !isOwner && (
+            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#6d28d9' }}>
+              ✨ This user has a <strong>custom role</strong>. Only the owner can modify its permissions.
+            </div>
+          )}
+
+          {/* ── ADD USER: CUSTOM ROLE BUILDER ── */}
+          {form.useCustomRole && !editTarget && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#6d28d9' }}>
+                <strong>Custom Role</strong> — a new role will be created and assigned exclusively to this user. You pick exactly which permissions it includes.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label style={supS.label}>Role Name *</label>
+                  <input
+                    style={supS.input}
+                    placeholder="e.g. Warehouse Staff"
+                    value={form.customRoleName}
+                    onChange={e => setForm(f => ({ ...f, customRoleName: e.target.value }))}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label style={supS.label}>Description (optional)</label>
+                  <input
+                    style={supS.input}
+                    placeholder="e.g. Can view stock and process sales"
+                    value={form.customRoleDesc}
+                    onChange={e => setForm(f => ({ ...f, customRoleDesc: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <CustomRolePermissionEditor
+                permissions={permissions}
+                selectedIds={form.customPermIds}
+                onChange={ids => setForm(f => ({ ...f, customPermIds: ids }))}
+              />
+            </div>
+          )}
 
           {formError && (
             <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
@@ -5739,13 +7108,14 @@ function UsersTab({ token, user: currentUser, toast }) {
             </Button>
           </div>
         </form>
+        )}
       </Modal>
     </div>
   );
 }
 
 // Stock Movements Tab Component
-function StockMovementsTab({ token, products }) {
+function StockMovementsTab({ token, products, canCreate = true }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 

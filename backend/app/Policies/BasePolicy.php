@@ -51,4 +51,20 @@ abstract class BasePolicy
         }
         return false;
     }
+
+    /**
+     * Check if the user passes the role check OR holds a specific permission.
+     *
+     * This allows tenants with custom roles to be granted fine-grained
+     * access (e.g. purchases.edit) without needing a full manager/owner role.
+     *
+     * @param User   $user       The authenticated user
+     * @param array  $roles      Roles that automatically grant access
+     * @param string $permission Permission name that also grants access
+     * @return bool
+     */
+    protected function hasRoleOrPermission(User $user, array $roles, string $permission): bool
+    {
+        return $this->hasAnyRole($user, $roles) || $user->hasPermission($permission);
+    }
 }

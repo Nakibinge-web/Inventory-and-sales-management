@@ -54,12 +54,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Roles
     Route::prefix('roles')->group(function () {
         Route::get('/', [RoleController::class, 'index']);
-        Route::post('/', [RoleController::class, 'store']);
-        Route::post('/assign', [RoleController::class, 'assign']);
-        Route::delete('/revoke', [RoleController::class, 'revoke']);
         Route::get('/{role}', [RoleController::class, 'show']);
-        Route::put('/{role}', [RoleController::class, 'update']);
-        Route::delete('/{role}', [RoleController::class, 'destroy']);
+
+        // Only owners can create, modify, or assign custom roles
+        Route::middleware('role:owner')->group(function () {
+            Route::post('/', [RoleController::class, 'store']);
+            Route::post('/assign', [RoleController::class, 'assign']);
+            Route::post('/with-permissions', [RoleController::class, 'storeWithPermissions']);
+            Route::delete('/revoke', [RoleController::class, 'revoke']);
+            Route::put('/{role}', [RoleController::class, 'update']);
+            Route::delete('/{role}', [RoleController::class, 'destroy']);
+        });
     });
 
     // Permissions
@@ -89,11 +94,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/by-role',  [UserController::class, 'getUsersByRole']);
         Route::get('/{user}',   [UserController::class, 'show']);
 
-        // Only owners and admins can create, update, or delete users
-        Route::middleware('role:owner,admin')->group(function () {
-            Route::post('/',          [UserController::class, 'store']);
-            Route::put('/{user}',     [UserController::class, 'update']);
-            Route::delete('/{user}',  [UserController::class, 'destroy']);
+        // Only owners and admins can create, update, or delete users,
+        // OR users who have the relevant granular permission.
+        // Permission checks are handled inside the controller.
+        Route::post('/',          [UserController::class, 'store']);
+        Route::put('/{user}',     [UserController::class, 'update']);
+        Route::delete('/{user}',  [UserController::class, 'destroy']);
+
+        // Only owners can create users with custom roles or modify custom role permissions
+        Route::middleware('role:owner')->group(function () {
+            Route::post('/with-custom-role',                    [UserController::class, 'storeWithCustomRole']);
+            Route::put('/{user}/custom-role-permissions',       [UserController::class, 'updateCustomRolePermissions']);
         });
     });
 
@@ -135,22 +146,21 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     });
 
     // Sales
+    // No route-level role middleware — the SaleController handles all permission
+    // checks itself, supporting both built-in roles and custom permission grants
+    // (sales.create, sales.view, sales.report).
     Route::prefix('sales')->group(function () {
-        // Reports restricted to managers and above — must be before /{sale} wildcard
-        Route::middleware('role:owner,admin,manager')->group(function () {
-            Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
-            Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
-            Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
-            Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
-        });
+        // Report routes must be declared before /{sale} wildcard
+        Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
+        Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
+        Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
+        Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
 
-        // Cashiers and above can view and record sales
-        Route::middleware('role:owner,admin,manager,cashier')->group(function () {
-            Route::get('/',        [SaleController::class, 'index']);
-            Route::post('/',       [SaleController::class, 'store']);
-            Route::get('/{sale}',  [SaleController::class, 'show']);
-            Route::put('/{sale}',  [SaleController::class, 'update']);
-        });
+        Route::get('/',        [SaleController::class, 'index']);
+        Route::post('/',       [SaleController::class, 'store']);
+        Route::get('/{sale}',  [SaleController::class, 'show']);
+        Route::put('/{sale}',  [SaleController::class, 'update']);
+        Route::delete('/{sale}', [SaleController::class, 'destroy']);
     });
 
     // Purchases
@@ -158,7 +168,10 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/', [PurchaseController::class, 'index']);
         Route::post('/', [PurchaseController::class, 'store']);
         Route::get('/monthly-report', [PurchaseController::class, 'getMonthlyReport']);
+        Route::get('/daily-report',   [PurchaseController::class, 'getDailyReport']);
         Route::get('/{purchase}', [PurchaseController::class, 'show']);
+        Route::put('/{purchase}', [PurchaseController::class, 'update']);
+        Route::delete('/{purchase}', [PurchaseController::class, 'destroy']);
     });
 
     // AI Assistant
