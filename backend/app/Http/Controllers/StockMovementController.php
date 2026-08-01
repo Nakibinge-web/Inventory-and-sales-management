@@ -41,18 +41,20 @@ class StockMovementController extends Controller
                     $product->increment('stock', $validated['quantity']);
                 } elseif ($validated['type'] === 'ADJUSTMENT') {
                     // quantity field holds the new absolute stock level
+                    $oldStock = $product->stock;
                     $product->update(['stock' => $validated['quantity']]);
-                    $validated['quantity'] = abs($validated['quantity'] - $product->stock);
+                    $validated['quantity'] = abs($validated['quantity'] - $oldStock);
                 }
 
                 $movement = StockMovement::create([
-                    'tenant_id'    => Auth::user()->tenant_id,
-                    'product_id'   => $validated['product_id'],
-                    'type'         => $validated['type'],
-                    'quantity'     => $validated['quantity'],
-                    'reference_id' => 'manual',
-                    'reason'       => $validated['reason'] ?? null,
-                    'date'         => $validated['date'] ?? now()->toDateString(),
+                    'tenant_id'      => Auth::user()->tenant_id,
+                    'product_id'     => $validated['product_id'],
+                    'type'           => $validated['type'],
+                    'quantity'       => $validated['quantity'],
+                    'reference_id'   => 'manual',
+                    'reference_type' => 'manual',
+                    'reason'         => $validated['reason'] ?? null,
+                    'date'           => $validated['date'] ?? now()->toDateString(),
                 ]);
 
                 return response()->json([

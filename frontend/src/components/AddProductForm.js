@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Button from './ui/Button';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -19,17 +19,42 @@ const EMPTY = {
 };
 
 export default function AddProductForm({ token, categories, suppliers, onSuccess, onCancel }) {
-  const [form, setForm]       = useState(EMPTY);
-  const [image, setImage]     = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-  const fileRef               = useRef();
+  const [form, setForm]         = useState(EMPTY);
+  const [skuAuto, setSkuAuto]   = useState(false);   // whether current SKU was auto-generated
+  const [skuLoading, setSkuLoading] = useState(false);
+  const [image, setImage]       = useState(null);
+  const [preview, setPreview]   = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const fileRef                 = useRef();
 
   const handle = e => {
     const { name, value, type, checked } = e.target;
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    // If user manually edits SKU, stop treating it as auto
+    if (name === 'sku') setSkuAuto(false);
   };
+
+  // Called when product name field loses focus
+  const handleNameBlur = useCallback(async (e) => {
+    const name = e.target.value.trim();
+    if (!name) return;
+    // Only auto-fill if SKU is currently empty or was previously auto-generated
+    if (form.sku && !skuAuto) return;
+
+    setSkuLoading(true);
+    try {
+      const res  = await fetch(`${API}/products/generate-sku?name=${encodeURIComponent(name)}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setForm(f => ({ ...f, sku: data.sku }));
+        setSkuAuto(true);
+      }
+    } catch { /* silent — user can still type SKU manually */ }
+    finally { setSkuLoading(false); }
+  }, [form.sku, skuAuto, token]);
 
   const handleImage = e => {
     const file = e.target.files[0];
@@ -88,19 +113,35 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     <form onSubmit={submit} style={s.form}>
 
       {/* ── Row 1: Name + SKU ── */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Product Name *">
           <input style={s.input} name="name" placeholder="e.g. Paracetamol 500mg"
-            value={form.name} onChange={handle} required />
+            value={form.name} onChange={handle} onBlur={handleNameBlur} required />
         </Field>
-        <Field label="SKU">
-          <input style={s.input} name="sku" placeholder="e.g. MED-001"
-            value={form.sku} onChange={handle} />
+        <Field label={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            SKU
+            {skuLoading && (
+              <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>generating…</span>
+            )}
+            {skuAuto && !skuLoading && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#7c3aed', padding: '1px 7px', borderRadius: 20, letterSpacing: '0.04em' }}>AUTO</span>
+            )}
+          </span>
+        }>
+          <input
+            style={{ ...s.input, background: skuAuto ? '#fafbff' : '#fff', borderColor: skuAuto ? '#c4b5fd' : '#e2e8f0' }}
+            name="sku"
+            placeholder={skuLoading ? 'Generating…' : 'e.g. Ap-001'}
+            value={form.sku}
+            onChange={handle}
+            title={skuAuto ? 'Auto-generated from product name. You can edit this.' : ''}
+          />
         </Field>
       </div>
 
       {/* ── Row 2: Barcode + Unit ── */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Barcode (optional)">
           <input style={s.input} name="barcode" placeholder="Scan or type barcode"
             value={form.barcode} onChange={handle} />
@@ -145,7 +186,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       </Field>
 
       {/* ── Row 3: Qty + Reorder ── */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Quantity *">
           <input style={s.input} name="stock" type="number" min="0"
             placeholder="0" value={form.stock} onChange={handle} required />
@@ -157,7 +198,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       </div>
 
       {/* ── Row 4: Cost + Selling price ── */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Cost Price">
           <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
             placeholder="0.00" value={form.cost_price} onChange={handle} />
@@ -213,7 +254,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       {/* ── Expiry date fields (shown when track_expiry is on) ── */}
       {form.track_expiry && (
         <div style={s.expiryBox}>
-          <div style={s.row}>
+          <div className="product-form-row" style={s.row}>
             <Field label="Manufacture Date">
               <input style={s.input} name="manufacture_date" type="date"
                 value={form.manufacture_date} onChange={handle} />
@@ -245,7 +286,11 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
 function Field({ label, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-      {label && <label style={s.label}>{label}</label>}
+      {label && (
+        <label style={s.label}>
+          {label}
+        </label>
+      )}
       {children}
     </div>
   );
@@ -254,7 +299,7 @@ function Field({ label, children }) {
 const s = {
   form:  { display: 'flex', flexDirection: 'column', gap: 16 },
   row:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.03em', textTransform: 'uppercase' },
+  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.03em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 },
   input: {
     padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',

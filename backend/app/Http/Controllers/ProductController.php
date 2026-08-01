@@ -10,6 +10,62 @@ use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
+    // ── SKU helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Build the two-letter prefix from the product name.
+     * "Apple Watch" → "Ap", "iPhone" → "iP", "TV" → "TV"
+     */
+    private function skuPrefix(string $name): string
+    {
+        // Strip leading/trailing whitespace, collapse inner spaces
+        $clean = trim(preg_replace('/\s+/', ' ', $name));
+        if (strlen($clean) === 0) return 'XX';
+
+        $words = explode(' ', $clean);
+        if (count($words) >= 2) {
+            // First letter of first word + first letter of second word, preserve original case
+            return substr($words[0], 0, 1) . substr($words[1], 0, 1);
+        }
+        // Single word: first two chars
+        return mb_substr($clean, 0, 2);
+    }
+
+    /**
+     * Find the next available sequential SKU for the given prefix and tenant.
+     * Returns e.g. "Ap-001", "Ap-002", …
+     */
+    private function nextSku(string $prefix, int $tenantId, ?int $excludeProductId = null): string
+    {
+        for ($n = 1; $n <= 9999; $n++) {
+            $candidate = $prefix . '-' . str_pad($n, 3, '0', STR_PAD_LEFT);
+            $query = Product::where('tenant_id', $tenantId)->where('sku', $candidate);
+            if ($excludeProductId) {
+                $query->where('id', '!=', $excludeProductId);
+            }
+            if (!$query->exists()) {
+                return $candidate;
+            }
+        }
+        // Fallback (should never happen in practice)
+        return $prefix . '-' . uniqid();
+    }
+
+    // ── API: generate SKU preview ────────────────────────────────────────────
+
+    public function generateSku(Request $request): JsonResponse
+    {
+        $name = trim($request->query('name', ''));
+        if (!$name) {
+            return response()->json(['success' => false, 'message' => 'name is required'], 422);
+        }
+
+        $prefix = $this->skuPrefix($name);
+        $sku    = $this->nextSku($prefix, auth()->user()->tenant_id);
+
+        return response()->json(['success' => true, 'sku' => $sku]);
+    }
+
     public function index(): JsonResponse
     {
         $products = Product::with(['category', 'supplier'])->get();
@@ -55,7 +111,7 @@ class ProductController extends Controller
         $product = Product::create([
             'tenant_id'        => auth()->user()->tenant_id,
             'name'             => $validated['name'],
-            'sku'              => $validated['sku'] ?? null,
+            'sku'              => $validated['sku'] ?? $this->nextSku($this->skuPrefix($validated['name']), auth()->user()->tenant_id),
             'barcode'          => $validated['barcode'] ?? null,
             'unit'             => $validated['unit'] ?? null,
             'category_id'      => $validated['category_id'] ?? null,

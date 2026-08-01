@@ -81,7 +81,22 @@ class PurchaseController extends Controller
                     $product = Product::create([
                         'tenant_id'        => $tenantId,
                         'name'             => $np['name'],
-                        'sku'              => $np['sku']              ?? null,
+                        'sku'              => !empty($np['sku'])
+                            ? $np['sku']
+                            : (function() use ($np, $tenantId) {
+                                $prefix = mb_strlen(trim($np['name'])) >= 2
+                                    ? (strpos(trim($np['name']), ' ') !== false
+                                        ? substr(explode(' ', trim($np['name']))[0], 0, 1) . substr(explode(' ', trim($np['name']))[1], 0, 1)
+                                        : mb_substr(trim($np['name']), 0, 2))
+                                    : 'XX';
+                                for ($n = 1; $n <= 9999; $n++) {
+                                    $candidate = $prefix . '-' . str_pad($n, 3, '0', STR_PAD_LEFT);
+                                    if (!Product::where('tenant_id', $tenantId)->where('sku', $candidate)->exists()) {
+                                        return $candidate;
+                                    }
+                                }
+                                return $prefix . '-' . uniqid();
+                            })(),
                         'barcode'          => $np['barcode']          ?? null,
                         'unit'             => $np['unit']             ?? null,
                         'category_id'      => $categoryId,
@@ -120,11 +135,13 @@ class PurchaseController extends Controller
                 Product::findOrFail($item['product_id'])->increment('stock', $item['quantity']);
 
                 StockMovement::create([
-                    'product_id'   => $item['product_id'],
-                    'type'         => 'IN',
-                    'quantity'     => $item['quantity'],
-                    'reference_id' => $purchase->id,
-                    'date'         => now(),
+                    'tenant_id'      => $tenantId,
+                    'product_id'     => $item['product_id'],
+                    'type'           => 'IN',
+                    'quantity'       => $item['quantity'],
+                    'reference_id'   => $purchase->id,
+                    'reference_type' => 'purchase',
+                    'date'           => now(),
                 ]);
             }
 
@@ -187,11 +204,13 @@ class PurchaseController extends Controller
                     Product::findOrFail($item['product_id'])->increment('stock', $item['quantity']);
 
                     StockMovement::create([
-                        'product_id'   => $item['product_id'],
-                        'type'         => 'IN',
-                        'quantity'     => $item['quantity'],
-                        'reference_id' => $purchase->id,
-                        'date'         => $request->input('purchase_date', $purchase->purchase_date),
+                        'tenant_id'      => auth()->user()->tenant_id,
+                        'product_id'     => $item['product_id'],
+                        'type'           => 'IN',
+                        'quantity'       => $item['quantity'],
+                        'reference_id'   => $purchase->id,
+                        'reference_type' => 'purchase',
+                        'date'           => $request->input('purchase_date', $purchase->purchase_date),
                     ]);
                 }
 

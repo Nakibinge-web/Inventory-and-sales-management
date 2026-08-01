@@ -211,7 +211,7 @@ export default function AuthPage() {
             <div className="brand-logo-ring" />
             <div className="brand-logo-icon">📦</div>
           </div>
-          <h1 className="brand-title">Business Yo!</h1>
+          <h1 className="brand-title"></h1>
           <p className="brand-sub">Inventory & Sales Management</p>
           <ul className="feature-list">
             {[

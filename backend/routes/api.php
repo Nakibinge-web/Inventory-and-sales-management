@@ -137,6 +137,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Products
     Route::prefix('products')->group(function () {
+        Route::get('/generate-sku', [ProductController::class, 'generateSku']);
         Route::get('/', [ProductController::class, 'index']);
         Route::post('/', [ProductController::class, 'store']);
         Route::get('/low-stock', [ProductController::class, 'getLowStock']);
