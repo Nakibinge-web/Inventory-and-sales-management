@@ -672,3 +672,33 @@ textarea.field-input { resize:vertical;min-height:80px; }
   object-fit: cover; border-radius: 6px;
   flex-shrink: 0;
 }
+
+/* ════════════════════════════════════════════════
+   PRINT STYLES FOR INVOICES & RECEIPTS
+   ════════════════════════════════════════════════ */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-invoice, #printable-invoice * {
+    visibility: visible;
+  }
+  #printable-invoice {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

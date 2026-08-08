@@ -209,7 +209,9 @@ export default function AuthPage() {
         <div className="brand-content">
           <div className="brand-logo-wrap">
             <div className="brand-logo-ring" />
-            <div className="brand-logo-icon">📦</div>
+            <div className="brand-logo-icon" style={{ background: '#ffffff', padding: 8 }}>
+              <img src="/zziwa logo.png" alt="Zziwa Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
           </div>
           <h1 className="brand-title"></h1>
           <p className="brand-sub">Inventory & Sales Management</p>
