@@ -114,13 +114,14 @@ export default function Dashboard({ user, token, onLogout }) {
     }
   }, [user.tenant_id, token]);
 
-  const handleAddProduct = (newProduct) => {
+  const handleAddProduct = (newProducts) => {
+    const arr = Array.isArray(newProducts) ? newProducts : [newProducts];
     setData(prev => ({
       ...prev,
-      products: [...prev.products, newProduct],
+      products: [...prev.products, ...arr],
       stats: {
         ...prev.stats,
-        totalProducts: prev.stats.totalProducts + 1
+        totalProducts: prev.stats.totalProducts + arr.length,
       }
     }));
     setShowAddProduct(false);
@@ -566,7 +567,7 @@ export default function Dashboard({ user, token, onLogout }) {
       <Modal
         isOpen={showAddProduct}
         onClose={() => setShowAddProduct(false)}
-        title="Add New Product"
+        title="Add Products"
         size="lg"
       >
         <AddProductForm
@@ -574,7 +575,7 @@ export default function Dashboard({ user, token, onLogout }) {
           tenantId={user.tenant_id}
           categories={data.categories}
           suppliers={data.suppliers}
-          onSuccess={(p) => { handleAddProduct(p); toast.success('Product added', `"${p.name}" added to inventory.`); }}
+          onSuccess={(p) => { handleAddProduct(p); toast.success('Product added', Array.isArray(p) && p.length > 1 ? `${p.length} products added to inventory.` : `"${Array.isArray(p) ? p[0]?.name : p?.name}" added to inventory.`); }}
           onCancel={() => setShowAddProduct(false)}
         />
       </Modal>
@@ -4285,7 +4286,6 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!supplierId) { setFormError('Please select a supplier.'); return; }
 
     // Validate lines
     const validLines = lines.filter(l => {
@@ -4332,7 +4332,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
       const res  = await fetch(`${API_URL}/purchases`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ supplier_id: supplierId, items }),
+        body: JSON.stringify({ supplier_id: supplierId || null, items }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
@@ -4387,7 +4387,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!editSupplierId) { setEditError('Please select a supplier.'); return; }
+    if (!editSupplierId) { setEditError(null); }
     const validLines = editLines.filter(l => l.product_id && l.quantity && l.cost_price);
     if (validLines.length === 0) { setEditError('Add at least one complete product line.'); return; }
     setEditSaving(true);
@@ -4397,7 +4397,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
         method: 'PUT',
         headers,
         body: JSON.stringify({
-          supplier_id: editSupplierId,
+          supplier_id: editSupplierId || null,
           items: validLines.map(l => ({
             product_id: parseInt(l.product_id),
             quantity:   parseInt(l.quantity),
@@ -4892,9 +4892,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
           {/* Supplier */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier *</label>
-            <select style={supS.input} value={supplierId} onChange={e => setSupplierId(e.target.value)} required>
-              <option value="">— Select supplier —</option>
+            <label style={supS.label}>Supplier (optional)</label>
+            <select style={supS.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+              <option value="">— No supplier —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
@@ -5156,14 +5156,13 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
             {/* Supplier */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 5 }}>Supplier *</label>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 5 }}>Supplier (optional)</label>
               <select
                 style={{ ...inp, padding: '10px 12px', borderRadius: 10, fontSize: 14 }}
                 value={editSupplierId}
                 onChange={e => setEditSupplierId(e.target.value)}
-                required
               >
-                <option value="">— Select supplier —</option>
+                <option value="">— No supplier —</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>

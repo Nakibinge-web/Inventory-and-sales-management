@@ -28,7 +28,7 @@ class PurchaseController extends Controller
         $this->authorize('create', Purchase::class);
 
         $request->validate([
-            'supplier_id'                       => 'required|exists:suppliers,id',
+            'supplier_id'                       => 'nullable|exists:suppliers,id',
             'items'                             => 'required|array|min:1',
             'items.*.product_id'                => 'nullable|exists:products,id',
             'items.*.quantity'                  => 'required|integer|min:1',
@@ -170,7 +170,7 @@ class PurchaseController extends Controller
         $this->authorize('update', $purchase);
 
         $request->validate([
-            'supplier_id'    => 'sometimes|required|exists:suppliers,id',
+            'supplier_id'    => 'nullable|exists:suppliers,id',
             'purchase_date'  => 'sometimes|required|date',
             'items'          => 'sometimes|required|array|min:1',
             'items.*.product_id'  => 'required_with:items|exists:products,id',
