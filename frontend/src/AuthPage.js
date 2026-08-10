@@ -101,6 +101,59 @@ export default function AuthPage() {
     setLoading(true);
     setError(null);
 
+    // Custom validation
+    if (mode === 'register') {
+      if (!form.name.trim()) {
+        setError('Full name is required');
+        setLoading(false);
+        return;
+      }
+      if (form.name.trim().length < 2) {
+        setError('Full name must be at least 2 characters');
+        setLoading(false);
+        return;
+      }
+      if (!form.business_name.trim()) {
+        setError('Business name is required');
+        setLoading(false);
+        return;
+      }
+      if (form.business_name.trim().length < 2) {
+        setError('Business name must be at least 2 characters');
+        setLoading(false);
+        return;
+      }
+      if (form.password.length < 8) {
+        setError('Password must be at least 8 characters');
+        setLoading(false);
+        return;
+      }
+      if (form.password !== form.password_confirmation) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+      if (form.phone && !/^[\d\s\+\-\(\)]+$/.test(form.phone)) {
+        setError('Invalid phone number format');
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
+    if (!form.password) {
+      setError('Password is required');
+      setLoading(false);
+      return;
+    }
+
     const body = mode === 'login'
       ? { email: form.email, password: form.password }
       : { name: form.name, email: form.email, password: form.password,
