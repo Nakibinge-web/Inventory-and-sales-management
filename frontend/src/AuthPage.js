@@ -308,8 +308,9 @@ export default function AuthPage() {
           </form>
 
           <p className="auth-toggle">
-            {isLogin ? "Different Staff Members can login from here " : 'Already have an account? '}
+            {isLogin ? "Different Staff members can login from here " : 'Already have an account? '}
             <span className="auth-toggle-link" onClick={toggle}>
+              {isLogin ? 'Register a new account' : 'Sign in'}
             </span>
           </p>
         </div>
