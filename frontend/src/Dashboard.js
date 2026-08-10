@@ -8580,234 +8580,181 @@ if (!document.head.querySelector('style[data-component="Dashboard"]')) {
 function PrintableInvoiceModal({ invoice, user, onClose }) {
   if (!invoice) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = () => { window.print(); };
+
+  const tenant = user?.tenant || {};
+  const businessName    = tenant.name    || user?.name  || 'Smart Trendz';
+  const businessPhone   = tenant.phone   || user?.phone || '0776 293691';
+  const businessEmail   = tenant.email   || user?.email || '';
+  const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
+  const businessTagline = tenant.tagline || 'Best Unboxing Xperience';
+
+  const items    = invoice.items || invoice.sale_items || invoice.saleItems || [];
+  const subtotal = invoice.subtotal != null
+    ? parseFloat(invoice.subtotal)
+    : items.reduce((s, i) => s + (parseFloat(i.subtotal) || (parseFloat(i.price || 0) * parseFloat(i.quantity || 1))), 0);
+  const discount = parseFloat(invoice.discount_amount || 0);
+  const tax      = parseFloat(invoice.tax_amount || 0);
+  const total    = parseFloat(invoice.total_amount || (subtotal - discount + tax));
+  const paid     = parseFloat(invoice.amount_paid ?? total);
+  const balance  = Math.max(0, total - paid);
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const date = new Date(d);
+    // Avoid timezone offset shifting the date
+    const utc = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    return utc.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
   };
 
-  // Dynamic Contact & Account Information (from user & user.tenant)
-  const tenant = user?.tenant || {};
-  const businessName = tenant.name || user?.name || 'Zziwa & Sons';
-  const businessPhone = tenant.phone || user?.phone || '0776 293691';
-  const businessEmail = tenant.email || user?.email || 'contact@zziwaandsons.com';
-  const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square, Kampala Uganda';
-
-  const items = invoice.items || invoice.sale_items || invoice.saleItems || [];
-  const subtotal = invoice.subtotal || items.reduce((s, i) => s + (parseFloat(i.subtotal) || (parseFloat(i.price || i.cost_price || 0) * parseFloat(i.quantity || 1))), 0);
-  const discount = parseFloat(invoice.discount_amount || invoice.discount || 0);
-  const tax = parseFloat(invoice.tax_amount || invoice.tax || 0);
-  const total = parseFloat(invoice.total_amount || invoice.total || (subtotal - discount + tax));
-  const paid = parseFloat(invoice.amount_paid !== undefined ? invoice.amount_paid : (invoice.payment_status === 'paid' ? total : total));
-  const balance = Math.max(0, total - paid);
-
-  const status = balance === 0 ? 'PAID' : paid > 0 ? 'PARTIAL' : 'DUE';
-  const statusBg = status === 'PAID' ? '#dcfce7' : status === 'PARTIAL' ? '#fef3c7' : '#fee2e2';
-  const statusColor = status === 'PAID' ? '#15803d' : status === 'PARTIAL' ? '#b45309' : '#b91c1c';
-
-  const invoiceNumber = invoice.invoice_number || invoice.reference || `INV/25-26/${String(invoice.id || '0125').padStart(4, '0')}`;
-  const invoiceDate = invoice.invoice_date || invoice.sale_date || invoice.created_at 
-    ? new Date(invoice.invoice_date || invoice.sale_date || invoice.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) 
-    : new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-  
-  const dueDate = invoice.due_date 
-    ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) 
-    : invoiceDate;
-    
-  const sourceRef = invoice.source_ref || `S${String(invoice.id || '00124').padStart(5, '0')}`;
-
-  const customerName = invoice.customer_name || invoice.customer?.name || 'Valued Customer';
-  const customerEmail = invoice.customer_email || invoice.customer?.email || '';
-  const customerPhone = invoice.customer_phone || invoice.customer?.phone || invoice.customer?.contact || '';
+  const invoiceNumber = invoice.invoice_number || `INV/25-26/${String(invoice.id || '0125').padStart(4, '0')}`;
+  const invoiceDate   = fmtDate(invoice.invoice_date || invoice.sale_date || invoice.created_at);
+  const dueDate       = fmtDate(invoice.due_date || invoice.invoice_date || invoice.sale_date);
+  const sourceRef     = invoice.source_ref || `S${String(invoice.id || '00124').padStart(5, '0')}`;
+  const customerName    = invoice.customer_name || invoice.customer?.name || 'Valued Customer';
+  const customerPhone   = invoice.customer_phone || invoice.customer?.phone || invoice.customer?.contact || '';
+  const customerEmail   = invoice.customer_email || invoice.customer?.email || '';
   const customerAddress = invoice.customer_address || invoice.customer?.address || '';
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="" maxWidth="920px">
-      {/* Top Action Bar (hidden when printing) */}
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#881337', fontSize: 20 }}>
-            📄
-          </div>
+    <Modal isOpen={true} onClose={onClose} title="" size="xl" className="invoice-modal">
+      {/* ── Action bar (screen only, hidden on print) ── */}
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
           <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Invoice #{invoiceNumber}</h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Ready for printing or downloading as PDF</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoiceNumber}</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>{customerName}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={handlePrint}
-            style={{
-              padding: '10px 22px', borderRadius: 8, border: 'none',
-              background: '#881337', color: '#ffffff', fontWeight: 700,
-              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              boxShadow: '0 4px 14px rgba(136,19,55,0.3)', transition: 'all 0.15s'
-            }}
-          >
-            <span>🖨️</span> Print / Save as PDF
-          </button>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '10px 18px', borderRadius: 8, border: '1px solid #cbd5e1',
-              background: '#ffffff', color: '#475569', fontWeight: 600,
-              fontSize: 13, cursor: 'pointer'
-            }}
-          >
-            Close
-          </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
+          <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
         </div>
       </div>
 
-      {/* Printable Invoice Container */}
-      <div
-        id="printable-invoice"
-        style={{
-          background: '#ffffff',
-          borderRadius: 16,
-          padding: '44px 48px',
-          color: '#0f172a',
-          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-          boxShadow: '0 8px 30px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-          position: 'relative',
-          boxSizing: 'border-box'
-        }}
-      >
-        {/* Top Header Row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '2px dashed #f1f5f9' }}>
-          {/* Logo & Company Branding */}
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            <img
-              src="/zziwa logo.png"
-              alt={businessName}
-              style={{
-                width: 76,
-                height: 76,
-                objectFit: 'contain',
-                background: '#ffffff',
-                padding: '6px',
-                borderRadius: 16,
-                border: '1.5px solid #e2e8f0',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-              }}
-            />
-            <div>
-              <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 900, color: '#881337', letterSpacing: '-0.5px' }}>
-                {businessName}
-              </h1>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#be123c', letterSpacing: '0.02em' }}>
-                Quality & Reliability | Inventory Management
-              </p>
+      {/* ══════════════════════════════════════════════
+          PRINTABLE INVOICE BODY
+          Matches the Smart Trendz proforma layout
+      ══════════════════════════════════════════════ */}
+      <div id="printable-invoice" style={{
+        background: '#ffffff',
+        padding: '36px 44px 32px',
+        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+        color: '#0f172a',
+        boxSizing: 'border-box',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+
+        {/* Decorative circle — top right, matches screenshot */}
+        <div style={{
+          position: 'absolute', top: -80, right: -80,
+          width: 260, height: 260, borderRadius: '50%',
+          background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+        }} />
+
+        {/* ── HEADER: logo/name + customer left · address right ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+
+          {/* Left: logo + business name, then customer details below */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <img
+                src="/zziwa logo.png"
+                alt={businessName}
+                style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
+              />
+              <div style={{ paddingTop: 2 }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#be123c', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                  {businessName}
+                </div>
+              </div>
+            </div>
+            {/* Customer details — sits directly below the logo */}
+            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8, paddingLeft: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>To:</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{customerName}</div>
+              {customerPhone   && <div>{customerPhone}</div>}
+              {customerEmail   && <div>{customerEmail}</div>}
+              {customerAddress && <div>{customerAddress}</div>}
             </div>
           </div>
 
-          {/* Document Title & Reference */}
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 6, background: '#881337', color: '#ffffff', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              PROFORMA INVOICE
+          {/* Right: business contact block + invoice title below */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+            <div style={{ textAlign: 'right', fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+              <div style={{ fontWeight: 700 }}>{businessName}</div>
+              <div>{businessAddress}</div>
+              <div>{businessPhone}</div>
+              {businessEmail && <div>{businessEmail}</div>}
+              <div>Kampala Uganda</div>
             </div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.5px' }}>
-              {invoiceNumber}
-            </h2>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#be123c', letterSpacing: '-0.3px', textAlign: 'right' }}>
+              Invoice {invoiceNumber}
+            </div>
           </div>
         </div>
 
-        {/* Issuer Details vs Billed To Cards (2-Column Layout) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 28 }}>
-          {/* Issuer Details Card */}
-          <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              ISSUED BY
-            </p>
-            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{businessName}</p>
-            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569', lineHeight: 1.4 }}>📍 {businessAddress}</p>
-            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>📞 {businessPhone}</p>
-            <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>✉️ {businessEmail}</p>
-          </div>
-
-          {/* Billed To Customer Card */}
-          <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              BILLED TO
-            </p>
-            <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{customerName}</p>
-            {customerPhone ? <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>📞 {customerPhone}</p> : <p style={{ margin: '0 0 3px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No phone listed</p>}
-            {customerEmail && <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>✉️ {customerEmail}</p>}
-            {customerAddress && <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>📍 {customerAddress}</p>}
-          </div>
-        </div>
-
-        {/* Metadata Bar (Date, Due Date, Source, Status) */}
+        {/* ── DATE / DUE DATE / SOURCE INFO CARD ── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          background: '#ffffff',
-          border: '1.5px solid #e2e8f0',
-          borderRadius: 12,
-          padding: '14px 20px',
-          marginBottom: 28,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+          gridTemplateColumns: '1fr 1fr 1fr',
+          border: '1.5px solid #cbd5e1',
+          borderRadius: 10,
+          overflow: 'hidden',
+          marginBottom: 22,
         }}>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice Date</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{invoiceDate}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due Date</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{dueDate}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Source / Ref</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{sourceRef}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Status</p>
-            <span style={{
-              display: 'inline-block',
-              padding: '3px 12px',
-              borderRadius: 20,
-              fontSize: 11,
-              fontWeight: 800,
-              background: statusBg,
-              color: statusColor
+          {[
+            { label: 'Invoice Date', value: invoiceDate },
+            { label: 'Due Date',     value: dueDate     },
+            { label: 'Source',       value: sourceRef   },
+          ].map((cell, i, arr) => (
+            <div key={cell.label} style={{
+              padding: '12px 18px',
+              borderRight: i < arr.length - 1 ? '1.5px solid #cbd5e1' : 'none',
             }}>
-              ● {status}
-            </span>
-          </div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>{cell.label}</div>
+              <div style={{ fontSize: 13, color: '#475569' }}>{cell.value}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Line Items Table */}
-        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        {/* ── LINE ITEMS TABLE ── */}
+        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#881337', color: '#ffffff' }}>
-                <th style={{ padding: '12px 18px', textAlign: 'left', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>DESCRIPTION</th>
-                <th style={{ padding: '12px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>QUANTITY</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '160px' }}>UNIT PRICE</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '170px' }}>AMOUNT</th>
+                <th style={{ padding: '11px 18px', textAlign: 'left',   fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Items</th>
+                <th style={{ padding: '11px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 130 }}>Quantity</th>
+                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 150 }}>Unit Price</th>
+                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 160 }}>Amount</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item, idx) => {
-                const name = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
-                const qty = parseFloat(item.quantity || 1);
-                const price = parseFloat(item.price || item.unit_price || 0);
-                const amt = parseFloat(item.subtotal || (qty * price));
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan="4" style={{ padding: '20px 18px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No items</td>
+                </tr>
+              ) : items.map((item, idx) => {
+                const name      = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
+                const qty       = parseFloat(item.quantity || 1);
+                const price     = parseFloat(item.price || item.unit_price || 0);
+                const amt       = parseFloat(item.subtotal != null ? item.subtotal : qty * price);
                 const unitLabel = item.product?.unit || item.unit || 'Units';
+                const isLast    = idx === items.length - 1;
 
                 return (
-                  <tr key={idx} style={{ borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                    <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                      {name}
-                    </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
+                  <tr key={idx} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '13px 18px', fontSize: 13, color: '#0f172a' }}>{name}</td>
+                    <td style={{ padding: '13px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
                       {qty.toFixed(2)} {unitLabel}
                     </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
-                      UGX {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
+                      {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 800, color: '#0f172a' }}>
-                      UGX {amt.toLocaleString('en-US')}
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#0f172a' }}>
+                      {amt.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
                     </td>
                   </tr>
                 );
@@ -8816,55 +8763,42 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           </table>
         </div>
 
-        {/* Bottom Section: Payment Instructions (Left) & Totals Summary (Right) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 28, marginTop: 20 }}>
-          {/* Payment Instructions (Bottom Left) */}
-          <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
-            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              💳 Payment Details & Instructions
-            </p>
-            <p style={{ margin: '0 0 3px' }}>
-              Payment Communication: <strong style={{ color: '#881337' }}>{invoiceNumber}</strong>
-            </p>
-            <p style={{ margin: '0 0 3px' }}>
-              Bank Account: <strong>6008040719 - ABSA Business Account</strong>
-            </p>
-            <p style={{ margin: '0 0 6px' }}>
-              Mobile Money: <strong>{businessPhone} ({businessName})</strong>
-            </p>
-            <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', fontStyle: 'italic', borderTop: '1px dashed #cbd5e1', paddingTop: 6 }}>
-              Thank you for doing business with {businessName}!
-            </p>
+        {/* ── BOTTOM SECTION: payment note (left) + totals (right) ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, marginTop: 4 }}>
+
+          {/* Payment terms — only shown if the invoice has notes */}
+          <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+            {invoice.notes && (
+              <div style={{ fontSize: 12, color: '#475569', maxWidth: 380 }}>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>Terms: </span>{invoice.notes}
+              </div>
+            )}
           </div>
 
-          {/* Totals Summary Box (Bottom Right) */}
-          <div style={{ width: '310px', border: '1.5px solid #cbd5e1', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
-              <span style={{ color: '#64748b', fontWeight: 600 }}>Subtotal</span>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
+          {/* Totals block — matches screenshot (paid row + bold amount due) */}
+          <div style={{ minWidth: 300, border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
+            {/* Paid on date row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+              <span style={{ fontStyle: 'italic', color: '#475569' }}>Paid on {invoiceDate}</span>
+              <span style={{ color: '#0f172a' }}>
+                {paid.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+              </span>
             </div>
-            {discount > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13, color: '#dc2626' }}>
-                <span>Discount</span>
-                <span>− UGX {discount.toLocaleString()}</span>
-              </div>
-            )}
-            {tax > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13, color: '#16a34a' }}>
-                <span>Tax</span>
-                <span>+ UGX {tax.toLocaleString()}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
-              <span style={{ color: '#475569', fontStyle: 'italic' }}>Amount Paid ({invoiceDate})</span>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {paid.toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: balance > 0 ? '#fff1f2' : '#f0fdf4', fontSize: 15, fontWeight: 900 }}>
-              <span style={{ color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
-              <span style={{ color: balance > 0 ? '#9f1239' : '#166534' }}>UGX {balance.toLocaleString()}</span>
+            {/* Amount Due row — bold, dark background when balance > 0 */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              padding: '12px 18px',
+              background: balance > 0 ? '#fff1f2' : '#f0fdf4',
+              fontSize: 14,
+            }}>
+              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
+              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>
+                {balance.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+              </span>
             </div>
           </div>
         </div>
+
       </div>
     </Modal>
   );
@@ -8873,14 +8807,24 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
 // ════════════════════════════════════════════════
 // CREATE CUSTOM INVOICE MODAL
 // ════════════════════════════════════════════════
-function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
+function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }) {
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
   const [sourceRef, setSourceRef] = useState(`S00${Math.floor(100 + Math.random() * 900)}`);
-  
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  // Payment status state
+  const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [amountPaid, setAmountPaid] = useState('');
+  const [amountDue, setAmountDue] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
+
   const [items, setItems] = useState([
     { description: '', quantity: '1', price: '' }
   ]);
@@ -8916,42 +8860,86 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  // When status changes, reset payment fields and auto-fill where appropriate
+  const handleStatusChange = (newStatus) => {
+    setPaymentStatus(newStatus);
+    const total = calculateTotal();
+    if (newStatus === 'paid') {
+      setAmountPaid(String(total));
+      setAmountDue('0');
+    } else if (newStatus === 'due') {
+      setAmountPaid('0');
+      setAmountDue(String(total));
+    } else {
+      // partial — clear both so user fills in
+      setAmountPaid('');
+      setAmountDue('');
+    }
+  };
+
+  // When partial amount paid changes, auto-calc amount due
+  const handlePartialPaidChange = (val) => {
+    setAmountPaid(val);
+    const total = calculateTotal();
+    const paid = parseFloat(val) || 0;
+    setAmountDue(String(Math.max(0, total - paid)));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!customerName) {
-      alert('Please enter or select a customer name.');
+    setSubmitError('');
+
+    if (!customerName.trim()) {
+      setSubmitError('Please enter or select a customer name.');
       return;
     }
     const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
     if (validItems.length === 0) {
-      alert('Please add at least one valid item with a description and price.');
+      setSubmitError('Please add at least one valid item with a description and price.');
       return;
     }
 
-    const total = calculateTotal();
-    const invNumber = `INV/25-26/${String(Math.floor(100 + Math.random() * 9000)).padStart(4, '0')}`;
-
-    const newInvoice = {
-      id: Date.now(),
-      invoice_number: invNumber,
+    const payload = {
       invoice_date: invoiceDate,
       due_date: dueDate,
       source_ref: sourceRef,
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      customer_email: customerEmail,
-      total_amount: total,
-      amount_paid: total,
-      payment_status: 'paid',
+      customer_name: customerName.trim(),
+      customer_phone: customerPhone.trim() || null,
+      customer_email: customerEmail.trim() || null,
+      payment_status: paymentStatus,
+      amount_paid: parseFloat(amountPaid) || 0,
+      notes: paymentTerms.trim() || null,
       items: validItems.map(i => ({
-        description: i.description,
+        description: i.description.trim(),
         quantity: parseFloat(i.quantity) || 1,
         price: parseFloat(i.price) || 0,
         subtotal: (parseFloat(i.quantity) || 1) * (parseFloat(i.price) || 0)
       }))
     };
 
-    onCreated(newInvoice);
+    try {
+      setSubmitting(true);
+      const res = await fetch(`${API}/invoices`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const msg = json.message || (json.errors ? Object.values(json.errors).flat().join(' ') : 'Failed to save invoice.');
+        setSubmitError(msg);
+        return;
+      }
+      onCreated(json.data);
+    } catch (err) {
+      setSubmitError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -9090,19 +9078,136 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
           <span style={{ fontSize: 18, fontWeight: 900, color: '#881337' }}>UGX {calculateTotal().toLocaleString()}</span>
         </div>
 
+        {/* ── PAYMENT STATUS ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Status
+            </label>
+            <select
+              value={paymentStatus}
+              onChange={e => handleStatusChange(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            >
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+              <option value="due">Due</option>
+            </select>
+          </div>
+
+          {/* PAID — show amount paid (pre-filled with total, editable) */}
+          {paymentStatus === 'paid' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Amount Paid (UGX)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountPaid}
+                onChange={e => setAmountPaid(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+
+          {/* PARTIAL — amount paid (user fills) + amount due (auto-calculated) */}
+          {paymentStatus === 'partial' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Amount Paid (UGX)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Enter partial amount paid"
+                  value={amountPaid}
+                  onChange={e => handlePartialPaidChange(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Amount Due (UGX) — Auto
+                </label>
+                <input
+                  type="number"
+                  readOnly
+                  value={amountDue}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 700, background: '#fef2f2', color: '#b91c1c', boxSizing: 'border-box', cursor: 'not-allowed' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* DUE — amount due (user fills manually) */}
+          {paymentStatus === 'due' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Amount Due (UGX)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter amount due"
+                value={amountDue}
+                onChange={e => setAmountDue(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ── PAYMENT TERMS & CONDITIONS ── */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Payment Terms &amp; Conditions
+          </label>
+          <textarea
+            rows={3}
+            value={paymentTerms}
+            onChange={e => setPaymentTerms(e.target.value)}
+            placeholder="Explicit due date (e.g., Net 30, Due on Receipt), accepted payment methods, and penalties for late payment"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1.5px solid #cbd5e1',
+              borderRadius: 8,
+              fontSize: 13,
+              color: '#0f172a',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              fontFamily: 'inherit',
+              lineHeight: 1.6,
+            }}
+          />
+        </div>
+
+        {submitError && (
+          <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
+            {submitError}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
           <button
             type="button"
             onClick={onClose}
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+            disabled={submitting}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}
           >
             Cancel
           </button>
           <button
             type="submit"
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
+            disabled={submitting}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.75 : 1, boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
           >
-            Generate Invoice 📄
+            {submitting ? 'Saving…' : 'Generate Invoice 📄'}
           </button>
         </div>
       </form>
@@ -9111,40 +9216,242 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
 }
 
 // ════════════════════════════════════════════════
+// INVOICE EDIT STATUS MODAL
+// ════════════════════════════════════════════════
+function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
+  const [status, setStatus] = useState(invoice.payment_status || 'paid');
+  const [amountPaid, setAmountPaid] = useState(String(invoice.amount_paid ?? invoice.total_amount ?? ''));
+  const [saving, setSaving] = useState(false);
+
+  const total = parseFloat(invoice.total_amount || 0);
+  const paid = parseFloat(amountPaid) || 0;
+  const balance = Math.max(0, total - paid);
+
+  // Auto-derive status from amount paid when user changes the amount
+  const handleAmountChange = (val) => {
+    setAmountPaid(val);
+    const p = parseFloat(val) || 0;
+    if (p >= total) setStatus('paid');
+    else if (p > 0) setStatus('partial');
+    else setStatus('due');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(invoice.id, status, parseFloat(amountPaid) || 0);
+    setSaving(false);
+  };
+
+  const statusOptions = [
+    { value: 'paid',    label: 'Paid',    bg: '#dcfce7', color: '#15803d' },
+    { value: 'partial', label: 'Partial', bg: '#fef3c7', color: '#b45309' },
+    { value: 'due',     label: 'Due',     bg: '#fee2e2', color: '#b91c1c' },
+  ];
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Edit Payment Status" maxWidth="440px">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Invoice reference */}
+        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 16px', border: '1px solid #e2e8f0' }}>
+          <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Invoice</p>
+          <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoice.invoice_number}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 13, color: '#475569' }}>{invoice.customer_name} · Total: <strong>UGX {total.toLocaleString()}</strong></p>
+        </div>
+
+        {/* Status selector */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Payment Status
+          </label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {statusOptions.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatus(opt.value)}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  border: status === opt.value ? `2px solid ${opt.color}` : '2px solid #e2e8f0',
+                  background: status === opt.value ? opt.bg : '#fff',
+                  color: status === opt.value ? opt.color : '#64748b',
+                  transition: 'all 0.12s'
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Amount paid */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Amount Paid (UGX)
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountPaid}
+            onChange={e => handleAmountChange(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12, color: '#64748b' }}>
+            <span>Balance remaining: <strong style={{ color: balance > 0 ? '#b91c1c' : '#15803d' }}>UGX {balance.toLocaleString()}</strong></span>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+              background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13,
+              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.75 : 1,
+              boxShadow: '0 4px 12px rgba(136,19,55,0.25)'
+            }}
+          >
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════
 // INVOICES TAB COMPONENT
 // ════════════════════════════════════════════════
 function InvoicesTab({ sales, customers, user, token, toast }) {
-  const [invoicesList, setInvoicesList] = useState([]);
+  const [customInvoices, setCustomInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);   // invoice being status-edited
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    if (sales && sales.length > 0) {
-      const generated = sales.map(s => ({
-        id: s.id,
-        invoice_number: `INV/25-26/${String(s.id).padStart(4, '0')}`,
-        invoice_date: (s.sale_date || s.created_at || '').slice(0, 10),
-        due_date: (s.sale_date || s.created_at || '').slice(0, 10),
-        customer_name: s.customer?.name || 'Walk-in Customer',
-        customer_email: s.customer?.email || '',
-        customer_phone: s.customer?.phone || s.customer?.contact || '',
-        customer_address: s.customer?.address || '',
-        total_amount: parseFloat(s.total_amount || 0),
-        amount_paid: parseFloat(s.total_amount || 0),
-        payment_status: 'paid',
-        items: s.sale_items || s.saleItems || [],
-        source_ref: `S${String(s.id).padStart(5, '0')}`
-      }));
-      setInvoicesList(generated);
-    }
-  }, [sales]);
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-  const filteredInvoices = invoicesList.filter(inv => {
-    return !search || 
-      inv.invoice_number.toLowerCase().includes(search.toLowerCase()) || 
-      inv.customer_name.toLowerCase().includes(search.toLowerCase());
-  });
+  // Fetch persisted custom invoices from the backend on mount
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const res = await fetch(`${API}/invoices`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+        });
+        const json = await res.json();
+        if (json.success) {
+          setCustomInvoices(json.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to load invoices', err);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    fetchInvoices();
+  }, [API, token]);
+
+  // Derive invoice rows from sales (sale-based invoices, always present)
+  const saleInvoices = (sales || []).map(s => ({
+    id: `sale-${s.id}`,
+    _type: 'sale',
+    invoice_number: `INV/25-26/${String(s.id).padStart(4, '0')}`,
+    invoice_date: (s.sale_date || s.created_at || '').slice(0, 10),
+    due_date: (s.sale_date || s.created_at || '').slice(0, 10),
+    customer_name: s.customer?.name || 'Walk-in Customer',
+    customer_email: s.customer?.email || '',
+    customer_phone: s.customer?.phone || s.customer?.contact || '',
+    customer_address: s.customer?.address || '',
+    total_amount: parseFloat(s.total_amount || 0),
+    amount_paid: parseFloat(s.total_amount || 0),
+    payment_status: 'paid',
+    items: s.sale_items || s.saleItems || [],
+    source_ref: `S${String(s.id).padStart(5, '0')}`
+  }));
+
+  // Normalise custom invoices from DB for the same shape
+  const dbInvoices = customInvoices.map(inv => ({
+    ...inv,
+    _type: 'custom',
+    invoice_date: inv.invoice_date ? String(inv.invoice_date).slice(0, 10) : '',
+    due_date: inv.due_date ? String(inv.due_date).slice(0, 10) : '',
+    total_amount: parseFloat(inv.total_amount || 0),
+    amount_paid: parseFloat(inv.amount_paid || 0),
+  }));
+
+  // Merge: custom invoices first (newest), then sale-based
+  const invoicesList = [...dbInvoices, ...saleInvoices];
+
+  const filteredInvoices = invoicesList.filter(inv =>
+    !search ||
+    inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+    inv.customer_name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleDeleteInvoice = async (inv) => {
+    if (inv._type !== 'custom') return;
+    if (!window.confirm(`Delete invoice ${inv.invoice_number}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API}/invoices/${inv.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCustomInvoices(prev => prev.filter(i => i.id !== inv.id));
+        if (selectedInvoice?.id === inv.id) setSelectedInvoice(null);
+        toast && toast.success('Invoice deleted', 'The invoice has been removed.');
+      } else {
+        toast && toast.error('Delete failed', json.message || 'Failed to delete invoice.');
+      }
+    } catch (err) {
+      toast && toast.error('Network error', 'Please try again.');
+    }
+  };
+
+  const handleSaveStatus = async (invoiceId, newStatus, amountPaid) => {
+    try {
+      const res = await fetch(`${API}/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ payment_status: newStatus, amount_paid: amountPaid })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCustomInvoices(prev =>
+          prev.map(i => i.id === invoiceId ? { ...i, payment_status: json.data.payment_status, amount_paid: parseFloat(json.data.amount_paid) } : i)
+        );
+        setEditingInvoice(null);
+        toast && toast.success('Status updated', 'Invoice payment status has been saved.');
+      } else {
+        toast && toast.error('Update failed', json.message || 'Failed to update invoice.');
+      }
+    } catch (err) {
+      toast && toast.error('Network error', 'Please try again.');
+    }
+  };
+
+  const statusStyle = (status) => {
+    if (status === 'paid') return { background: '#dcfce7', color: '#15803d' };
+    if (status === 'partial') return { background: '#fef3c7', color: '#b45309' };
+    return { background: '#fee2e2', color: '#b91c1c' };
+  };
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
@@ -9199,48 +9506,87 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
 
       {/* Invoices List Table */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-              {['Invoice #', 'Customer', 'Date', 'Amount', 'Status', 'Actions'].map(h => (
-                <th key={h} style={{ padding: '12px 18px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredInvoices.length > 0 ? filteredInvoices.map(inv => (
-              <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 800, color: '#881337' }}>{inv.invoice_number}</td>
-                <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.customer_name}</td>
-                <td style={{ padding: '14px 18px', fontSize: 13, color: '#64748b' }}>{inv.invoice_date}</td>
-                <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {inv.total_amount.toLocaleString()}</td>
-                <td style={{ padding: '14px 18px' }}>
-                  <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d' }}>
-                    PAID
-                  </span>
-                </td>
-                <td style={{ padding: '14px 18px' }}>
-                  <button
-                    onClick={() => setSelectedInvoice(inv)}
-                    style={{
-                      padding: '6px 14px', borderRadius: 6, border: '1px solid #881337',
-                      background: '#fff1f2', color: '#881337', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 6
-                    }}
-                  >
-                    <span>📄</span> View / Print Invoice
-                  </button>
-                </td>
+        {loadingInvoices ? (
+          <div style={{ padding: 36, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>Loading invoices…</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
+                {['Invoice #', 'Customer', 'Date', 'Amount', 'Status', 'Type', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '12px 18px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                ))}
               </tr>
-            )) : (
-              <tr>
-                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
-                  No invoices found matching search query.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredInvoices.length > 0 ? filteredInvoices.map(inv => (
+                <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 800, color: '#881337' }}>{inv.invoice_number}</td>
+                  <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.customer_name}</td>
+                  <td style={{ padding: '14px 18px', fontSize: 13, color: '#64748b' }}>{inv.invoice_date}</td>
+                  <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {inv.total_amount.toLocaleString()}</td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, ...statusStyle(inv.payment_status) }}>
+                      {(inv.payment_status || 'paid').toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                      background: inv._type === 'custom' ? '#eff6ff' : '#f0fdf4',
+                      color: inv._type === 'custom' ? '#1d4ed8' : '#15803d'
+                    }}>
+                      {inv._type === 'custom' ? 'Custom' : 'Sale'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button
+                        onClick={() => setSelectedInvoice(inv)}
+                        style={{
+                          padding: '6px 14px', borderRadius: 6, border: '1px solid #881337',
+                          background: '#fff1f2', color: '#881337', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        <span>📄</span> View / Print
+                      </button>
+                      {inv._type === 'custom' && (
+                        <button
+                          onClick={() => setEditingInvoice(inv)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #bfdbfe',
+                            background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                          }}
+                          title="Edit payment status"
+                        >
+                          ✏️ Status
+                        </button>
+                      )}
+                      {inv._type === 'custom' && (
+                        <button
+                          onClick={() => handleDeleteInvoice(inv)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #fecaca',
+                            background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                          }}
+                          title="Delete invoice"
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                    No invoices found matching search query.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Printable Invoice Modal */}
@@ -9257,12 +9603,23 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
         <CustomInvoiceCreateModal
           user={user}
           customers={customers}
+          token={token}
           onClose={() => setShowCreateModal(false)}
-          onCreated={(newInv) => {
-            setInvoicesList(prev => [newInv, ...prev]);
+          onCreated={(savedInvoice) => {
+            setCustomInvoices(prev => [savedInvoice, ...prev]);
             setShowCreateModal(false);
-            setSelectedInvoice(newInv);
+            setSelectedInvoice({ ...savedInvoice, _type: 'custom' });
+            toast && toast.success('Invoice created', 'Saved successfully and ready to print.');
           }}
+        />
+      )}
+
+      {/* Edit Payment Status Modal */}
+      {editingInvoice && (
+        <InvoiceEditStatusModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSave={handleSaveStatus}
         />
       )}
     </div>

@@ -7,6 +7,7 @@ export default function Modal({
   children, 
   footer,
   size = 'md',
+  maxWidth,
   className = '' 
 }) {
   if (!isOpen) return null;
@@ -15,7 +16,7 @@ export default function Modal({
     sm: { maxWidth: '400px' },
     md: { maxWidth: '600px' },
     lg: { maxWidth: '800px' },
-    xl: { maxWidth: '1000px' }
+    xl: { maxWidth: '1100px' }
   };
 
   const overlayStyles = {
@@ -41,7 +42,7 @@ export default function Modal({
     display: 'flex',
     flexDirection: 'column',
     animation: 'slideIn 0.2s ease-out',
-    ...sizes[size]
+    ...(maxWidth ? { maxWidth } : sizes[size])
   };
 
   const headerStyles = {

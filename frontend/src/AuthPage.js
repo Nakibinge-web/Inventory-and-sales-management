@@ -213,7 +213,7 @@ export default function AuthPage() {
               <img src="/zziwa logo.png" alt="Zziwa Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
           </div>
-          <h1 className="brand-title"></h1>
+          <h1 className="brand-title">ZZIWA AND SONS BEDDINGS</h1>
           <p className="brand-sub">Inventory & Sales Management</p>
           <ul className="feature-list">
             {[
@@ -308,9 +308,8 @@ export default function AuthPage() {
           </form>
 
           <p className="auth-toggle">
-            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            {isLogin ? "Different Staff Members can login from here " : 'Already have an account? '}
             <span className="auth-toggle-link" onClick={toggle}>
-              {isLogin ? 'Register your business' : 'Sign in'}
             </span>
           </p>
         </div>

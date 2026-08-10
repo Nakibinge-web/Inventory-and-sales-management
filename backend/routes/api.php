@@ -14,6 +14,7 @@ use App\Http\Controllers\StockMovementController;
 
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\InvoiceController;
 
 // Public auth routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
@@ -173,6 +174,15 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/{purchase}', [PurchaseController::class, 'show']);
         Route::put('/{purchase}', [PurchaseController::class, 'update']);
         Route::delete('/{purchase}', [PurchaseController::class, 'destroy']);
+    });
+
+    // Invoices (custom / proforma invoices stored in DB)
+    Route::prefix('invoices')->group(function () {
+        Route::get('/',             [InvoiceController::class, 'index']);
+        Route::post('/',            [InvoiceController::class, 'store']);
+        Route::get('/{invoice}',    [InvoiceController::class, 'show']);
+        Route::put('/{invoice}',    [InvoiceController::class, 'update']);
+        Route::delete('/{invoice}', [InvoiceController::class, 'destroy']);
     });
 
     // AI Assistant
