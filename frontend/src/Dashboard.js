@@ -103,7 +103,7 @@ export default function Dashboard({ user, token, onLogout }) {
           totalProducts: (products.data || []).length,
           totalSales: (sales.data || []).reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0),
           totalPurchases: (purchases.data || []).reduce((sum, purchase) => sum + parseFloat(purchase.total_amount || 0), 0),
-          lowStockCount: (lowStock.data || []).length
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
         }
       });
       setError(null);
@@ -339,18 +339,42 @@ export default function Dashboard({ user, token, onLogout }) {
                 {data.stats.lowStockCount > 0 ? (
                   <div>
                     <div style={{ padding: '10px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ Low Stock Alert</p>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ {data.stats.lowStockCount} Product{data.stats.lowStockCount === 1 ? '' : 's'} Need Attention</p>
                     </div>
-                    {data.products.filter(p => p.stock <= (p.reorder_level || 10)).slice(0, 5).map(product => (
-                      <div key={product.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
+                    {data.products
+                      .filter(p => p.stock <= (p.reorder_level || 10))
+                      .sort((a, b) => a.stock - b.stock)
+                      .slice(0, 5)
+                      .map(product => (
+                      <div key={product.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        background: product.stock === 0 ? '#fef2f2' : 'transparent'
+                      }}
                         onClick={() => { setActiveTab('products'); setShowNotifications(false); }}>
-                        <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>Stock: {product.stock} {product.unit || 'units'} (Reorder at {product.reorder_level || 10})</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
+                          {product.stock === 0 && (
+                            <span style={{ 
+                              fontSize: 10, 
+                              fontWeight: 700, 
+                              color: '#dc2626', 
+                              background: '#fee2e2', 
+                              padding: '2px 6px', 
+                              borderRadius: 4 
+                            }}>OUT OF STOCK</span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: product.stock === 0 ? '#dc2626' : '#64748b' }}>
+                          Stock: <strong>{product.stock}</strong> {product.unit || 'units'} • Reorder at {product.reorder_level || 10}
+                        </p>
                       </div>
                     ))}
                     {data.stats.lowStockCount > 5 && (
-                      <div style={{ padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#64748b' }}>
-                        +{data.stats.lowStockCount - 5} more products low on stock
+                      <div style={{ padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#64748b', cursor: 'pointer' }}
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}>
+                        View all {data.stats.lowStockCount} low stock items →
                       </div>
                     )}
                   </div>
