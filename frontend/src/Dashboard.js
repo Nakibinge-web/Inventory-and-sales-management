@@ -320,8 +320,8 @@ export default function Dashboard({ user, token, onLogout }) {
                 top: '100%',
                 right: 0,
                 marginTop: 8,
-                width: 320,
-                maxHeight: 400,
+                width: 360,
+                maxHeight: 450,
                 overflowY: 'auto',
                 background: '#fff',
                 border: '1.5px solid #e2e8f0',
@@ -336,28 +336,37 @@ export default function Dashboard({ user, token, onLogout }) {
                   <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
                 </div>
                 
-                {data.stats.lowStockCount > 0 ? (
+                {/* Low/Out of Stock Section */}
+                {data.stats.lowStockCount > 0 && (
                   <div>
-                    <div style={{ padding: '10px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
-                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ {data.stats.lowStockCount} Product{data.stats.lowStockCount === 1 ? '' : 's'} Need Attention</p>
+                    <div style={{ padding: '8px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ Stock Alert ({data.stats.lowStockCount})</p>
+                      <button 
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                        VIEW ALL →
+                      </button>
                     </div>
                     {data.products
                       .filter(p => p.stock <= (p.reorder_level || 10))
                       .sort((a, b) => a.stock - b.stock)
-                      .slice(0, 5)
+                      .slice(0, 3)
                       .map(product => (
                       <div key={product.id} style={{ 
                         padding: '10px 16px', 
                         borderBottom: '1px solid #f8fafc', 
                         cursor: 'pointer',
-                        background: product.stock === 0 ? '#fef2f2' : 'transparent'
+                        background: product.stock === 0 ? '#fef2f2' : 'transparent',
+                        transition: 'background 0.15s'
                       }}
-                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}>
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = product.stock === 0 ? '#fee2e2' : '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = product.stock === 0 ? '#fef2f2' : 'transparent'}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                           <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
                           {product.stock === 0 && (
                             <span style={{ 
-                              fontSize: 10, 
+                              fontSize: 9, 
                               fontWeight: 700, 
                               color: '#dc2626', 
                               background: '#fee2e2', 
@@ -371,19 +380,100 @@ export default function Dashboard({ user, token, onLogout }) {
                         </p>
                       </div>
                     ))}
-                    {data.stats.lowStockCount > 5 && (
-                      <div style={{ padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#64748b', cursor: 'pointer' }}
-                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}>
-                        View all {data.stats.lowStockCount} low stock items →
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ padding: '40px 16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
-                    <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>All good! No notifications</p>
                   </div>
                 )}
+                
+                {/* Recent Sales Section */}
+                {data.sales.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#16a34a' }}>💰 Recent Sales</p>
+                    </div>
+                    {data.sales.slice(0, 2).map(sale => (
+                      <div key={sale.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('sales'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {sale.customer?.name || 'Walk-in Customer'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
+                            UGX {parseFloat(sale.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(sale.sale_date || sale.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Purchases Section */}
+                {data.purchases.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#2563eb' }}>🛒 Recent Purchases</p>
+                    </div>
+                    {data.purchases.slice(0, 2).map(purchase => (
+                      <div key={purchase.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('purchases'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {purchase.supplier?.name || 'Supplier'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>
+                            UGX {parseFloat(purchase.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(purchase.purchase_date || purchase.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* No notifications */}
+                {data.stats.lowStockCount === 0 && data.sales.length === 0 && data.purchases.length === 0 && (
+                  <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+                    <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>All caught up! No new notifications</p>
+                  </div>
+                )}
+                
+                {/* View All Link */}
+                {(data.stats.lowStockCount > 3 || data.sales.length > 2 || data.purchases.length > 2) && (
+                  <div style={{ padding: '10px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      style={{ 
+                        fontSize: 12, 
+                        color: '#64748b', 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}>
+                      Close Notifications
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
               </div>
             )}
           </div>
