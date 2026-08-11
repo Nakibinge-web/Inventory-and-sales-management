@@ -49,6 +49,7 @@ export default function Dashboard({ user, token, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -285,11 +286,82 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
 
         <div style={styles.headerRight}>
-          <div style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px' }}>
+          <div 
+            style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
+            {data.stats.lowStockCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: '#dc2626',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700
+              }}>
+                {data.stats.lowStockCount}
+              </span>
+            )}
+            
+            {showNotifications && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 8,
+                width: 320,
+                maxHeight: 400,
+                overflowY: 'auto',
+                background: '#fff',
+                border: '1.5px solid #e2e8f0',
+                borderRadius: 12,
+                boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                zIndex: 1000
+              }}
+              onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
+                  <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                </div>
+                
+                {data.stats.lowStockCount > 0 ? (
+                  <div>
+                    <div style={{ padding: '10px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ Low Stock Alert</p>
+                    </div>
+                    {data.products.filter(p => p.stock <= (p.reorder_level || 10)).slice(0, 5).map(product => (
+                      <div key={product.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}>
+                        <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>Stock: {product.stock} {product.unit || 'units'} (Reorder at {product.reorder_level || 10})</p>
+                      </div>
+                    ))}
+                    {data.stats.lowStockCount > 5 && (
+                      <div style={{ padding: '10px 16px', textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+                        +{data.stats.lowStockCount - 5} more products low on stock
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+                    <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>All good! No notifications</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
