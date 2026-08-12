@@ -49,6 +49,7 @@ export default function Dashboard({ user, token, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -102,7 +103,7 @@ export default function Dashboard({ user, token, onLogout }) {
           totalProducts: (products.data || []).length,
           totalSales: (sales.data || []).reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0),
           totalPurchases: (purchases.data || []).reduce((sum, purchase) => sum + parseFloat(purchase.total_amount || 0), 0),
-          lowStockCount: (lowStock.data || []).length
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
         }
       });
       setError(null);
@@ -285,11 +286,196 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
 
         <div style={styles.headerRight}>
-          <div style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px' }}>
+          <div 
+            style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
+            {data.stats.lowStockCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: '#dc2626',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700
+              }}>
+                {data.stats.lowStockCount}
+              </span>
+            )}
+            
+            {showNotifications && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 8,
+                width: 360,
+                maxHeight: 450,
+                overflowY: 'auto',
+                background: '#fff',
+                border: '1.5px solid #e2e8f0',
+                borderRadius: 12,
+                boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                zIndex: 1000
+              }}
+              onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
+                  <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                </div>
+                
+                {/* Low/Out of Stock Section */}
+                {data.stats.lowStockCount > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ Stock Alert ({data.stats.lowStockCount})</p>
+                      <button 
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                        VIEW ALL →
+                      </button>
+                    </div>
+                    {data.products
+                      .filter(p => p.stock <= (p.reorder_level || 10))
+                      .sort((a, b) => a.stock - b.stock)
+                      .slice(0, 3)
+                      .map(product => (
+                      <div key={product.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        background: product.stock === 0 ? '#fef2f2' : 'transparent',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = product.stock === 0 ? '#fee2e2' : '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = product.stock === 0 ? '#fef2f2' : 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
+                          {product.stock === 0 && (
+                            <span style={{ 
+                              fontSize: 9, 
+                              fontWeight: 700, 
+                              color: '#dc2626', 
+                              background: '#fee2e2', 
+                              padding: '2px 6px', 
+                              borderRadius: 4 
+                            }}>OUT OF STOCK</span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: product.stock === 0 ? '#dc2626' : '#64748b' }}>
+                          Stock: <strong>{product.stock}</strong> {product.unit || 'units'} • Reorder at {product.reorder_level || 10}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Sales Section */}
+                {data.sales.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#16a34a' }}>💰 Recent Sales</p>
+                    </div>
+                    {data.sales.slice(0, 2).map(sale => (
+                      <div key={sale.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('sales'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {sale.customer?.name || 'Walk-in Customer'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
+                            UGX {parseFloat(sale.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(sale.sale_date || sale.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Purchases Section */}
+                {data.purchases.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#2563eb' }}>🛒 Recent Purchases</p>
+                    </div>
+                    {data.purchases.slice(0, 2).map(purchase => (
+                      <div key={purchase.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('purchases'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {purchase.supplier?.name || 'Supplier'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>
+                            UGX {parseFloat(purchase.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(purchase.purchase_date || purchase.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* No notifications */}
+                {data.stats.lowStockCount === 0 && data.sales.length === 0 && data.purchases.length === 0 && (
+                  <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+                    <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>All caught up! No new notifications</p>
+                  </div>
+                )}
+                
+                {/* View All Link */}
+                {(data.stats.lowStockCount > 3 || data.sales.length > 2 || data.purchases.length > 2) && (
+                  <div style={{ padding: '10px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      style={{ 
+                        fontSize: 12, 
+                        color: '#64748b', 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}>
+                      Close Notifications
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+              </div>
+            )}
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
@@ -1375,15 +1561,38 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
   const [saving, setSaving] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deleteError, setDeleteError] = useState(null);
 
-  const openAdd = () => { setForm({ name: '', description: '' }); setFormError(null); setShowAddModal(true); };
-  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setEditingCat(cat); };
+  const openAdd = () => { setForm({ name: '', description: '' }); setFormError(null); setFieldErrors({}); setShowAddModal(true); };
+  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setFieldErrors({}); setEditingCat(cat); };
 
   const handleSubmit = async e => {
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Category name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Category name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Category name must not exceed 100 characters';
+    }
+    
+    if (form.description && form.description.length > 500) {
+      errors.description = 'Description must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     const isEdit = !!editingCat;
     try {
       const res = await fetch(
@@ -1391,7 +1600,7 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
         {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ name: form.name.trim(), description: form.description.trim() }),
         }
       );
       const data = await res.json();
@@ -1436,22 +1645,23 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <label style={catS.label}>Category Name *</label>
         <input
-          style={catS.input}
+          style={{ ...catS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }}
           placeholder="e.g. Electronics"
           value={form.name}
-          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          required
+          onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
           autoFocus
         />
+        {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.name}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <label style={catS.label}>Description (optional)</label>
         <textarea
-          style={{ ...catS.input, minHeight: 80, resize: 'vertical' }}
+          style={{ ...catS.input, minHeight: 80, resize: 'vertical', borderColor: fieldErrors.description ? '#dc2626' : '#e2e8f0' }}
           placeholder="Brief description of this category…"
           value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          onChange={e => { setForm(f => ({ ...f, description: e.target.value })); if (fieldErrors.description) setFieldErrors(prev => ({ ...prev, description: null })); }}
         />
+        {fieldErrors.description && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.description}</span>}
       </div>
       {formError && <div style={catS.error}>{formError}</div>}
       <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
@@ -1685,6 +1895,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [search, setSearch] = useState('');
 
@@ -1692,6 +1903,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1699,6 +1911,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     setEditTarget(supplier);
     setForm({ name: supplier.name, contact: supplier.contact || '', email: supplier.email || '', address: supplier.address || '' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1724,13 +1937,49 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Supplier name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Supplier name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Supplier name must not exceed 100 characters';
+    }
+    
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (form.contact && form.contact.trim() && !/^[\d\s\+\-\(\)]+$/.test(form.contact)) {
+      errors.contact = 'Invalid phone number format';
+    }
+    
+    if (form.address && form.address.length > 500) {
+      errors.address = 'Address must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     try {
       const isEdit = !!editTarget;
       const url = isEdit ? `${API_URL}/suppliers/${editTarget.id}` : `${API_URL}/suppliers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body: JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+        body: JSON.stringify({ 
+          name: form.name.trim(), 
+          contact: form.contact.trim(), 
+          email: form.email.trim(), 
+          address: form.address.trim(), 
+          tenant_id: user.tenant_id 
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
@@ -1855,27 +2104,31 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
           {/* Row 1: Name (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={supS.label}>Supplier Name *</label>
-            <input style={supS.input} placeholder="e.g. Kampala Distributors" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g. Kampala Distributors" value={form.name}
+              onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }} />
+            {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.name}</span>}
           </div>
           {/* Row 2: Contact + Email side by side */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <label style={supS.label}>Contact / Phone</label>
-              <input style={supS.input} placeholder="+256 700 000 000" value={form.contact}
-                onChange={e => setForm(f => ({ ...f, contact: e.target.value }))} />
+              <input style={{ ...supS.input, borderColor: fieldErrors.contact ? '#dc2626' : '#e2e8f0' }} placeholder="+256 700 000 000" value={form.contact}
+                onChange={e => { setForm(f => ({ ...f, contact: e.target.value })); if (fieldErrors.contact) setFieldErrors(prev => ({ ...prev, contact: null })); }} />
+              {fieldErrors.contact && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.contact}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <label style={supS.label}>Email</label>
-              <input style={supS.input} type="email" placeholder="supplier@example.com" value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="supplier@example.com" value={form.email}
+                onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }} />
+              {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.email}</span>}
             </div>
           </div>
           {/* Row 3: Address (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={supS.label}>Address</label>
-            <input style={supS.input} placeholder="Street, City, Country" value={form.address}
-              onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="Street, City, Country" value={form.address}
+              onChange={e => { setForm(f => ({ ...f, address: e.target.value })); if (fieldErrors.address) setFieldErrors(prev => ({ ...prev, address: null })); }} />
+            {fieldErrors.address && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.address}</span>}
           </div>
 
           {formError && (
@@ -1907,6 +2160,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
   const [form, setForm] = useState({ name: '', phone: '', email: '', status: 'active' });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // customer pending deletion
   const [search, setSearch] = useState('');
@@ -1915,6 +2169,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     setEditTarget(null);
     setForm({ name: '', phone: '', email: '', status: 'active' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1922,6 +2177,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     setEditTarget(customer);
     setForm({ name: customer.name, phone: customer.phone || '', email: customer.email || '', status: customer.status || 'active' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1943,13 +2199,50 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Customer name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Customer name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Customer name must not exceed 100 characters';
+    }
+    
+    if (form.phone && form.phone.trim() && !/^[\d\s\+\-\(\)]+$/.test(form.phone)) {
+      errors.phone = 'Invalid phone number format';
+    }
+    
+    if (form.email && form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (form.address && form.address.length > 500) {
+      errors.address = 'Address must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     try {
       const isEdit = !!editTarget;
       const url = isEdit ? `${API}/customers/${editTarget.id}` : `${API}/customers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body: JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+        body: JSON.stringify({ 
+          name: form.name.trim(), 
+          phone: form.phone.trim(), 
+          email: form.email.trim(), 
+          address: form.address?.trim() || '',
+          status: form.status,
+          tenant_id: user.tenant_id 
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Failed to save customer.'); return; }
@@ -2062,52 +2355,57 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
               <label style={custS.label}>
                 Full Name<span style={custS.required}>*</span>
               </label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>👤</span>
                 <input
                   style={custS.input}
                   placeholder="e.g. Jane Nakato"
                   value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
-                  required
                   autoFocus
                 />
               </div>
+              {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.name}</span>}
             </div>
 
             <div style={custS.field}>
               <label style={custS.label}>Phone Number</label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.phone ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>📞</span>
                 <input
                   style={custS.input}
                   type="tel"
                   placeholder="+256 700 000 000"
                   value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, phone: e.target.value })); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
                 />
               </div>
-              <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+              {fieldErrors.phone ? (
+                <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.phone}</span>
+              ) : (
+                <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+              )}
             </div>
 
             <div style={custS.field}>
               <label style={custS.label}>Email Address</label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>✉️</span>
                 <input
                   style={custS.input}
                   type="email"
                   placeholder="customer@example.com"
                   value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
                 />
               </div>
+              {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.email}</span>}
             </div>
           </div>
 
@@ -3885,29 +4183,67 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               variant="success"
               onClick={() => {
                 const src = document.getElementById('receipt-content');
-                if (!src) return;
+                if (!src) {
+                  alert('Receipt content not found. Please try again.');
+                  return;
+                }
+                
                 const win = window.open('', '_blank', 'width=800,height=900');
+                if (!win) {
+                  alert('Pop-up blocked. Please allow pop-ups for this site.');
+                  return;
+                }
+                
                 win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Receipt</title>
+  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #fff; color: #000; padding: 32px; font-size: 14px; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
     @media print {
       body { padding: 20px; }
       button { display: none !important; }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+    
+    @media screen {
+      body {
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        margin: 20px auto;
+      }
     }
   </style>
 </head>
 <body>${src.innerHTML}</body>
 </html>`);
                 win.document.close();
-                win.focus();
-                setTimeout(() => { win.print(); win.close(); }, 400);
+                
+                // Wait for images to load
+                win.addEventListener('load', () => {
+                  setTimeout(() => {
+                    win.focus();
+                    win.print();
+                    // Don't auto-close to allow user to save as PDF
+                    // win.close();
+                  }, 500);
+                });
               }}
             >
               🖨️ Print / Save PDF
@@ -3938,30 +4274,51 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           );
 
           return (
-            <div id="receipt-content" style={{ fontFamily: 'inherit' }}>
+            <div id="receipt-content" style={{ fontFamily: 'inherit', position: 'relative' }}>
+
+              {/* Decorative circle — top right, matches invoice */}
+              <div style={{
+                position: 'absolute', top: -60, right: -60,
+                width: 200, height: 200, borderRadius: '50%',
+                background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+              }} />
 
               {/* ── Business Header ── */}
-              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '1px solid #e2e8f0' }}>
-                {/* Avatar */}
-                <div style={{
-                  width: 64, height: 64, borderRadius: '50%', background: '#4f46e5',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 28, fontWeight: 700, color: '#fff', marginBottom: 10,
-                }}>
-                  {tenantName.charAt(0).toLowerCase()}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>{tenantName}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
+                {/* Logo */}
+                <img
+                  src="/zziwa logo.png"
+                  alt={tenantName}
+                  style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
+                />
+                <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
+                <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
                   {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
                 </div>
-                {tenant.address && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{tenant.address}</div>}
+                {tenant.address && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{tenant.address}</div>}
+                {/* Receipt Badge */}
+                <div style={{
+                  marginTop: 10,
+                  display: 'inline-block',
+                  padding: '6px 16px',
+                  background: '#fff1f2',
+                  border: '1.5px solid #fda4af',
+                  borderRadius: 20,
+                  color: '#881337',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase'
+                }}>
+                  Receipt
+                </div>
               </div>
 
               {/* ── Receipt Details + Customer ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1.5px solid #cbd5e1', position: 'relative' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
-                  <div style={{ color: '#4f46e5', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{receiptRef}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
+                  <div style={{ color: '#be123c', fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{receiptRef}</div>
                   <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                     <span>📅</span> {date}
                   </div>
@@ -3975,8 +4332,8 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
-                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
+                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>
                     {viewingSale.customer?.name || 'Walk-in Customer'}
                   </div>
                   {viewingSale.customer?.phone && (
@@ -3989,75 +4346,112 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               </div>
 
               {/* ── Items Table ── */}
-              <div style={{ paddingTop: 18 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
-                        <th key={h} style={{
-                          padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8',
-                          letterSpacing: '0.06em', textTransform: 'uppercase',
-                          textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
-                          borderBottom: '1px solid #e2e8f0',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 ? (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
-                    ) : items.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
-                        <td style={{ padding: '10px' }}>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
-                          {item.product?.sku && <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.product.sku}</div>}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                          {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                          UGX {parseFloat(item.price).toLocaleString()}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                          UGX {parseFloat(item.subtotal).toLocaleString()}
-                        </td>
+              <div style={{ paddingTop: 18, position: 'relative' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
+                <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#881337' }}>
+                        {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
+                          <th key={h} style={{
+                            padding: '10px', fontSize: 11, fontWeight: 800, color: '#ffffff',
+                            letterSpacing: '0.07em', textTransform: 'uppercase',
+                            textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
+                          }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {items.length === 0 ? (
+                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
+                      ) : items.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
+                            {item.product?.sku && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>SKU: {item.product.sku}</div>}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
+                            {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
+                            UGX {parseFloat(item.price).toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                            UGX {parseFloat(item.subtotal).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* ── Totals ── */}
-              <div style={{ marginTop: 10, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <div style={{ maxWidth: 280, marginLeft: 'auto' }}>
-                  {rRow('Subtotal:', `UGX ${subtotal.toLocaleString()}`)}
-                  {discount > 0 && rRow('Discount:', `− UGX ${discount.toLocaleString()}`, false, '#dc2626')}
-                  {tax > 0 && rRow('Tax:', `+ UGX ${tax.toLocaleString()}`, false, '#16a34a')}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16 }}>TOTAL:</span>
-                    <span style={{ fontWeight: 700, fontSize: 18, color: '#0f172a' }}>UGX {total.toLocaleString()}</span>
+              <div style={{ marginTop: 16, borderTop: '1.5px solid #cbd5e1', paddingTop: 16, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ maxWidth: 520, width: '100%', border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                    <span style={{ color: '#64748b' }}>Subtotal:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
                   </div>
-                  {rRow('Payment Method:', viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
-                    <span style={{ color: '#64748b' }}>Payment Status:</span>
-                    <span style={{ background: '#dcfce7', color: '#16a34a', fontWeight: 700, fontSize: 12, padding: '2px 10px', borderRadius: 20 }}>Paid</span>
+                  {discount > 0 && (
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>Discount:</span>
+                      <span style={{ fontWeight: 600, color: '#dc2626' }}>− UGX {discount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {tax > 0 && (
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>Tax:</span>
+                      <span style={{ fontWeight: 600, color: '#16a34a' }}>+ UGX {tax.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{
+                    padding: '12px 16px',
+                    background: '#fff1f2',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ fontWeight: 800, fontSize: 16, color: '#881337' }}>TOTAL:</span>
+                    <span style={{ fontWeight: 800, fontSize: 18, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
+                  </div>
+                </div>
+                
+                <div style={{ maxWidth: 520, width: '100%', marginTop: 12, padding: '10px 16px', border: '1.5px solid #cbd5e1', borderRadius: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ color: '#64748b', fontSize: 14 }}>Payment Method:</span>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b', fontSize: 14 }}>Payment Status:</span>
+                    <span style={{
+                      background: '#dcfce7',
+                      color: '#16a34a',
+                      fontWeight: 800,
+                      fontSize: 11,
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      letterSpacing: '0.03em',
+                      textTransform: 'uppercase'
+                    }}>
+                      Paid
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Notes */}
               {viewingSale.notes && (
-                <div style={{ marginTop: 14, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#475569', borderLeft: '3px solid #e2e8f0' }}>
+                <div style={{ marginTop: 16, padding: '12px 16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, fontSize: 13, color: '#475569', borderLeft: '4px solid #be123c' }}>
                   📝 {viewingSale.notes}
                 </div>
               )}
 
               {/* ── Thank you footer ── */}
-              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#1e293b', marginBottom: 4 }}>Thank you!</div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>We appreciate your business. Visit us again!</div>
+              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '2px solid #be123c', textAlign: 'center', position: 'relative' }}>
+                <div style={{ fontWeight: 800, fontSize: 17, color: '#881337', marginBottom: 6 }}>Thank you for your business!</div>
+                <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>We appreciate your patronage. Visit us again!</div>
               </div>
             </div>
           );
@@ -4301,6 +4695,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState('');
 
@@ -4338,11 +4733,17 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     setSupplierId('');
     setLines([{ ...EMPTY_LINE }]);
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
-  const setLine = (i, key, val) =>
+  const setLine = (i, key, val) => {
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+    // Clear line-specific errors
+    if (fieldErrors[`line_${i}_${key}`]) {
+      setFieldErrors(prev => ({ ...prev, [`line_${i}_${key}`]: null }));
+    }
+  };
 
   const toggleMode = (i) =>
     setLines(prev => prev.map((l, idx) =>
@@ -4357,17 +4758,73 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!supplierId) { setFormError('Please select a supplier.'); return; }
+    
+    // Validate form
+    const errors = {};
+    
+    if (!supplierId) {
+      errors.supplier = 'Please select a supplier';
+      setFormError('Please select a supplier');
+      setFieldErrors(errors);
+      return;
+    }
+
+    // Validate lines
+    let hasValidLine = false;
+    lines.forEach((l, i) => {
+      if (l.mode === 'existing') {
+        if (!l.product_id) {
+          errors[`line_${i}_product`] = 'Select a product';
+        }
+        if (!l.quantity || l.quantity <= 0) {
+          errors[`line_${i}_quantity`] = 'Quantity required';
+        }
+        if (!l.cost_price || l.cost_price <= 0) {
+          errors[`line_${i}_cost`] = 'Cost price required';
+        }
+        if (l.product_id && l.quantity && l.cost_price) {
+          hasValidLine = true;
+        }
+      } else {
+        // new product
+        if (!l.np_name || !l.np_name.trim()) {
+          errors[`line_${i}_name`] = 'Product name required';
+        }
+        if (!l.np_price || l.np_price <= 0) {
+          errors[`line_${i}_price`] = 'Selling price required';
+        }
+        if (!l.quantity || l.quantity <= 0) {
+          errors[`line_${i}_quantity`] = 'Quantity required';
+        }
+        if (!l.cost_price || l.cost_price <= 0) {
+          errors[`line_${i}_cost`] = 'Cost price required';
+        }
+        if (l.np_track_expiry && !l.np_expiry_date) {
+          errors[`line_${i}_expiry`] = 'Expiry date required';
+        }
+        if (l.np_name && l.np_price && l.quantity && l.cost_price) {
+          hasValidLine = true;
+        }
+      }
+    });
+
+    if (!hasValidLine) {
+      setFormError('Add at least one complete product line with all required fields');
+      setFieldErrors(errors);
+      return;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormError('Please fix the errors in the form');
+      setFieldErrors(errors);
+      return;
+    }
 
     // Validate lines
     const validLines = lines.filter(l => {
       if (l.mode === 'existing') return l.product_id && l.quantity && l.cost_price;
       return l.np_name && l.np_price && l.quantity && l.cost_price;
     });
-    if (validLines.length === 0) {
-      setFormError('Add at least one complete product line.');
-      return;
-    }
 
     const items = validLines.map(l => {
       if (l.mode === 'existing') {
@@ -4965,10 +5422,11 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           {/* Supplier */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={supS.label}>Supplier *</label>
-            <select style={supS.input} value={supplierId} onChange={e => setSupplierId(e.target.value)} required>
+            <select style={{ ...supS.input, borderColor: fieldErrors.supplier ? '#dc2626' : '#e2e8f0' }} value={supplierId} onChange={e => { setSupplierId(e.target.value); if (fieldErrors.supplier) setFieldErrors(prev => ({ ...prev, supplier: null })); }}>
               <option value="">— Select supplier —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {fieldErrors.supplier && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.supplier}</span>}
           </div>
 
           {/* Product Lines */}
@@ -7026,6 +7484,32 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Custom validation
+    if (!form.name.trim()) {
+      setFormError('User name is required');
+      return;
+    }
+    if (form.name.trim().length < 2) {
+      setFormError('User name must be at least 2 characters');
+      return;
+    }
+    if (!form.email.trim()) {
+      setFormError('Email is required');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setFormError('Please enter a valid email address');
+      return;
+    }
+    if (!editTarget && !form.password) {
+      setFormError('Password is required for new users');
+      return;
+    }
+    if (!editTarget && form.password && form.password.length < 8) {
+      setFormError('Password must be at least 8 characters');
+      return;
+    }
+
     // ── ADD USER: Custom role path (atomic endpoint) ──────────────────────────
     if (!editTarget && form.useCustomRole) {
       if (!form.customRoleName.trim()) { setFormError('Please enter a name for the custom role.'); return; }
@@ -7036,8 +7520,8 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
         const res = await fetch(`${API_URL}/users/with-custom-role`, {
           method: 'POST', headers,
           body: JSON.stringify({
-            name: form.name,
-            email: form.email,
+            name: form.name.trim(),
+            email: form.email.trim(),
             password: form.password,
             role_name: form.customRoleName.trim(),
             role_description: form.customRoleDesc.trim() || null,
@@ -8818,6 +9302,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
   const [sourceRef, setSourceRef] = useState(`S00${Math.floor(100 + Math.random() * 900)}`);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Payment status state
   const [paymentStatus, setPaymentStatus] = useState('paid');
@@ -8888,14 +9373,27 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
+    setFieldErrors({});
 
+    // Validate form
+    const errors = {};
+    
     if (!customerName.trim()) {
-      setSubmitError('Please enter or select a customer name.');
-      return;
+      errors.customerName = 'Customer name is required';
     }
+    
     const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
     if (validItems.length === 0) {
-      setSubmitError('Please add at least one valid item with a description and price.');
+      errors.items = 'Please add at least one valid item with a description and price';
+    }
+    
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      errors.customerEmail = 'Please enter a valid email address';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setSubmitError('Please fix the errors below');
       return;
     }
 
@@ -8967,12 +9465,12 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Customer Name *</label>
             <input
               type="text"
-              required
               placeholder="e.g. Asher"
               value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setCustomerName(e.target.value); if (fieldErrors.customerName) setFieldErrors(prev => ({ ...prev, customerName: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerName ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.customerName && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
           </div>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Phone Number</label>
