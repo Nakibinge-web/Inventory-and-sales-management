@@ -49,6 +49,7 @@ export default function Dashboard({ user, token, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -102,7 +103,7 @@ export default function Dashboard({ user, token, onLogout }) {
           totalProducts: (products.data || []).length,
           totalSales: (sales.data || []).reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0),
           totalPurchases: (purchases.data || []).reduce((sum, purchase) => sum + parseFloat(purchase.total_amount || 0), 0),
-          lowStockCount: (lowStock.data || []).length
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
         }
       });
       setError(null);
@@ -180,17 +181,18 @@ export default function Dashboard({ user, token, onLogout }) {
   };
 
   const menuItems = [
-    { id: 'overview',         label: 'Overview',        icon: '📊', color: 'primary' },
+    { id: 'overview', label: 'Overview', icon: '📊', color: 'primary' },
     ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS', icon: '🖥️', color: 'success' }] : []),
     ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products', icon: '📦', color: 'success' }] : []),
     ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️', color: 'warning' }] : []),
     ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' }] : []),
     ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers', icon: '👥', color: 'primary' }] : []),
     ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales', icon: '💰', color: 'success' }] : []),
+    ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄', color: 'primary' }] : []),
     ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' }] : []),
     ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
     ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
-    { id: 'ai',               label: 'AI Assistant',    icon: '🤖', color: 'primary' },
+    { id: 'ai', label: 'AI Assistant', icon: '🤖', color: 'primary' },
     ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
@@ -218,27 +220,32 @@ export default function Dashboard({ user, token, onLogout }) {
             aria-label="Open navigation"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="3" y1="6" x2="21" y2="6"/>
-              <line x1="3" y1="12" x2="21" y2="12"/>
-              <line x1="3" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
           <div style={styles.logoContainer}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: theme.colors.primary[600], display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-            </div>
-            <h1 style={styles.logo}></h1>
+            <img 
+              src="/zziwa logo.png" 
+              alt="Zziwa & Sons Logo" 
+              style={{ 
+                width: 36, 
+                height: 36, 
+                objectFit: 'contain', 
+                background: '#ffffff', 
+                padding: '4px', 
+                borderRadius: 8, 
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }} 
+            />
           </div>
           <Badge variant="primary" size="sm">
             {user.tenant?.name || 'Business'}
           </Badge>
         </div>
-        
+
         <div style={styles.headerCenter} className="header-search">
           <div style={{ ...styles.searchContainer, position: 'relative' }}>
             <span style={styles.searchIcon}>🔍</span>
@@ -263,8 +270,8 @@ export default function Dashboard({ user, token, onLogout }) {
                     cursor: 'pointer', borderBottom: i < searchResults.length - 1 ? '1px solid #f8fafc' : 'none',
                     transition: 'background 0.1s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <span style={{ fontSize: 18 }}>{r.icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -278,13 +285,196 @@ export default function Dashboard({ user, token, onLogout }) {
             )}
           </div>
         </div>
-        
+
         <div style={styles.headerRight}>
-          <div style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px' }}>
+          <div 
+            style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
+            {data.stats.lowStockCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: '#dc2626',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700
+              }}>
+                {data.stats.lowStockCount}
+              </span>
+            )}
+            
+            {showNotifications && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 8,
+                width: 360,
+                maxHeight: 450,
+                overflowY: 'auto',
+                background: '#fff',
+                border: '1.5px solid #e2e8f0',
+                borderRadius: 12,
+                boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                zIndex: 1000
+              }}
+              onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
+                  <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                </div>
+                
+                {/* Low/Out of Stock Section */}
+                {data.stats.lowStockCount > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ Stock Alert ({data.stats.lowStockCount})</p>
+                      <button 
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                        VIEW ALL →
+                      </button>
+                    </div>
+                    {data.products
+                      .filter(p => p.stock <= (p.reorder_level || 10))
+                      .sort((a, b) => a.stock - b.stock)
+                      .slice(0, 3)
+                      .map(product => (
+                      <div key={product.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        background: product.stock === 0 ? '#fef2f2' : 'transparent',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = product.stock === 0 ? '#fee2e2' : '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = product.stock === 0 ? '#fef2f2' : 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
+                          {product.stock === 0 && (
+                            <span style={{ 
+                              fontSize: 9, 
+                              fontWeight: 700, 
+                              color: '#dc2626', 
+                              background: '#fee2e2', 
+                              padding: '2px 6px', 
+                              borderRadius: 4 
+                            }}>OUT OF STOCK</span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: product.stock === 0 ? '#dc2626' : '#64748b' }}>
+                          Stock: <strong>{product.stock}</strong> {product.unit || 'units'} • Reorder at {product.reorder_level || 10}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Sales Section */}
+                {data.sales.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#16a34a' }}>💰 Recent Sales</p>
+                    </div>
+                    {data.sales.slice(0, 2).map(sale => (
+                      <div key={sale.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('sales'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {sale.customer?.name || 'Walk-in Customer'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
+                            UGX {parseFloat(sale.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(sale.sale_date || sale.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Purchases Section */}
+                {data.purchases.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#2563eb' }}>🛒 Recent Purchases</p>
+                    </div>
+                    {data.purchases.slice(0, 2).map(purchase => (
+                      <div key={purchase.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('purchases'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {purchase.supplier?.name || 'Supplier'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>
+                            UGX {parseFloat(purchase.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(purchase.purchase_date || purchase.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* No notifications */}
+                {data.stats.lowStockCount === 0 && data.sales.length === 0 && data.purchases.length === 0 && (
+                  <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+                    <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>All caught up! No new notifications</p>
+                  </div>
+                )}
+                
+                {/* View All Link */}
+                {(data.stats.lowStockCount > 3 || data.sales.length > 2 || data.purchases.length > 2) && (
+                  <div style={{ padding: '10px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      style={{ 
+                        fontSize: 12, 
+                        color: '#64748b', 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}>
+                      Close Notifications
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
@@ -293,7 +483,7 @@ export default function Dashboard({ user, token, onLogout }) {
             <div style={{ ...styles.userDetails }} className="user-details-text">
               <span style={styles.userName}>{user.name}</span>
               <span style={styles.userRole}>
-                {user.roles && user.roles.length > 0 
+                {user.roles && user.roles.length > 0
                   ? user.roles.map(r => r.name).join(', ')
                   : 'No role'}
               </span>
@@ -322,8 +512,8 @@ export default function Dashboard({ user, token, onLogout }) {
                 aria-label="Close navigation"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
@@ -338,8 +528,8 @@ export default function Dashboard({ user, token, onLogout }) {
                     ...(activeTab === item.id ? styles.menuItemActive : {})
                   }}
                   onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
-                  onMouseEnter={e => { if (activeTab !== item.id) { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}}
-                  onMouseLeave={e => { if (activeTab !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
+                  onMouseEnter={e => { if (activeTab !== item.id) { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; } }}
+                  onMouseLeave={e => { if (activeTab !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
                 >
                   <span style={styles.menuIcon}>{item.icon}</span>
                   <span style={styles.menuLabel}>{item.label}</span>
@@ -365,7 +555,7 @@ export default function Dashboard({ user, token, onLogout }) {
                   }}
                   onClick={() => { setActiveTab('users'); setMobileNavOpen(false); }}
                   onMouseEnter={e => { if (activeTab !== 'users') e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}
-                  onMouseLeave={e => { if (activeTab !== 'users') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}}
+                  onMouseLeave={e => { if (activeTab !== 'users') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
                 >
                   <span style={styles.menuIcon}>🔑</span>
                   <span style={styles.menuLabel}>Users</span>
@@ -390,11 +580,11 @@ export default function Dashboard({ user, token, onLogout }) {
           )}
 
           {activeTab === 'overview' && <OverviewTab data={data} loading={loading} onNavigate={setActiveTab} onAddProduct={() => setShowAddProduct(true)}
-              canSell={hasPermission('sales.create')}
-              canAddProduct={hasPermission('products.create')}
-              canAddSupplier={hasPermission('suppliers.create')}
-              canRecordPurchase={hasPermission('purchases.create')}
-            />}
+            canSell={hasPermission('sales.create')}
+            canAddProduct={hasPermission('products.create')}
+            canAddSupplier={hasPermission('suppliers.create')}
+            canRecordPurchase={hasPermission('purchases.create')}
+          />}
           {activeTab === 'pos' && (
             <POSTab
               products={data.products}
@@ -417,7 +607,7 @@ export default function Dashboard({ user, token, onLogout }) {
                     stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
                     products: prev.products.map(p => {
                       const item = sale.sale_items?.find(i => i.product_id === p.id)
-                                 || sale.saleItems?.find(i => i.product_id === p.id);
+                        || sale.saleItems?.find(i => i.product_id === p.id);
                       return item ? { ...p, stock: p.stock - item.quantity } : p;
                     }),
                     customers: (!customerAlreadyExists && newCustomerEntry)
@@ -500,6 +690,15 @@ export default function Dashboard({ user, token, onLogout }) {
               return item ? { ...p, stock: p.stock + Number(item.quantity) } : p;
             }),
           }))} />}
+          {activeTab === 'invoices' && (
+            <InvoicesTab
+              sales={data.sales}
+              customers={data.customers}
+              user={user}
+              token={token}
+              toast={toast}
+            />
+          )}
           {activeTab === 'purchases' && (
             <PurchasesTab
               purchases={data.purchases}
@@ -642,33 +841,37 @@ export default function Dashboard({ user, token, onLogout }) {
 // Overview Tab Component
 function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, canAddProduct = true, canAddSupplier = true, canRecordPurchase = true }) {
   const today = new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const hour  = new Date().getHours();
+  const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const recentSalesColumns = [
-    { key: 'sale_date',      title: 'Date',    type: 'date' },
-    { key: 'total_amount',   title: 'Amount',  type: 'currency' },
-    { key: 'payment_method', title: 'Payment', render: v => (
-      <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-        background: '#f1f5f9', color: '#475569', textTransform: 'capitalize' }}>
-        {v?.replace(/_/g, ' ') || '—'}
-      </span>
-    )},
+    { key: 'sale_date', title: 'Date', type: 'date' },
+    { key: 'total_amount', title: 'Amount', type: 'currency' },
+    {
+      key: 'payment_method', title: 'Payment', render: v => (
+        <span style={{
+          padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+          background: '#f1f5f9', color: '#475569', textTransform: 'capitalize'
+        }}>
+          {v?.replace(/_/g, ' ') || '—'}
+        </span>
+      )
+    },
     { key: 'user', title: 'Cashier', render: v => v?.name || '—' }
   ];
 
   const kpi = [
-    { label: 'Total Products',   value: data.stats.totalProducts,                          sub: 'Items in inventory',  color: 'primary' },
-    { label: 'Total Sales',      value: `UGX ${data.stats.totalSales.toLocaleString()}`,   sub: 'Revenue generated',   color: 'success' },
-    { label: 'Total Purchases',  value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, sub: 'Stock investment',  color: 'warning' },
-    { label: 'Low Stock Alerts', value: data.stats.lowStockCount,                          sub: 'Items need reordering', color: 'danger', trend: data.stats.lowStockCount > 0 ? 'up' : 'neutral', tv: data.stats.lowStockCount > 0 ? 'Needs attention' : 'All good' },
+    { label: 'Total Products', value: data.stats.totalProducts, sub: 'Items in inventory', color: 'primary' },
+    { label: 'Total Sales', value: `UGX ${data.stats.totalSales.toLocaleString()}`, sub: 'Revenue generated', color: 'success' },
+    { label: 'Total Purchases', value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, sub: 'Stock investment', color: 'warning' },
+    { label: 'Low Stock Alerts', value: data.stats.lowStockCount, sub: 'Items need reordering', color: 'danger', trend: data.stats.lowStockCount > 0 ? 'up' : 'neutral', tv: data.stats.lowStockCount > 0 ? 'Needs attention' : 'All good' },
   ];
 
   const quickActions = [
-    ...(canSell           ? [{ label: 'New Sale',        sub: 'Process a sale transaction', action: () => onNavigate('pos'),       accent: '#4f46e5' }] : []),
-    ...(canAddProduct     ? [{ label: 'Add Product',     sub: 'Add to your inventory',       action: onAddProduct,                  accent: '#16a34a' }] : []),
-    ...(canAddSupplier    ? [{ label: 'Add Supplier',    sub: 'Register a new vendor',       action: () => onNavigate('suppliers'), accent: '#0891b2' }] : []),
-    ...(canRecordPurchase ? [{ label: 'Record Purchase', sub: 'Log a supplier order',        action: () => onNavigate('purchases'), accent: '#d97706' }] : []),
+    ...(canSell ? [{ label: 'New Sale', sub: 'Process a sale transaction', action: () => onNavigate('pos'), accent: '#4f46e5' }] : []),
+    ...(canAddProduct ? [{ label: 'Add Product', sub: 'Add to your inventory', action: onAddProduct, accent: '#16a34a' }] : []),
+    ...(canAddSupplier ? [{ label: 'Add Supplier', sub: 'Register a new vendor', action: () => onNavigate('suppliers'), accent: '#0891b2' }] : []),
+    ...(canRecordPurchase ? [{ label: 'Record Purchase', sub: 'Log a supplier order', action: () => onNavigate('purchases'), accent: '#d97706' }] : []),
   ];
 
   return (
@@ -681,14 +884,30 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, 
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
       }}>
-        <div>
-          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
-          <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.5px' }}>
-            {greeting} 👋
-          </h1>
-          <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', maxWidth: 440, lineHeight: 1.5 }}>
-            Here's a live snapshot of your business. Use the quick actions below to get things done fast.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          <img 
+            src="/zziwa logo.png" 
+            alt="Zziwa & Sons Logo" 
+            style={{ 
+              width: 96, 
+              height: 96, 
+              objectFit: 'contain', 
+              background: '#ffffff', 
+              padding: '6px', 
+              borderRadius: 18, 
+              flexShrink: 0,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.25)'
+            }} 
+          />
+          <div>
+            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
+            <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.5px' }}>
+              {greeting} 👋
+            </h1>
+            <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', maxWidth: 440, lineHeight: 1.5 }}>
+              Here's a live snapshot of your business. Use the quick actions below to get things done fast.
+            </p>
+          </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Today's Sales</div>
@@ -715,33 +934,33 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, 
           Quick Actions
         </h2>
         {quickActions.length > 0 ? (
-        <div className="quick-actions-grid" style={{ gridTemplateColumns: `repeat(${quickActions.length}, 1fr)` }}>
-          {quickActions.map(q => (
-            <button key={q.label} onClick={q.action} style={{
-              padding: '18px 20px', borderRadius: 12,
-              border: `1.5px solid #e2e8f0`,
-              background: '#ffffff', cursor: 'pointer', textAlign: 'left',
-              transition: 'all 0.15s', outline: 'none', position: 'relative', overflow: 'hidden',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.borderColor = q.accent;
-              e.currentTarget.style.background = q.accent + '08';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = `0 4px 16px ${q.accent}22`;
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.borderColor = '#e2e8f0';
-              e.currentTarget.style.background = '#ffffff';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}>
-              {/* Accent dot */}
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: q.accent, marginBottom: 12 }} />
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{q.label}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{q.sub}</div>
-            </button>
-          ))}
-        </div>
+          <div className="quick-actions-grid" style={{ gridTemplateColumns: `repeat(${quickActions.length}, 1fr)` }}>
+            {quickActions.map(q => (
+              <button key={q.label} onClick={q.action} style={{
+                padding: '18px 20px', borderRadius: 12,
+                border: `1.5px solid #e2e8f0`,
+                background: '#ffffff', cursor: 'pointer', textAlign: 'left',
+                transition: 'all 0.15s', outline: 'none', position: 'relative', overflow: 'hidden',
+              }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = q.accent;
+                  e.currentTarget.style.background = q.accent + '08';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 4px 16px ${q.accent}22`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = '#e2e8f0';
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}>
+                {/* Accent dot */}
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: q.accent, marginBottom: 12 }} />
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{q.label}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{q.sub}</div>
+              </button>
+            ))}
+          </div>
         ) : (
           <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>No quick actions available for your role.</p>
         )}
@@ -841,8 +1060,8 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
 
   const getStockStatus = (stock, reorder) => {
     const s = Number(stock ?? 0), r = Number(reorder ?? 0);
-    if (s === 0)  return 'out';
-    if (s <= r)   return 'low';
+    if (s === 0) return 'out';
+    if (s <= r) return 'low';
     return 'in';
   };
 
@@ -889,12 +1108,12 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
         const src = row.image_url || (value ? `${API_BASE}/storage/${value}` : null);
         return src
           ? <img src={src} alt="product"
-              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+            style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
           : <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>
-              </svg>
-            </div>;
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" /><path d="M3 9h18M9 21V9" />
+            </svg>
+          </div>;
       }
     },
     { key: 'name', title: 'Product Name' },
@@ -978,26 +1197,26 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
       render: (_, row) => (
         <div style={{ display: 'flex', gap: 8 }}>
           {canEdit && (
-          <button
-            onClick={() => setEditingProduct(row)}
-            style={{
-              padding: '4px 12px', borderRadius: 6, border: '1px solid #3b82f6',
-              background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500
-            }}
-          >
-            Edit
-          </button>
+            <button
+              onClick={() => setEditingProduct(row)}
+              style={{
+                padding: '4px 12px', borderRadius: 6, border: '1px solid #3b82f6',
+                background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500
+              }}
+            >
+              Edit
+            </button>
           )}
           {canDelete && (
-          <button
-            onClick={() => { setDeleteError(null); setDeletingProduct(row); }}
-            style={{
-              padding: '4px 12px', borderRadius: 6, border: '1px solid #ef4444',
-              background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500
-            }}
-          >
-            Delete
-          </button>
+            <button
+              onClick={() => { setDeleteError(null); setDeletingProduct(row); }}
+              style={{
+                padding: '4px 12px', borderRadius: 6, border: '1px solid #ef4444',
+                background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500
+              }}
+            >
+              Delete
+            </button>
           )}
         </div>
       )
@@ -1026,20 +1245,20 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
             background: 'transparent', color: '#94a3b8', cursor: 'pointer',
             fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#a5b4fc'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}>
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#a5b4fc'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#94a3b8'; }}>
             Expiry Tracker
           </button>
           {canCreate && (
-          <button onClick={onAddProduct} style={{
-            padding: '9px 20px', borderRadius: 8, border: 'none',
-            background: '#4f46e5', color: '#fff', cursor: 'pointer',
-            fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#4338ca'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#4f46e5'; }}>
-            + Add Product
-          </button>
+            <button onClick={onAddProduct} style={{
+              padding: '9px 20px', borderRadius: 8, border: 'none',
+              background: '#4f46e5', color: '#fff', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#4338ca'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#4f46e5'; }}>
+              + Add Product
+            </button>
           )}
         </div>
       </div>
@@ -1049,9 +1268,9 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
         <div className="stats-grid-4">
           {[
             { label: 'Total Products', value: products.length, color: '#4f46e5' },
-            { label: 'In Stock',       value: products.filter(p => Number(p.stock) > Number(p.reorder_level || 0)).length, color: '#16a34a' },
-            { label: 'Low Stock',      value: products.filter(p => Number(p.stock) > 0 && Number(p.stock) <= Number(p.reorder_level || 0)).length, color: '#d97706' },
-            { label: 'Out of Stock',   value: products.filter(p => Number(p.stock) === 0).length, color: '#dc2626' },
+            { label: 'In Stock', value: products.filter(p => Number(p.stock) > Number(p.reorder_level || 0)).length, color: '#16a34a' },
+            { label: 'Low Stock', value: products.filter(p => Number(p.stock) > 0 && Number(p.stock) <= Number(p.reorder_level || 0)).length, color: '#d97706' },
+            { label: 'Out of Stock', value: products.filter(p => Number(p.stock) === 0).length, color: '#dc2626' },
           ].map(s => (
             <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', borderTop: `3px solid ${s.color}` }}>
               <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
@@ -1208,19 +1427,19 @@ function ExpiryGoodsView({ products }) {
     .sort((a, b) => a.diffDays - b.diffDays);
 
   const getStatus = (days) => {
-    if (days < 0)   return { label: 'Expired',        variant: 'danger',  color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' };
-    if (days <= 7)  return { label: 'Critical',       variant: 'danger',  color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' };
-    if (days <= 30) return { label: 'Expiring Soon',  variant: 'warning', color: '#92400e', bg: '#fffbeb', border: '#fde68a' };
-    return              { label: 'Good',              variant: 'success', color: '#065f46', bg: '#f0fdf4', border: '#bbf7d0' };
+    if (days < 0) return { label: 'Expired', variant: 'danger', color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' };
+    if (days <= 7) return { label: 'Critical', variant: 'danger', color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' };
+    if (days <= 30) return { label: 'Expiring Soon', variant: 'warning', color: '#92400e', bg: '#fffbeb', border: '#fde68a' };
+    return { label: 'Good', variant: 'success', color: '#065f46', bg: '#f0fdf4', border: '#bbf7d0' };
   };
 
   const getTimeLabel = (days) => {
-    if (days < 0)  return `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''} ago`;
+    if (days < 0) return `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''} ago`;
     if (days === 0) return 'Expires today!';
     if (days === 1) return '1 day remaining';
-    if (days < 30)  return `${days} days remaining`;
+    if (days < 30) return `${days} days remaining`;
     const months = Math.floor(days / 30);
-    const rem    = days % 30;
+    const rem = days % 30;
     return rem > 0 ? `${months}mo ${rem}d remaining` : `${months} month${months !== 1 ? 's' : ''} remaining`;
   };
 
@@ -1236,18 +1455,18 @@ function ExpiryGoodsView({ products }) {
     );
   }
 
-  const expired  = expiryProducts.filter(p => p.diffDays < 0).length;
+  const expired = expiryProducts.filter(p => p.diffDays < 0).length;
   const critical = expiryProducts.filter(p => p.diffDays >= 0 && p.diffDays <= 7).length;
-  const soon     = expiryProducts.filter(p => p.diffDays > 7 && p.diffDays <= 30).length;
+  const soon = expiryProducts.filter(p => p.diffDays > 7 && p.diffDays <= 30).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Summary pills */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {expired  > 0 && <span style={exS.pill('#fef2f2','#fecaca','#b91c1c')}>🚫 {expired} Expired</span>}
-        {critical > 0 && <span style={exS.pill('#fef2f2','#fecaca','#dc2626')}>🔴 {critical} Critical (≤7 days)</span>}
-        {soon     > 0 && <span style={exS.pill('#fffbeb','#fde68a','#92400e')}>🟡 {soon} Expiring Soon (≤30 days)</span>}
-        <span style={exS.pill('#f0fdf4','#bbf7d0','#065f46')}>
+        {expired > 0 && <span style={exS.pill('#fef2f2', '#fecaca', '#b91c1c')}>🚫 {expired} Expired</span>}
+        {critical > 0 && <span style={exS.pill('#fef2f2', '#fecaca', '#dc2626')}>🔴 {critical} Critical (≤7 days)</span>}
+        {soon > 0 && <span style={exS.pill('#fffbeb', '#fde68a', '#92400e')}>🟡 {soon} Expiring Soon (≤30 days)</span>}
+        <span style={exS.pill('#f0fdf4', '#bbf7d0', '#065f46')}>
           ✅ {expiryProducts.length - expired - critical - soon} Good
         </span>
       </div>
@@ -1334,22 +1553,45 @@ const supS = {
 
 // Categories Tab Component
 function CategoriesTab({ categories, loading, token, canCreate = true, canEdit = true, canDelete = true, onCategoryAdded, onCategoryUpdated, onCategoryDeleted }) {
-  const [showAddModal, setShowAddModal]       = useState(false);
-  const [editingCat, setEditingCat]           = useState(null);
-  const [deletingCat, setDeletingCat]         = useState(null);
-  const [form, setForm]                       = useState({ name: '', description: '' });
-  const [saving, setSaving]                   = useState(false);
-  const [deleteLoading, setDeleteLoading]     = useState(false);
-  const [formError, setFormError]             = useState(null);
-  const [deleteError, setDeleteError]         = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingCat, setEditingCat] = useState(null);
+  const [deletingCat, setDeletingCat] = useState(null);
+  const [form, setForm] = useState({ name: '', description: '' });
+  const [saving, setSaving] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [deleteError, setDeleteError] = useState(null);
 
-  const openAdd  = () => { setForm({ name: '', description: '' }); setFormError(null); setShowAddModal(true); };
-  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setEditingCat(cat); };
+  const openAdd = () => { setForm({ name: '', description: '' }); setFormError(null); setFieldErrors({}); setShowAddModal(true); };
+  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setFieldErrors({}); setEditingCat(cat); };
 
   const handleSubmit = async e => {
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Category name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Category name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Category name must not exceed 100 characters';
+    }
+    
+    if (form.description && form.description.length > 500) {
+      errors.description = 'Description must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     const isEdit = !!editingCat;
     try {
       const res = await fetch(
@@ -1357,14 +1599,14 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
         {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ name: form.name.trim(), description: form.description.trim() }),
         }
       );
       const data = await res.json();
       if (!res.ok) { setFormError(data?.message || `Error ${res.status}`); }
       else {
         if (isEdit) { onCategoryUpdated(data.data); setEditingCat(null); }
-        else        { onCategoryAdded(data.data);   setShowAddModal(false); }
+        else { onCategoryAdded(data.data); setShowAddModal(false); }
         setForm({ name: '', description: '' });
       }
     } catch {
@@ -1402,22 +1644,23 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <label style={catS.label}>Category Name *</label>
         <input
-          style={catS.input}
+          style={{ ...catS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }}
           placeholder="e.g. Electronics"
           value={form.name}
-          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          required
+          onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
           autoFocus
         />
+        {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.name}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <label style={catS.label}>Description (optional)</label>
         <textarea
-          style={{ ...catS.input, minHeight: 80, resize: 'vertical' }}
+          style={{ ...catS.input, minHeight: 80, resize: 'vertical', borderColor: fieldErrors.description ? '#dc2626' : '#e2e8f0' }}
           placeholder="Brief description of this category…"
           value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          onChange={e => { setForm(f => ({ ...f, description: e.target.value })); if (fieldErrors.description) setFieldErrors(prev => ({ ...prev, description: null })); }}
         />
+        {fieldErrors.description && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.description}</span>}
       </div>
       {formError && <div style={catS.error}>{formError}</div>}
       <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
@@ -1448,15 +1691,15 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
           </p>
         </div>
         {canCreate && (
-        <button onClick={openAdd} style={{
-          padding: '9px 20px', borderRadius: 8, border: 'none',
-          background: '#4f46e5', color: '#fff', cursor: 'pointer',
-          fontSize: 13, fontWeight: 600,
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-        onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
-          + Add Category
-        </button>
+          <button onClick={openAdd} style={{
+            padding: '9px 20px', borderRadius: 8, border: 'none',
+            background: '#4f46e5', color: '#fff', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600,
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+            + Add Category
+          </button>
         )}
       </div>
 
@@ -1476,7 +1719,7 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
       ) : (
         <div style={styles.cardsGrid}>
           {categories.map((category, idx) => {
-            const colors = ['#4f46e5','#16a34a','#0891b2','#d97706','#dc2626','#7c3aed'];
+            const colors = ['#4f46e5', '#16a34a', '#0891b2', '#d97706', '#dc2626', '#7c3aed'];
             const accent = colors[idx % colors.length];
             return (
               <div key={category.id} style={{
@@ -1646,18 +1889,20 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const EMPTY_FORM = { name: '', contact: '', email: '', address: '' };
-  const [showModal, setShowModal]   = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
-  const [search, setSearch]         = useState('');
+  const [search, setSearch] = useState('');
 
   const openAdd = () => {
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1665,6 +1910,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     setEditTarget(supplier);
     setForm({ name: supplier.name, contact: supplier.contact || '', email: supplier.email || '', address: supplier.address || '' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1690,13 +1936,49 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Supplier name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Supplier name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Supplier name must not exceed 100 characters';
+    }
+    
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (form.contact && form.contact.trim() && !/^[\d\s\+\-\(\)]+$/.test(form.contact)) {
+      errors.contact = 'Invalid phone number format';
+    }
+    
+    if (form.address && form.address.length > 500) {
+      errors.address = 'Address must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     try {
       const isEdit = !!editTarget;
-      const url    = isEdit ? `${API_URL}/suppliers/${editTarget.id}` : `${API_URL}/suppliers`;
-      const res    = await fetch(url, {
-        method:  isEdit ? 'PUT' : 'POST',
+      const url = isEdit ? `${API_URL}/suppliers/${editTarget.id}` : `${API_URL}/suppliers`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body:    JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+        body: JSON.stringify({ 
+          name: form.name.trim(), 
+          contact: form.contact.trim(), 
+          email: form.email.trim(), 
+          address: form.address.trim(), 
+          tenant_id: user.tenant_id 
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
@@ -1742,14 +2024,14 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
             />
           )}
           {canCreate && (
-          <button onClick={openAdd} style={{
-            padding: '9px 20px', borderRadius: 8, border: 'none',
-            background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-          onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
-            + Add Supplier
-          </button>
+            <button onClick={openAdd} style={{
+              padding: '9px 20px', borderRadius: 8, border: 'none',
+              background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+              onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+              + Add Supplier
+            </button>
           )}
         </div>
       </div>
@@ -1782,8 +2064,8 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
               {/* Details */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {[
-                  { label: 'Phone',   value: supplier.contact },
-                  { label: 'Email',   value: supplier.email },
+                  { label: 'Phone', value: supplier.contact },
+                  { label: 'Email', value: supplier.email },
                   { label: 'Address', value: supplier.address },
                 ].map(d => (
                   <div key={d.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -1795,14 +2077,14 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
                 {canEdit && (
-                <button onClick={() => openEdit(supplier)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                  Edit
-                </button>
+                  <button onClick={() => openEdit(supplier)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    Edit
+                  </button>
                 )}
                 {canDelete && (
-                <button onClick={() => handleDelete(supplier)} disabled={deletingId === supplier.id} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                  {deletingId === supplier.id ? 'Deleting…' : 'Delete'}
-                </button>
+                  <button onClick={() => handleDelete(supplier)} disabled={deletingId === supplier.id} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    {deletingId === supplier.id ? 'Deleting…' : 'Delete'}
+                  </button>
                 )}
               </div>
             </div>
@@ -1821,27 +2103,31 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
           {/* Row 1: Name (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={supS.label}>Supplier Name *</label>
-            <input style={supS.input} placeholder="e.g. Kampala Distributors" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g. Kampala Distributors" value={form.name}
+              onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }} />
+            {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.name}</span>}
           </div>
           {/* Row 2: Contact + Email side by side */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <label style={supS.label}>Contact / Phone</label>
-              <input style={supS.input} placeholder="+256 700 000 000" value={form.contact}
-                onChange={e => setForm(f => ({ ...f, contact: e.target.value }))} />
+              <input style={{ ...supS.input, borderColor: fieldErrors.contact ? '#dc2626' : '#e2e8f0' }} placeholder="+256 700 000 000" value={form.contact}
+                onChange={e => { setForm(f => ({ ...f, contact: e.target.value })); if (fieldErrors.contact) setFieldErrors(prev => ({ ...prev, contact: null })); }} />
+              {fieldErrors.contact && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.contact}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <label style={supS.label}>Email</label>
-              <input style={supS.input} type="email" placeholder="supplier@example.com" value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="supplier@example.com" value={form.email}
+                onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }} />
+              {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.email}</span>}
             </div>
           </div>
           {/* Row 3: Address (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={supS.label}>Address</label>
-            <input style={supS.input} placeholder="Street, City, Country" value={form.address}
-              onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="Street, City, Country" value={form.address}
+              onChange={e => { setForm(f => ({ ...f, address: e.target.value })); if (fieldErrors.address) setFieldErrors(prev => ({ ...prev, address: null })); }} />
+            {fieldErrors.address && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.address}</span>}
           </div>
 
           {formError && (
@@ -1868,19 +2154,21 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
 function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded, onCustomerUpdated, onCustomerDeleted, canCreate = true, canEdit = true, canDelete = true }) {
   const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-  const [showModal, setShowModal]   = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm]             = useState({ name: '', phone: '', email: '', status: 'active' });
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState(null);
+  const [form, setForm] = useState({ name: '', phone: '', email: '', status: 'active' });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // customer pending deletion
-  const [search, setSearch]         = useState('');
+  const [search, setSearch] = useState('');
 
   const openAdd = () => {
     setEditTarget(null);
     setForm({ name: '', phone: '', email: '', status: 'active' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1888,6 +2176,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     setEditTarget(customer);
     setForm({ name: customer.name, phone: customer.phone || '', email: customer.email || '', status: customer.status || 'active' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1909,13 +2198,50 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Customer name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Customer name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Customer name must not exceed 100 characters';
+    }
+    
+    if (form.phone && form.phone.trim() && !/^[\d\s\+\-\(\)]+$/.test(form.phone)) {
+      errors.phone = 'Invalid phone number format';
+    }
+    
+    if (form.email && form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (form.address && form.address.length > 500) {
+      errors.address = 'Address must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     try {
       const isEdit = !!editTarget;
-      const url    = isEdit ? `${API}/customers/${editTarget.id}` : `${API}/customers`;
-      const res    = await fetch(url, {
-        method:  isEdit ? 'PUT' : 'POST',
+      const url = isEdit ? `${API}/customers/${editTarget.id}` : `${API}/customers`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body:    JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+        body: JSON.stringify({ 
+          name: form.name.trim(), 
+          phone: form.phone.trim(), 
+          email: form.email.trim(), 
+          address: form.address?.trim() || '',
+          status: form.status,
+          tenant_id: user.tenant_id 
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Failed to save customer.'); return; }
@@ -1959,14 +2285,14 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
             />
           )}
           {canCreate && (
-          <button onClick={openAdd} style={{
-            padding: '9px 20px', borderRadius: 8, border: 'none',
-            background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-          onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
-            + Add Customer
-          </button>
+            <button onClick={openAdd} style={{
+              padding: '9px 20px', borderRadius: 8, border: 'none',
+              background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+              onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}>
+              + Add Customer
+            </button>
           )}
         </div>
       </div>
@@ -2028,52 +2354,57 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
               <label style={custS.label}>
                 Full Name<span style={custS.required}>*</span>
               </label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>👤</span>
                 <input
                   style={custS.input}
                   placeholder="e.g. Jane Nakato"
                   value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
-                  required
                   autoFocus
                 />
               </div>
+              {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.name}</span>}
             </div>
 
             <div style={custS.field}>
               <label style={custS.label}>Phone Number</label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.phone ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>📞</span>
                 <input
                   style={custS.input}
                   type="tel"
                   placeholder="+256 700 000 000"
                   value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, phone: e.target.value })); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
                 />
               </div>
-              <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+              {fieldErrors.phone ? (
+                <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.phone}</span>
+              ) : (
+                <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+              )}
             </div>
 
             <div style={custS.field}>
               <label style={custS.label}>Email Address</label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>✉️</span>
                 <input
                   style={custS.input}
                   type="email"
                   placeholder="customer@example.com"
                   value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
                 />
               </div>
+              {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.email}</span>}
             </div>
           </div>
 
@@ -2177,30 +2508,30 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                   {canEdit && (
-                  <button
-                    onClick={() => openEdit(c)}
-                    style={{
-                      padding: '8px 18px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-                      background: '#fff', color: '#0f172a', fontWeight: 600, fontSize: 13,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Edit
-                  </button>
+                    <button
+                      onClick={() => openEdit(c)}
+                      style={{
+                        padding: '8px 18px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+                        background: '#fff', color: '#0f172a', fontWeight: 600, fontSize: 13,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Edit
+                    </button>
                   )}
                   {canDelete && (
-                  <button
-                    onClick={() => setConfirmDelete(c)}
-                    disabled={deletingId === c.id}
-                    style={{
-                      padding: '8px 18px', borderRadius: 10, border: 'none',
-                      background: '#ef4444', color: '#fff', fontWeight: 700, fontSize: 13,
-                      cursor: deletingId === c.id ? 'not-allowed' : 'pointer',
-                      opacity: deletingId === c.id ? 0.6 : 1,
-                    }}
-                  >
-                    {deletingId === c.id ? 'Deleting…' : 'Delete'}
-                  </button>
+                    <button
+                      onClick={() => setConfirmDelete(c)}
+                      disabled={deletingId === c.id}
+                      style={{
+                        padding: '8px 18px', borderRadius: 10, border: 'none',
+                        background: '#ef4444', color: '#fff', fontWeight: 700, fontSize: 13,
+                        cursor: deletingId === c.id ? 'not-allowed' : 'pointer',
+                        opacity: deletingId === c.id ? 0.6 : 1,
+                      }}
+                    >
+                      {deletingId === c.id ? 'Deleting…' : 'Delete'}
+                    </button>
                   )}                </div>
               </div>
             ))}
@@ -2278,37 +2609,37 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
   );
 }
 function POSTab({ products, categories, customers, token, user, onSaleCompleted, canSell = true }) {
-  const [search, setSearch]           = useState('');
+  const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [cart, setCart]               = useState([]);
+  const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [submitting, setSubmitting]   = useState(false);
-  const [saleError, setSaleError]     = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [saleError, setSaleError] = useState(null);
   const [lastReceipt, setLastReceipt] = useState(null);
 
   // Customer selection state
-  const [customerType, setCustomerType]         = useState('walk_in');
+  const [customerType, setCustomerType] = useState('walk_in');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [customerSearch, setCustomerSearch]     = useState('');
-  const [newCustomer, setNewCustomer]           = useState({ name: '', phone: '', email: '' });
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
 
   // Discount & tax state
   const [discountValue, setDiscountValue] = useState('');
-  const [taxValue, setTaxValue]           = useState('');
+  const [taxValue, setTaxValue] = useState('');
 
   // Cash payment state
   const [amountPaid, setAmountPaid] = useState('');
-  const [cashNote, setCashNote]     = useState('');
+  const [cashNote, setCashNote] = useState('');
 
   // ── Barcode scanner state ────────────────────────────────
-  const barcodeInputRef                     = useRef(null);
-  const [barcodeValue, setBarcodeValue]     = useState('');
-  const [barcodeFlash, setBarcodeFlash]     = useState(null); // 'success' | 'error' | null
-  const [barcodeMsg, setBarcodeMsg]         = useState('');
-  const barcodeTimerRef                     = useRef(null);
+  const barcodeInputRef = useRef(null);
+  const [barcodeValue, setBarcodeValue] = useState('');
+  const [barcodeFlash, setBarcodeFlash] = useState(null); // 'success' | 'error' | null
+  const [barcodeMsg, setBarcodeMsg] = useState('');
+  const barcodeTimerRef = useRef(null);
   // Tracks rapid keystrokes to distinguish scanner input from manual typing
-  const barcodeLastKeyTime                  = useRef(0);
-  const barcodeAccumRef                     = useRef('');
+  const barcodeLastKeyTime = useRef(0);
+  const barcodeAccumRef = useRef('');
 
   // Auto-focus barcode input when the POS mounts
   useEffect(() => {
@@ -2322,7 +2653,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     const handleGlobalKey = (e) => {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const isOtherInput = ['input', 'textarea', 'select'].includes(tag) &&
-                           document.activeElement !== barcodeInputRef.current;
+        document.activeElement !== barcodeInputRef.current;
       if (isOtherInput) return;
       if (e.key === 'Tab' || e.key === 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return;
       barcodeInputRef.current?.focus();
@@ -2349,7 +2680,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     // Match against barcode field first, then SKU as fallback
     const product = products.find(
       p => (p.barcode && p.barcode.trim() === code) ||
-           (p.sku    && p.sku.trim().toLowerCase() === code.toLowerCase())
+        (p.sku && p.sku.trim().toLowerCase() === code.toLowerCase())
     );
 
     if (!product) {
@@ -2420,13 +2751,13 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 
   const removeFromCart = (product_id) => setCart(prev => prev.filter(i => i.product_id !== product_id));
 
-  const cartSubtotal   = cart.reduce((sum, i) => sum + i.subtotal, 0);
+  const cartSubtotal = cart.reduce((sum, i) => sum + i.subtotal, 0);
   const discountAmount = (() => {
     const v = parseFloat(discountValue) || 0;
     return Math.min(v, cartSubtotal);
   })();
-  const taxAmount  = parseFloat(taxValue) || 0;
-  const cartTotal  = cartSubtotal - discountAmount + taxAmount;
+  const taxAmount = parseFloat(taxValue) || 0;
+  const cartTotal = cartSubtotal - discountAmount + taxAmount;
   const changeAmount = paymentMethod === 'cash'
     ? Math.max(0, (parseFloat(amountPaid) || 0) - cartTotal)
     : 0;
@@ -2449,9 +2780,9 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           customer_type: customerType,
           ...(customerType === 'existing' && selectedCustomerId ? { customer_id: parseInt(selectedCustomerId) } : {}),
           ...(customerType === 'new' ? { new_customer: newCustomer } : {}),
-          discount_type:   discountAmount > 0 ? 'fixed' : null,
+          discount_type: discountAmount > 0 ? 'fixed' : null,
           discount_amount: discountAmount > 0 ? discountAmount : null,
-          tax_amount:      taxAmount > 0 ? taxAmount : null,
+          tax_amount: taxAmount > 0 ? taxAmount : null,
         }),
       });
       const data = await res.json();
@@ -2483,7 +2814,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           <div style={{ background: 'linear-gradient(135deg, #065f46, #16a34a)', borderRadius: 16, padding: '28px 32px', textAlign: 'center' }}>
             <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
+                <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
             <h2 style={{ margin: '0 0 6px', color: '#fff', fontSize: 22, fontWeight: 700 }}>Sale Complete</h2>
@@ -2606,7 +2937,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
               {/* Barcode icon */}
               <svg style={{ position: 'absolute', left: 12, pointerEvents: 'none', opacity: 0.4 }}
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 5v14M7 5v14M11 5v14M15 5v10M19 5v14M15 18v1"/>
+                <path d="M3 5v14M7 5v14M11 5v14M15 5v10M19 5v14M15 18v1" />
               </svg>
             </div>
             {/* Feedback message */}
@@ -2711,9 +3042,9 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
             </div>
             <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { value: 'walk_in',  label: 'Walk-in Customer' },
+                { value: 'walk_in', label: 'Walk-in Customer' },
                 { value: 'existing', label: 'Existing Customer' },
-                { value: 'new',      label: 'New Customer' },
+                { value: 'new', label: 'New Customer' },
               ].map(type => (
                 <label key={type.value} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -2763,8 +3094,8 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
               <div style={posS.emptyCart}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                    <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                   </svg>
                 </div>
                 <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Select products to add to cart</div>
@@ -2968,8 +3299,8 @@ const posS = {
     transition: 'border-color 0.15s, box-shadow 0.15s',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)', outline: 'none',
   },
-  productName:  { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3, marginBottom: 2 },
-  productSku:   { fontSize: 11, color: '#94a3b8' },
+  productName: { fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.3, marginBottom: 2 },
+  productSku: { fontSize: 11, color: '#94a3b8' },
   productPrice: { fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 4 },
   cartPanel: {
     background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14,
@@ -2996,8 +3327,8 @@ const posS = {
     padding: '10px 14px', borderBottom: '1px solid #f8fafc',
     flexWrap: 'wrap',
   },
-  cartItemName:     { fontSize: 13, fontWeight: 600, color: '#0f172a' },
-  cartItemPrice:    { fontSize: 11, color: '#94a3b8' },
+  cartItemName: { fontSize: 13, fontWeight: 600, color: '#0f172a' },
+  cartItemPrice: { fontSize: 11, color: '#94a3b8' },
   cartItemSubtotal: { fontSize: 13, fontWeight: 700, color: '#0f172a', width: '100%', textAlign: 'right', marginTop: 2 },
   qtyBtn: {
     width: 28, height: 28, borderRadius: 6, border: '1px solid #e2e8f0',
@@ -3037,8 +3368,8 @@ const posS = {
     display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
     padding: '10px 16px', borderBottom: '1px solid #f8fafc',
   },
-  cartItemName:     { fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  cartItemPrice:    { fontSize: 11, color: '#94a3b8' },
+  cartItemName: { fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  cartItemPrice: { fontSize: 11, color: '#94a3b8' },
   cartItemSubtotal: { fontSize: 13, fontWeight: 700, color: '#0f172a', marginLeft: 'auto' },
   qtyBtn: {
     width: 26, height: 26, borderRadius: 6, border: '1px solid #e2e8f0',
@@ -3080,15 +3411,16 @@ function formatSaleDateTime(saleDate, createdAt) {
 
 // Sales Tab Component
 function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, canEdit = true, canDelete = false, onSaleDeleted }) {
-  const [viewingSale, setViewingSale]   = useState(null);
-  const [editingSale, setEditingSale]   = useState(null);
-  const [editForm, setEditForm]         = useState({});
-  const [editSaving, setEditSaving]     = useState(false);
-  const [editError, setEditError]       = useState(null);
+  const [viewingSale, setViewingSale] = useState(null);
+  const [viewingInvoice, setViewingInvoice] = useState(null);
+  const [editingSale, setEditingSale] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
   const [deletingSale, setDeletingSale] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError]   = useState(null);
-  const [localSales, setLocalSales]     = useState(sales);
+  const [deleteError, setDeleteError] = useState(null);
+  const [localSales, setLocalSales] = useState(sales);
 
   // Keep localSales in sync when parent refreshes
   useEffect(() => setLocalSales(sales), [sales]);
@@ -3097,13 +3429,13 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
   const [dateFilter, setDateFilter] = useState('all');
 
   // Custom day lookup
-  const [customDate, setCustomDate]           = useState('');
-  const [customDaySales, setCustomDaySales]   = useState(null);
+  const [customDate, setCustomDate] = useState('');
+  const [customDaySales, setCustomDaySales] = useState(null);
 
   // Custom week lookup
-  const [customWeekDate, setCustomWeekDate]     = useState('');
-  const [customWeekSales, setCustomWeekSales]   = useState(null);
-  const [customWeekRange, setCustomWeekRange]   = useState(null);
+  const [customWeekDate, setCustomWeekDate] = useState('');
+  const [customWeekSales, setCustomWeekSales] = useState(null);
+  const [customWeekRange, setCustomWeekRange] = useState(null);
 
   const filteredSales = localSales.filter(sale => {
     if (dateFilter === 'all') return true;
@@ -3137,17 +3469,17 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
     setEditingSale(sale);
     const items = sale.sale_items || sale.saleItems || [];
     setEditForm({
-      payment_method:  sale.payment_method || 'cash',
+      payment_method: sale.payment_method || 'cash',
       discount_amount: sale.discount_amount || '',
-      tax_amount:      sale.tax_amount || '',
-      notes:           sale.notes || '',
-      customer_type:   sale.customer ? 'existing' : 'walk_in',
-      customer_id:     sale.customer?.id || '',
+      tax_amount: sale.tax_amount || '',
+      notes: sale.notes || '',
+      customer_type: sale.customer ? 'existing' : 'walk_in',
+      customer_id: sale.customer?.id || '',
       items: items.map(i => ({
         product_id: i.product_id,
-        name:       i.product?.name || `Product #${i.product_id}`,
-        quantity:   i.quantity,
-        price:      i.price,
+        name: i.product?.name || `Product #${i.product_id}`,
+        quantity: i.quantity,
+        price: i.price,
       })),
     });
     setEditError(null);
@@ -3158,18 +3490,18 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
     setEditError(null);
     try {
       const body = {
-        payment_method:  editForm.payment_method,
+        payment_method: editForm.payment_method,
         discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
-        tax_amount:      editForm.tax_amount !== ''      ? parseFloat(editForm.tax_amount)      : null,
-        notes:           editForm.notes || null,
-        customer_type:   editForm.customer_type,
+        tax_amount: editForm.tax_amount !== '' ? parseFloat(editForm.tax_amount) : null,
+        notes: editForm.notes || null,
+        customer_type: editForm.customer_type,
         ...(editForm.customer_type === 'existing' && editForm.customer_id
           ? { customer_id: parseInt(editForm.customer_id) }
           : {}),
         items: editForm.items.map(i => ({
           product_id: i.product_id,
-          quantity:   parseInt(i.quantity),
-          price:      parseFloat(i.price),
+          quantity: parseInt(i.quantity),
+          price: parseFloat(i.price),
         })),
       };
       const res = await fetch(`${API}/sales/${editingSale.id}`, {
@@ -3272,7 +3604,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
       render: (_, row) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button
-            title="View sale"
+            title="View sale details"
             onClick={() => setViewingSale(row)}
             style={{
               padding: '5px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
@@ -3285,37 +3617,52 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           >
             👁
           </button>
-          {canEdit && (
           <button
-            title="Edit sale"
-            onClick={() => openEdit(row)}
+            title="Generate & View Invoice"
+            onClick={() => setViewingInvoice(row)}
             style={{
-              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
-              background: '#f8fafc', color: '#b45309', cursor: 'pointer',
-              fontSize: 15, fontWeight: 600, lineHeight: 1,
+              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #fbcfe8',
+              background: '#fff1f2', color: '#881337', cursor: 'pointer',
+              fontSize: 12, fontWeight: 700, lineHeight: 1,
+              display: 'flex', alignItems: 'center', gap: 4,
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
-            onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+            onMouseEnter={e => e.currentTarget.style.background = '#ffe4e6'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff1f2'}
           >
-            ✏️
+            📄 Invoice
           </button>
+          {canEdit && (
+            <button
+              title="Edit sale"
+              onClick={() => openEdit(row)}
+              style={{
+                padding: '5px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+                background: '#f8fafc', color: '#b45309', cursor: 'pointer',
+                fontSize: 15, fontWeight: 600, lineHeight: 1,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
+              onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+            >
+              ✏️
+            </button>
           )}
           {canDelete && (
-          <button
-            title="Delete sale"
-            onClick={() => { setDeleteError(null); setDeletingSale(row); }}
-            style={{
-              padding: '5px 10px', borderRadius: 8, border: '1.5px solid #fecaca',
-              background: '#fff5f5', color: '#dc2626', cursor: 'pointer',
-              fontSize: 15, fontWeight: 600, lineHeight: 1,
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-            onMouseLeave={e => e.currentTarget.style.background = '#fff5f5'}
-          >
-            🗑️
-          </button>
+            <button
+              title="Delete sale"
+              onClick={() => { setDeleteError(null); setDeletingSale(row); }}
+              style={{
+                padding: '5px 10px', borderRadius: 8, border: '1.5px solid #fecaca',
+                background: '#fff5f5', color: '#dc2626', cursor: 'pointer',
+                fontSize: 15, fontWeight: 600, lineHeight: 1,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+              onMouseLeave={e => e.currentTarget.style.background = '#fff5f5'}
+            >
+              🗑️
+            </button>
           )}
         </div>
       )
@@ -3346,12 +3693,12 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Track all your sales transactions and revenue</p>
         </div>
         {canCreate && (
-        <button onClick={onNewSale}
-          style={{ padding: '10px 22px', borderRadius: 9, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: 7 }}
-          onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
-          onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New Sale
-        </button>
+          <button onClick={onNewSale}
+            style={{ padding: '10px 22px', borderRadius: 9, border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700, letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: 7 }}
+            onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+            onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> New Sale
+          </button>
         )}
       </div>
 
@@ -3359,9 +3706,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
       {!loading && sales.length > 0 && (
         <div className="kpi-grid-3">
           {[
-            { label: 'Total Transactions', value: totalTx,                                                                          icon: '🧾', color: '#4f46e5', bg: '#eef2ff' },
-            { label: 'Total Revenue',      value: `UGX ${totalRevenue.toLocaleString()}`,                                           icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
-            { label: 'Average Sale',       value: `UGX ${totalTx ? Math.round(totalRevenue / totalTx).toLocaleString() : 0}`,       icon: '📊', color: '#0891b2', bg: '#ecfeff' },
+            { label: 'Total Transactions', value: totalTx, icon: '🧾', color: '#4f46e5', bg: '#eef2ff' },
+            { label: 'Total Revenue', value: `UGX ${totalRevenue.toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
+            { label: 'Average Sale', value: `UGX ${totalTx ? Math.round(totalRevenue / totalTx).toLocaleString() : 0}`, icon: '📊', color: '#0891b2', bg: '#ecfeff' },
           ].map(s => (
             <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: 11, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
@@ -3379,10 +3726,10 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         {/* ── Filter bar ── */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '4px', background: '#f1f5f9', borderRadius: 12, width: 'fit-content' }}>
           {[
-            { key: 'all',   label: 'All Sales',  icon: '⊞' },
-            { key: 'today', label: 'Today',       icon: '◎' },
-            { key: 'week',  label: 'This Week',   icon: '▦' },
-            { key: 'month', label: 'This Month',  icon: '▤' },
+            { key: 'all', label: 'All Sales', icon: '⊞' },
+            { key: 'today', label: 'Today', icon: '◎' },
+            { key: 'week', label: 'This Week', icon: '▦' },
+            { key: 'month', label: 'This Month', icon: '▤' },
           ].map(f => (
             <button
               key={f.key}
@@ -3392,8 +3739,8 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                 padding: '7px 16px', borderRadius: 9, border: 'none',
                 fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 background: dateFilter === f.key ? '#fff' : 'transparent',
-                color:      dateFilter === f.key ? '#4f46e5' : '#64748b',
-                boxShadow:  dateFilter === f.key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                color: dateFilter === f.key ? '#4f46e5' : '#64748b',
+                boxShadow: dateFilter === f.key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
                 transition: 'all 0.15s',
               }}
             >
@@ -3410,7 +3757,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
 
           // Build 7 day slots Mon–Sun (reorder so Mon is first)
-          const dayNames = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+          const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
           const days = Array.from({ length: 7 }, (_, i) => {
             const d = new Date(startOfWeek);
             d.setDate(startOfWeek.getDate() + i);
@@ -3420,10 +3767,10 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           const ordered = [...days.slice(1), days[0]];
 
           // Build totals per day
-          const weekTotal     = filteredSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
-          const weekCount     = filteredSales.length;
-          const startLabel    = startOfWeek.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g, ' ');
-          const endLabel      = today.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g, ' ');
+          const weekTotal = filteredSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
+          const weekCount = filteredSales.length;
+          const startLabel = startOfWeek.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, ' ');
+          const endLabel = today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, ' ');
 
           const dayTotals = ordered.map(day => {
             const daySales = filteredSales.filter(sale => {
@@ -3506,7 +3853,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
 
         {/* ── Monthly breakdown (only when This Month is active) ── */}
         {dateFilter === 'month' && (() => {
-          const now   = new Date();
+          const now = new Date();
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           const monthName = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
@@ -3515,8 +3862,8 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           const monthCount = filteredSales.length;
 
           // Build calendar weeks for this month (week starts Monday)
-          const firstDay  = new Date(today.getFullYear(), today.getMonth(), 1);
-          const lastDay   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+          const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
           // Find Monday on or before the 1st
           const startMon = new Date(firstDay);
@@ -3528,7 +3875,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           let cursor = new Date(startMon);
           while (cursor <= lastDay) {
             const weekStart = new Date(cursor);
-            const weekEnd   = new Date(cursor);
+            const weekEnd = new Date(cursor);
             weekEnd.setDate(cursor.getDate() + 6);
 
             const daySales = filteredSales.filter(sale => {
@@ -3541,7 +3888,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
             weeks.push({
               label: `Week ${weeks.length + 1}`,
               start: weekStart,
-              end:   weekEnd,
+              end: weekEnd,
               count: daySales.length,
               total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0),
               isCurrent: today >= weekStart && today <= weekEnd,
@@ -3674,7 +4021,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
-                  {new Date(...customDate.split('-').map((v,i) => i===1 ? v-1 : +v))
+                  {new Date(...customDate.split('-').map((v, i) => i === 1 ? v - 1 : +v))
                     .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                 </div>
               </div>
@@ -3757,7 +4104,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           const { monday, sunday } = customWeekRange;
           const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
           const weekTotal = customWeekSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
-          const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+          const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
           const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
             const day = new Date(monday);
             day.setDate(monday.getDate() + i);
@@ -3834,29 +4181,67 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               variant="success"
               onClick={() => {
                 const src = document.getElementById('receipt-content');
-                if (!src) return;
+                if (!src) {
+                  alert('Receipt content not found. Please try again.');
+                  return;
+                }
+                
                 const win = window.open('', '_blank', 'width=800,height=900');
+                if (!win) {
+                  alert('Pop-up blocked. Please allow pop-ups for this site.');
+                  return;
+                }
+                
                 win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Receipt</title>
+  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #fff; color: #000; padding: 32px; font-size: 14px; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
     @media print {
       body { padding: 20px; }
       button { display: none !important; }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+    
+    @media screen {
+      body {
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        margin: 20px auto;
+      }
     }
   </style>
 </head>
 <body>${src.innerHTML}</body>
 </html>`);
                 win.document.close();
-                win.focus();
-                setTimeout(() => { win.print(); win.close(); }, 400);
+                
+                // Wait for images to load
+                win.addEventListener('load', () => {
+                  setTimeout(() => {
+                    win.focus();
+                    win.print();
+                    // Don't auto-close to allow user to save as PDF
+                    // win.close();
+                  }, 500);
+                });
               }}
             >
               🖨️ Print / Save PDF
@@ -3865,19 +4250,19 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         }
       >
         {viewingSale && (() => {
-          const items       = viewingSale.sale_items || viewingSale.saleItems || [];
-          const subtotal    = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
-          const discount    = parseFloat(viewingSale.discount_amount) || 0;
-          const tax         = parseFloat(viewingSale.tax_amount) || 0;
-          const total       = parseFloat(viewingSale.total_amount) || 0;
+          const items = viewingSale.sale_items || viewingSale.saleItems || [];
+          const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
+          const discount = parseFloat(viewingSale.discount_amount) || 0;
+          const tax = parseFloat(viewingSale.tax_amount) || 0;
+          const total = parseFloat(viewingSale.total_amount) || 0;
           const { date, time } = formatSaleDateTime(viewingSale.sale_date, viewingSale.created_at);
-          const tenant      = user?.tenant || {};
-          const tenantName  = tenant.name || 'InventoryPro';
+          const tenant = user?.tenant || {};
+          const tenantName = tenant.name || 'InventoryPro';
           // Build a SAL-YYYYMMDD-NNNN style ref using the sale date
-          const saleDate    = viewingSale.sale_date || viewingSale.created_at || '';
-          const datePart    = saleDate.replace(/-/g, '').slice(0, 8);
-          const saleId      = String(viewingSale.id).padStart(4, '0');
-          const receiptRef  = `SAL-${datePart}-${saleId}`;
+          const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
+          const datePart = saleDate.replace(/-/g, '').slice(0, 8);
+          const saleId = String(viewingSale.id).padStart(4, '0');
+          const receiptRef = `SAL-${datePart}-${saleId}`;
 
           const rRow = (label, value, bold = false, color = '#0f172a') => (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
@@ -3887,30 +4272,51 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           );
 
           return (
-            <div id="receipt-content" style={{ fontFamily: 'inherit' }}>
+            <div id="receipt-content" style={{ fontFamily: 'inherit', position: 'relative' }}>
+
+              {/* Decorative circle — top right, matches invoice */}
+              <div style={{
+                position: 'absolute', top: -60, right: -60,
+                width: 200, height: 200, borderRadius: '50%',
+                background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+              }} />
 
               {/* ── Business Header ── */}
-              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '1px solid #e2e8f0' }}>
-                {/* Avatar */}
-                <div style={{
-                  width: 64, height: 64, borderRadius: '50%', background: '#4f46e5',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 28, fontWeight: 700, color: '#fff', marginBottom: 10,
-                }}>
-                  {tenantName.charAt(0).toLowerCase()}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>{tenantName}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
+                {/* Logo */}
+                <img
+                  src="/zziwa logo.png"
+                  alt={tenantName}
+                  style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
+                />
+                <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
+                <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
                   {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
                 </div>
-                {tenant.address && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{tenant.address}</div>}
+                {tenant.address && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{tenant.address}</div>}
+                {/* Receipt Badge */}
+                <div style={{
+                  marginTop: 10,
+                  display: 'inline-block',
+                  padding: '6px 16px',
+                  background: '#fff1f2',
+                  border: '1.5px solid #fda4af',
+                  borderRadius: 20,
+                  color: '#881337',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase'
+                }}>
+                  Receipt
+                </div>
               </div>
 
               {/* ── Receipt Details + Customer ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1.5px solid #cbd5e1', position: 'relative' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
-                  <div style={{ color: '#4f46e5', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{receiptRef}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
+                  <div style={{ color: '#be123c', fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{receiptRef}</div>
                   <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                     <span>📅</span> {date}
                   </div>
@@ -3924,8 +4330,8 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
-                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
+                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>
                     {viewingSale.customer?.name || 'Walk-in Customer'}
                   </div>
                   {viewingSale.customer?.phone && (
@@ -3938,75 +4344,112 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               </div>
 
               {/* ── Items Table ── */}
-              <div style={{ paddingTop: 18 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
-                        <th key={h} style={{
-                          padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8',
-                          letterSpacing: '0.06em', textTransform: 'uppercase',
-                          textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
-                          borderBottom: '1px solid #e2e8f0',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 ? (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
-                    ) : items.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
-                        <td style={{ padding: '10px' }}>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
-                          {item.product?.sku && <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.product.sku}</div>}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                          {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                          UGX {parseFloat(item.price).toLocaleString()}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                          UGX {parseFloat(item.subtotal).toLocaleString()}
-                        </td>
+              <div style={{ paddingTop: 18, position: 'relative' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
+                <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#881337' }}>
+                        {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
+                          <th key={h} style={{
+                            padding: '10px', fontSize: 11, fontWeight: 800, color: '#ffffff',
+                            letterSpacing: '0.07em', textTransform: 'uppercase',
+                            textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
+                          }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {items.length === 0 ? (
+                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
+                      ) : items.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
+                            {item.product?.sku && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>SKU: {item.product.sku}</div>}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
+                            {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
+                            UGX {parseFloat(item.price).toLocaleString()}
+                          </td>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                            UGX {parseFloat(item.subtotal).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* ── Totals ── */}
-              <div style={{ marginTop: 10, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <div style={{ maxWidth: 280, marginLeft: 'auto' }}>
-                  {rRow('Subtotal:', `UGX ${subtotal.toLocaleString()}`)}
-                  {discount > 0 && rRow('Discount:', `− UGX ${discount.toLocaleString()}`, false, '#dc2626')}
-                  {tax > 0      && rRow('Tax:',      `+ UGX ${tax.toLocaleString()}`,      false, '#16a34a')}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16 }}>TOTAL:</span>
-                    <span style={{ fontWeight: 700, fontSize: 18, color: '#0f172a' }}>UGX {total.toLocaleString()}</span>
+              <div style={{ marginTop: 16, borderTop: '1.5px solid #cbd5e1', paddingTop: 16, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ maxWidth: 520, width: '100%', border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                    <span style={{ color: '#64748b' }}>Subtotal:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
                   </div>
-                  {rRow('Payment Method:', viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
-                    <span style={{ color: '#64748b' }}>Payment Status:</span>
-                    <span style={{ background: '#dcfce7', color: '#16a34a', fontWeight: 700, fontSize: 12, padding: '2px 10px', borderRadius: 20 }}>Paid</span>
+                  {discount > 0 && (
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>Discount:</span>
+                      <span style={{ fontWeight: 600, color: '#dc2626' }}>− UGX {discount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {tax > 0 && (
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>Tax:</span>
+                      <span style={{ fontWeight: 600, color: '#16a34a' }}>+ UGX {tax.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{
+                    padding: '12px 16px',
+                    background: '#fff1f2',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ fontWeight: 800, fontSize: 16, color: '#881337' }}>TOTAL:</span>
+                    <span style={{ fontWeight: 800, fontSize: 18, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
+                  </div>
+                </div>
+                
+                <div style={{ maxWidth: 520, width: '100%', marginTop: 12, padding: '10px 16px', border: '1.5px solid #cbd5e1', borderRadius: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ color: '#64748b', fontSize: 14 }}>Payment Method:</span>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b', fontSize: 14 }}>Payment Status:</span>
+                    <span style={{
+                      background: '#dcfce7',
+                      color: '#16a34a',
+                      fontWeight: 800,
+                      fontSize: 11,
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      letterSpacing: '0.03em',
+                      textTransform: 'uppercase'
+                    }}>
+                      Paid
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Notes */}
               {viewingSale.notes && (
-                <div style={{ marginTop: 14, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#475569', borderLeft: '3px solid #e2e8f0' }}>
+                <div style={{ marginTop: 16, padding: '12px 16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, fontSize: 13, color: '#475569', borderLeft: '4px solid #be123c' }}>
                   📝 {viewingSale.notes}
                 </div>
               )}
 
               {/* ── Thank you footer ── */}
-              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#1e293b', marginBottom: 4 }}>Thank you!</div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>We appreciate your business. Visit us again!</div>
+              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '2px solid #be123c', textAlign: 'center', position: 'relative' }}>
+                <div style={{ fontWeight: 800, fontSize: 17, color: '#881337', marginBottom: 6 }}>Thank you for your business!</div>
+                <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>We appreciate your patronage. Visit us again!</div>
               </div>
             </div>
           );
@@ -4151,17 +4594,17 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
 
             {/* Live total preview */}
             {editForm.items?.length > 0 && (() => {
-              const subtotal  = editForm.items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.price) || 0), 0);
-              const discount  = parseFloat(editForm.discount_amount) || 0;
-              const tax       = parseFloat(editForm.tax_amount) || 0;
-              const total     = Math.max(0, subtotal - discount + tax);
+              const subtotal = editForm.items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.price) || 0), 0);
+              const discount = parseFloat(editForm.discount_amount) || 0;
+              const tax = parseFloat(editForm.tax_amount) || 0;
+              const total = Math.max(0, subtotal - discount + tax);
               return (
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
                     <span>Subtotal</span><span>UGX {subtotal.toLocaleString()}</span>
                   </div>
                   {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Discount</span><span>− UGX {discount.toLocaleString()}</span></div>}
-                  {tax > 0      && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Tax</span><span>+ UGX {tax.toLocaleString()}</span></div>}
+                  {tax > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Tax</span><span>+ UGX {tax.toLocaleString()}</span></div>}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15, marginTop: 6, borderTop: '1px solid #bbf7d0', paddingTop: 6, color: '#15803d' }}>
                     <span>Total</span><span>UGX {total.toLocaleString()}</span>
                   </div>
@@ -4202,6 +4645,27 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           </div>
         )}
       </Modal>
+      {viewingInvoice && (
+        <PrintableInvoiceModal
+          invoice={{
+            id: viewingInvoice.id,
+            invoice_number: `INV/25-26/${String(viewingInvoice.id).padStart(4, '0')}`,
+            invoice_date: (viewingInvoice.sale_date || viewingInvoice.created_at || '').slice(0, 10),
+            due_date: (viewingInvoice.sale_date || viewingInvoice.created_at || '').slice(0, 10),
+            customer_name: viewingInvoice.customer?.name || 'Walk-in Customer',
+            customer_email: viewingInvoice.customer?.email || '',
+            customer_phone: viewingInvoice.customer?.phone || viewingInvoice.customer?.contact || '',
+            customer_address: viewingInvoice.customer?.address || '',
+            total_amount: parseFloat(viewingInvoice.total_amount || 0),
+            discount_amount: parseFloat(viewingInvoice.discount_amount || 0),
+            tax_amount: parseFloat(viewingInvoice.tax_amount || 0),
+            items: viewingInvoice.sale_items || viewingInvoice.saleItems || [],
+            source_ref: `S${String(viewingInvoice.id).padStart(5, '0')}`
+          }}
+          user={user}
+          onClose={() => setViewingInvoice(null)}
+        />
+      )}
     </div>
   );
 }
@@ -4224,23 +4688,24 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     quantity: '', cost_price: '',
   };
 
-  const [showModal, setShowModal]   = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [supplierId, setSupplierId] = useState('');
-  const [lines, setLines]           = useState([{ ...EMPTY_LINE }]);
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState(null);
+  const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [expandedId, setExpandedId] = useState(null);
-  const [search, setSearch]         = useState('');
+  const [search, setSearch] = useState('');
 
   // Edit state
-  const [editingPurchase, setEditingPurchase]   = useState(null);
-  const [editSupplierId, setEditSupplierId]     = useState('');
-  const [editLines, setEditLines]               = useState([]);
-  const [editSaving, setEditSaving]             = useState(false);
-  const [editError, setEditError]               = useState(null);
+  const [editingPurchase, setEditingPurchase] = useState(null);
+  const [editSupplierId, setEditSupplierId] = useState('');
+  const [editLines, setEditLines] = useState([]);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
   // Delete state
-  const [confirmDelete, setConfirmDelete]       = useState(null);
-  const [deleting, setDeleting]                 = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Date filter
   const [dateFilter, setDateFilter] = useState('all');
@@ -4250,8 +4715,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
   const [customDayPurchases, setCustomDayPurchases] = useState(null);
 
   // Custom week lookup
-  const [customPurchaseWeekDate, setCustomPurchaseWeekDate]   = useState('');
-  const [customWeekPurchases, setCustomWeekPurchases]         = useState(null);
+  const [customPurchaseWeekDate, setCustomPurchaseWeekDate] = useState('');
+  const [customWeekPurchases, setCustomWeekPurchases] = useState(null);
   const [customPurchaseWeekRange, setCustomPurchaseWeekRange] = useState(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -4266,18 +4731,24 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     setSupplierId('');
     setLines([{ ...EMPTY_LINE }]);
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
-  const setLine = (i, key, val) =>
+  const setLine = (i, key, val) => {
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+    // Clear line-specific errors
+    if (fieldErrors[`line_${i}_${key}`]) {
+      setFieldErrors(prev => ({ ...prev, [`line_${i}_${key}`]: null }));
+    }
+  };
 
   const toggleMode = (i) =>
     setLines(prev => prev.map((l, idx) =>
       idx === i ? { ...EMPTY_LINE, mode: l.mode === 'existing' ? 'new' : 'existing' } : l
     ));
 
-  const addLine    = () => setLines(prev => [...prev, { ...EMPTY_LINE }]);
+  const addLine = () => setLines(prev => [...prev, { ...EMPTY_LINE }]);
   const removeLine = (i) => setLines(prev => prev.filter((_, idx) => idx !== i));
 
   const lineTotal = (l) => (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0);
@@ -4285,42 +4756,99 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate form
+    const errors = {};
+    
+    if (!supplierId) {
+      errors.supplier = 'Please select a supplier';
+      setFormError('Please select a supplier');
+      setFieldErrors(errors);
+      return;
+    }
+
+    // Validate lines
+    let hasValidLine = false;
+    lines.forEach((l, i) => {
+      if (l.mode === 'existing') {
+        if (!l.product_id) {
+          errors[`line_${i}_product`] = 'Select a product';
+        }
+        if (!l.quantity || l.quantity <= 0) {
+          errors[`line_${i}_quantity`] = 'Quantity required';
+        }
+        if (!l.cost_price || l.cost_price <= 0) {
+          errors[`line_${i}_cost`] = 'Cost price required';
+        }
+        if (l.product_id && l.quantity && l.cost_price) {
+          hasValidLine = true;
+        }
+      } else {
+        // new product
+        if (!l.np_name || !l.np_name.trim()) {
+          errors[`line_${i}_name`] = 'Product name required';
+        }
+        if (!l.np_price || l.np_price <= 0) {
+          errors[`line_${i}_price`] = 'Selling price required';
+        }
+        if (!l.quantity || l.quantity <= 0) {
+          errors[`line_${i}_quantity`] = 'Quantity required';
+        }
+        if (!l.cost_price || l.cost_price <= 0) {
+          errors[`line_${i}_cost`] = 'Cost price required';
+        }
+        if (l.np_track_expiry && !l.np_expiry_date) {
+          errors[`line_${i}_expiry`] = 'Expiry date required';
+        }
+        if (l.np_name && l.np_price && l.quantity && l.cost_price) {
+          hasValidLine = true;
+        }
+      }
+    });
+
+    if (!hasValidLine) {
+      setFormError('Add at least one complete product line with all required fields');
+      setFieldErrors(errors);
+      return;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormError('Please fix the errors in the form');
+      setFieldErrors(errors);
+      return;
+    }
 
     // Validate lines
     const validLines = lines.filter(l => {
       if (l.mode === 'existing') return l.product_id && l.quantity && l.cost_price;
       return l.np_name && l.np_price && l.quantity && l.cost_price;
     });
-    if (validLines.length === 0) {
-      setFormError('Add at least one complete product line.');
-      return;
-    }
 
     const items = validLines.map(l => {
       if (l.mode === 'existing') {
         return {
           product_id: l.product_id,
-          quantity:   parseInt(l.quantity),
+          quantity: parseInt(l.quantity),
           cost_price: parseFloat(l.cost_price),
         };
       }
       // new product — omit product_id, include new_product object
       return {
-        quantity:   parseInt(l.quantity),
+        quantity: parseInt(l.quantity),
         cost_price: parseFloat(l.cost_price),
         new_product: {
-          name:             l.np_name,
-          sku:              l.np_sku          || undefined,
-          barcode:          l.np_barcode      || undefined,
-          unit:             l.np_unit         || undefined,
-          category_id:      l.np_category_mode === 'existing' ? (l.np_category_id || undefined) : undefined,
-          new_category:     l.np_category_mode === 'new'      ? (l.np_new_category || undefined) : undefined,
-          price:            parseFloat(l.np_price),
-          reorder_level:    l.np_reorder ? parseFloat(l.np_reorder) : undefined,
-          description:      l.np_description  || undefined,
-          track_expiry:     l.np_track_expiry  ? 1 : 0,
+          name: l.np_name,
+          sku: l.np_sku || undefined,
+          barcode: l.np_barcode || undefined,
+          unit: l.np_unit || undefined,
+          category_id: l.np_category_mode === 'existing' ? (l.np_category_id || undefined) : undefined,
+          new_category: l.np_category_mode === 'new' ? (l.np_new_category || undefined) : undefined,
+          price: parseFloat(l.np_price),
+          reorder_level: l.np_reorder ? parseFloat(l.np_reorder) : undefined,
+          description: l.np_description || undefined,
+          track_expiry: l.np_track_expiry ? 1 : 0,
           manufacture_date: l.np_track_expiry ? (l.np_manufacture_date || undefined) : undefined,
-          expiry_date:      l.np_track_expiry ? (l.np_expiry_date      || undefined) : undefined,
+          expiry_date: l.np_track_expiry ? (l.np_expiry_date || undefined) : undefined,
         },
       };
     });
@@ -4328,7 +4856,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     setSaving(true);
     setFormError(null);
     try {
-      const res  = await fetch(`${API_URL}/purchases`, {
+      const res = await fetch(`${API_URL}/purchases`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ supplier_id: supplierId || null, items }),
@@ -4354,7 +4882,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
     const [y, m, d] = raw.split('-').map(Number);
     const purchaseDate = new Date(y, m - 1, d);
-    const now   = new Date();
+    const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     if (dateFilter === 'today') return purchaseDate.getTime() === today.getTime();
     if (dateFilter === 'week') {
@@ -4375,7 +4903,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
       ...EMPTY_LINE,
       mode: 'existing',
       product_id: String(item.product_id),
-      quantity:   String(item.quantity),
+      quantity: String(item.quantity),
       cost_price: String(item.cost_price),
     })));
     setEditError(null);
@@ -4392,14 +4920,14 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     setEditSaving(true);
     setEditError(null);
     try {
-      const res  = await fetch(`${API_URL}/purchases/${editingPurchase.id}`, {
+      const res = await fetch(`${API_URL}/purchases/${editingPurchase.id}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({
           supplier_id: editSupplierId || null,
           items: validLines.map(l => ({
             product_id: parseInt(l.product_id),
-            quantity:   parseInt(l.quantity),
+            quantity: parseInt(l.quantity),
             cost_price: parseFloat(l.cost_price),
           })),
         }),
@@ -4450,14 +4978,14 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
             />
           )}
           {canCreate && (
-          <button
-            onClick={openModal}
-            style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-            onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-            onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}
-          >
-            + Record Purchase
-          </button>
+            <button
+              onClick={openModal}
+              style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+              onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}
+            >
+              + Record Purchase
+            </button>
           )}
         </div>
       </div>
@@ -4466,8 +4994,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
       {!loading && purchases.length > 0 && (
         <div className="kpi-grid-3">
           {[
-            { label: 'Total Purchases',  value: filtered.length,                                                                                                  icon: '🧾', color: '#4f46e5', bg: '#eef2ff' },
-            { label: 'Total Spent',      value: `UGX ${filtered.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0).toLocaleString()}`,                      icon: '💸', color: '#dc2626', bg: '#fef2f2' },
+            { label: 'Total Purchases', value: filtered.length, icon: '🧾', color: '#4f46e5', bg: '#eef2ff' },
+            { label: 'Total Spent', value: `UGX ${filtered.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0).toLocaleString()}`, icon: '💸', color: '#dc2626', bg: '#fef2f2' },
             { label: 'Average Purchase', value: `UGX ${filtered.length ? Math.round(filtered.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0) / filtered.length).toLocaleString() : 0}`, icon: '📊', color: '#0891b2', bg: '#ecfeff' },
           ].map(s => (
             <div key={s.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -4488,10 +5016,10 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
         {!loading && purchases.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '4px', background: '#f1f5f9', borderRadius: 12, width: 'fit-content' }}>
             {[
-              { key: 'all',   label: 'All Purchases', icon: '⊞' },
-              { key: 'today', label: 'Today',          icon: '◎' },
-              { key: 'week',  label: 'This Week',      icon: '▦' },
-              { key: 'month', label: 'This Month',     icon: '▤' },
+              { key: 'all', label: 'All Purchases', icon: '⊞' },
+              { key: 'today', label: 'Today', icon: '◎' },
+              { key: 'week', label: 'This Week', icon: '▦' },
+              { key: 'month', label: 'This Month', icon: '▤' },
             ].map(f => (
               <button
                 key={f.key}
@@ -4501,8 +5029,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                   padding: '7px 16px', borderRadius: 9, border: 'none',
                   fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   background: dateFilter === f.key ? '#fff' : 'transparent',
-                  color:      dateFilter === f.key ? '#4f46e5' : '#64748b',
-                  boxShadow:  dateFilter === f.key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                  color: dateFilter === f.key ? '#4f46e5' : '#64748b',
+                  boxShadow: dateFilter === f.key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
                   transition: 'all 0.15s',
                 }}
               >
@@ -4555,26 +5083,26 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                       </button>
                     </td>
                     {(canEdit || canDelete) && (
-                    <td style={{ padding: '14px' }}>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {canEdit && (
-                          <button
-                            onClick={() => openEdit(p)}
-                            style={{ padding: '5px 11px', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={() => setConfirmDelete(p)}
-                            style={{ padding: '5px 11px', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {canEdit && (
+                            <button
+                              onClick={() => openEdit(p)}
+                              style={{ padding: '5px 11px', borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => setConfirmDelete(p)}
+                              style={{ padding: '5px 11px', borderRadius: 6, border: '1px solid #ef4444', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     )}
                   </tr>
                   {expandedId === p.id && (
@@ -4784,7 +5312,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           const { monday, sunday } = customPurchaseWeekRange;
           const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
           const weekTotal = customWeekPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0);
-          const dayNames  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
           const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
             const day = new Date(monday);
             day.setDate(monday.getDate() + i);
@@ -4795,13 +5323,13 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
             });
             return {
               day,
-              name:  dayNames[i],
+              name: dayNames[i],
               count: dayPurchases.length,
               total: dayPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0),
             };
           });
           const maxDayTotal = Math.max(...dayBreakdown.map(d => d.total), 1);
-          const now   = new Date();
+          const now = new Date();
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
           return (
@@ -4827,7 +5355,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
               <div className="week-day-grid" style={{ marginBottom: 20 }}>
                 {dayBreakdown.map(({ day, name, count, total }) => {
                   const isToday = day.getTime() === today.getTime();
-                  const barPct  = Math.round((total / maxDayTotal) * 100);
+                  const barPct = Math.round((total / maxDayTotal) * 100);
                   return (
                     <div key={name} style={{ background: isToday ? '#eff6ff' : '#fff', border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#3b82f6' : '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{name}</div>
@@ -4861,7 +5389,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {customWeekPurchases.map(p => (
                       <tr key={p.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                         <td style={{ padding: '13px 14px', color: '#475569', fontSize: 13 }}>
-                          {new Date(...(p.purchase_date || p.created_at || '').slice(0,10).split('-').map((v,i) => i===1 ? v-1 : +v))
+                          {new Date(...(p.purchase_date || p.created_at || '').slice(0, 10).split('-').map((v, i) => i === 1 ? v - 1 : +v))
                             .toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
                         </td>
                         <td style={{ padding: '13px 14px' }}>
@@ -4891,11 +5419,12 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
           {/* Supplier */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier (optional)</label>
-            <select style={supS.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-              <option value="">— No supplier —</option>
+            <label style={supS.label}>Supplier *</label>
+            <select style={{ ...supS.input, borderColor: fieldErrors.supplier ? '#dc2626' : '#e2e8f0' }} value={supplierId} onChange={e => { setSupplierId(e.target.value); if (fieldErrors.supplier) setFieldErrors(prev => ({ ...prev, supplier: null })); }}>
+              <option value="">— Select supplier —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {fieldErrors.supplier && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.supplier}</span>}
           </div>
 
           {/* Product Lines */}
@@ -4922,8 +5451,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                           padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
                           border: '1.5px solid',
                           borderColor: line.mode === m ? '#4f46e5' : '#e2e8f0',
-                          background:  line.mode === m ? '#4f46e5' : '#fff',
-                          color:       line.mode === m ? '#fff'    : '#94a3b8',
+                          background: line.mode === m ? '#4f46e5' : '#fff',
+                          color: line.mode === m ? '#fff' : '#94a3b8',
                           cursor: 'pointer',
                         }}
                       >
@@ -5010,8 +5539,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                                 flex: 1, padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
                                 border: '1.5px solid',
                                 borderColor: line.np_category_mode === m ? '#4f46e5' : '#e2e8f0',
-                                background:  line.np_category_mode === m ? '#ede9fe' : '#f8fafc',
-                                color:       line.np_category_mode === m ? '#4f46e5' : '#94a3b8',
+                                background: line.np_category_mode === m ? '#ede9fe' : '#f8fafc',
+                                color: line.np_category_mode === m ? '#4f46e5' : '#94a3b8',
                                 cursor: 'pointer',
                               }}
                             >
@@ -5313,12 +5842,12 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
 // Stock Tab Component
 function StockTab({ products, stockMovements, token, onAdjusted, canCreate = true }) {
-  const [form, setForm]               = useState({ product_id: '', type: 'IN', quantity: '', reason: '', date: '' });
-  const [submitting, setSubmitting]   = useState(false);
-  const [formError, setFormError]     = useState(null);
+  const [form, setForm] = useState({ product_id: '', type: 'IN', quantity: '', reason: '', date: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [formSuccess, setFormSuccess] = useState(null);
-  const [typeFilter, setTypeFilter]   = useState('ALL');
-  const [search, setSearch]           = useState('');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
 
   const handleSubmit = async () => {
     if (!form.product_id || !form.quantity) { setFormError('Product and quantity are required.'); return; }
@@ -5330,10 +5859,10 @@ function StockTab({ products, stockMovements, token, onAdjusted, canCreate = tru
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({
           product_id: parseInt(form.product_id),
-          type:       form.type,
-          quantity:   parseInt(form.quantity),
-          reason:     form.reason || null,
-          date:       form.date || null,
+          type: form.type,
+          quantity: parseInt(form.quantity),
+          reason: form.reason || null,
+          date: form.date || null,
         }),
       });
       const data = await res.json();
@@ -5346,18 +5875,18 @@ function StockTab({ products, stockMovements, token, onAdjusted, canCreate = tru
   };
 
   const typeConfig = {
-    IN:         { label: 'Stock In',    color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-    OUT:        { label: 'Stock Out',   color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    IN: { label: 'Stock In', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+    OUT: { label: 'Stock Out', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
     ADJUSTMENT: { label: 'Adjustment', color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
   };
 
   const filtered = stockMovements.filter(m => {
-    const matchType   = typeFilter === 'ALL' || m.type === typeFilter;
+    const matchType = typeFilter === 'ALL' || m.type === typeFilter;
     const matchSearch = !search || (m.product?.name || '').toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
   });
 
-  const totalIn  = stockMovements.filter(m => m.type === 'IN').reduce((s, m) => s + Number(m.quantity), 0);
+  const totalIn = stockMovements.filter(m => m.type === 'IN').reduce((s, m) => s + Number(m.quantity), 0);
   const totalOut = stockMovements.filter(m => m.type === 'OUT').reduce((s, m) => s + Number(m.quantity), 0);
   const lowStock = products.filter(p => Number(p.stock) <= Number(p.reorder_level || 0));
 
@@ -5389,9 +5918,9 @@ function StockTab({ products, stockMovements, token, onAdjusted, canCreate = tru
       {/* ── Summary cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Products',  value: products.length, icon: '📦', iconBg: '#fff7ed', numColor: '#ea580c' },
-          { label: 'Total Stock In',  value: totalIn,          icon: '⬆',  iconBg: '#eff6ff', numColor: '#2563eb' },
-          { label: 'Total Stock Out', value: totalOut,         icon: '⬇',  iconBg: '#eff6ff', numColor: '#2563eb' },
+          { label: 'Total Products', value: products.length, icon: '📦', iconBg: '#fff7ed', numColor: '#ea580c' },
+          { label: 'Total Stock In', value: totalIn, icon: '⬆', iconBg: '#eff6ff', numColor: '#2563eb' },
+          { label: 'Total Stock Out', value: totalOut, icon: '⬇', iconBg: '#eff6ff', numColor: '#2563eb' },
         ].map(c => (
           <div key={c.label} style={{
             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14,
@@ -5413,89 +5942,89 @@ function StockTab({ products, stockMovements, token, onAdjusted, canCreate = tru
 
         {/* ── Left: Adjust Stock form ── */}
         {canCreate && (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-            🗒️ Adjust Stock
-          </h3>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+              🗒️ Adjust Stock
+            </h3>
 
-          {formError   && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {formError}</div>}
-          {formSuccess && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#15803d', fontSize: 13 }}>✅ {formSuccess}</div>}
+            {formError && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {formError}</div>}
+            {formSuccess && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#15803d', fontSize: 13 }}>✅ {formSuccess}</div>}
 
-          {/* Product */}
-          <div>
-            <label style={labelStyle}>Product *</label>
-            <select style={inputStyle} value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
-              <option value="">— Select product —</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
-            </select>
-          </div>
-
-          {/* Adjustment Type */}
-          <div>
-            <label style={labelStyle}>Adjustment Type *</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[
-                { val: 'IN',         label: '⬆ Stock In'  },
-                { val: 'OUT',        label: '⬇ Stock Out' },
-                { val: 'ADJUSTMENT', label: '⚙ Set Level' },
-              ].map(t => (
-                <button key={t.val} onClick={() => setForm(p => ({ ...p, type: t.val }))} style={{
-                  flex: 1, padding: '8px 6px', borderRadius: 8, border: '1.5px solid',
-                  borderColor: form.type === t.val ? '#16a34a' : '#e2e8f0',
-                  background:  form.type === t.val ? '#f0fdf4' : '#fff',
-                  color:       form.type === t.val ? '#16a34a' : '#64748b',
-                  fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
-                }}>{t.label}</button>
-              ))}
+            {/* Product */}
+            <div>
+              <label style={labelStyle}>Product *</label>
+              <select style={inputStyle} value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
+                <option value="">— Select product —</option>
+                {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
+              </select>
             </div>
-            <div style={{ marginTop: 5, fontSize: 12, color: '#94a3b8' }}>
-              {form.type === 'IN'         && 'Adds quantity to current stock.'}
-              {form.type === 'OUT'        && 'Removes quantity from current stock.'}
-              {form.type === 'ADJUSTMENT' && 'Sets stock to an exact absolute value.'}
-            </div>
-          </div>
 
-          {/* Quantity */}
-          <div>
-            <label style={labelStyle}>{form.type === 'ADJUSTMENT' ? 'New Stock Level *' : 'Quantity *'}</label>
-            <input style={inputStyle} type="number" min="1"
-              placeholder={form.type === 'ADJUSTMENT' ? 'Enter new total stock' : 'Enter quantity'}
-              value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} />
-          </div>
-
-          {/* Reason */}
-          <div>
-            <label style={labelStyle}>Reason (Optional)</label>
-            <input style={inputStyle} type="text"
-              placeholder="e.g. Damaged goods, Stock count correction…"
-              value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} />
-          </div>
-
-          {/* Date */}
-          <div>
-            <label style={labelStyle}>Date <span style={{ color: '#94a3b8', fontWeight: 400 }}>(defaults to today)</span></label>
-            <input style={inputStyle} type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-          </div>
-
-          <Button variant="success" style={{ width: '100%', justifyContent: 'center' }} loading={submitting} onClick={handleSubmit}>
-            Apply Adjustment
-          </Button>
-
-          {/* Low stock alert */}
-          {lowStock.length > 0 && (
-            <div style={{ padding: '10px 12px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
-                ⚠️ {lowStock.length} product{lowStock.length > 1 ? 's' : ''} low on stock
+            {/* Adjustment Type */}
+            <div>
+              <label style={labelStyle}>Adjustment Type *</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[
+                  { val: 'IN', label: '⬆ Stock In' },
+                  { val: 'OUT', label: '⬇ Stock Out' },
+                  { val: 'ADJUSTMENT', label: '⚙ Set Level' },
+                ].map(t => (
+                  <button key={t.val} onClick={() => setForm(p => ({ ...p, type: t.val }))} style={{
+                    flex: 1, padding: '8px 6px', borderRadius: 8, border: '1.5px solid',
+                    borderColor: form.type === t.val ? '#16a34a' : '#e2e8f0',
+                    background: form.type === t.val ? '#f0fdf4' : '#fff',
+                    color: form.type === t.val ? '#16a34a' : '#64748b',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                  }}>{t.label}</button>
+                ))}
               </div>
-              {lowStock.slice(0, 4).map(p => (
-                <div key={p.id} style={{ fontSize: 12, color: '#92400e', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{p.name}</span><span style={{ fontWeight: 700 }}>{p.stock} left</span>
-                </div>
-              ))}
-              {lowStock.length > 4 && <div style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>+{lowStock.length - 4} more…</div>}
+              <div style={{ marginTop: 5, fontSize: 12, color: '#94a3b8' }}>
+                {form.type === 'IN' && 'Adds quantity to current stock.'}
+                {form.type === 'OUT' && 'Removes quantity from current stock.'}
+                {form.type === 'ADJUSTMENT' && 'Sets stock to an exact absolute value.'}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Quantity */}
+            <div>
+              <label style={labelStyle}>{form.type === 'ADJUSTMENT' ? 'New Stock Level *' : 'Quantity *'}</label>
+              <input style={inputStyle} type="number" min="1"
+                placeholder={form.type === 'ADJUSTMENT' ? 'Enter new total stock' : 'Enter quantity'}
+                value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} />
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label style={labelStyle}>Reason (Optional)</label>
+              <input style={inputStyle} type="text"
+                placeholder="e.g. Damaged goods, Stock count correction…"
+                value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} />
+            </div>
+
+            {/* Date */}
+            <div>
+              <label style={labelStyle}>Date <span style={{ color: '#94a3b8', fontWeight: 400 }}>(defaults to today)</span></label>
+              <input style={inputStyle} type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+            </div>
+
+            <Button variant="success" style={{ width: '100%', justifyContent: 'center' }} loading={submitting} onClick={handleSubmit}>
+              Apply Adjustment
+            </Button>
+
+            {/* Low stock alert */}
+            {lowStock.length > 0 && (
+              <div style={{ padding: '10px 12px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
+                  ⚠️ {lowStock.length} product{lowStock.length > 1 ? 's' : ''} low on stock
+                </div>
+                {lowStock.slice(0, 4).map(p => (
+                  <div key={p.id} style={{ fontSize: 12, color: '#92400e', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{p.name}</span><span style={{ fontWeight: 700 }}>{p.stock} left</span>
+                  </div>
+                ))}
+                {lowStock.length > 4 && <div style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>+{lowStock.length - 4} more…</div>}
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── Right: Movement History ── */}
@@ -5511,8 +6040,8 @@ function StockTab({ products, stockMovements, token, onAdjusted, canCreate = tru
                 <button key={t} onClick={() => setTypeFilter(t)} style={{
                   padding: '5px 14px', borderRadius: 8, border: '1.5px solid',
                   borderColor: typeFilter === t ? '#4f46e5' : '#e2e8f0',
-                  background:  typeFilter === t ? '#4f46e5' : '#fff',
-                  color:       typeFilter === t ? '#fff'    : '#64748b',
+                  background: typeFilter === t ? '#4f46e5' : '#fff',
+                  color: typeFilter === t ? '#fff' : '#64748b',
                   fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 }}>{t}</button>
               ))}
@@ -5596,14 +6125,14 @@ function ReportsTab({ data, loading, token }) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
   const [activeReport, setActiveReport] = useState('overview');
-  const [dailyDate, setDailyDate]             = useState(new Date().toISOString().split('T')[0]);
-  const [weeklyDate, setWeeklyDate]           = useState(new Date().toISOString().split('T')[0]);
-  const [monthlyMonth, setMonthlyMonth]       = useState(new Date().toISOString().slice(0, 7));
-  const [yearlyYear, setYearlyYear]           = useState(new Date().getFullYear().toString());
+  const [dailyDate, setDailyDate] = useState(new Date().toISOString().split('T')[0]);
+  const [weeklyDate, setWeeklyDate] = useState(new Date().toISOString().split('T')[0]);
+  const [monthlyMonth, setMonthlyMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [yearlyYear, setYearlyYear] = useState(new Date().getFullYear().toString());
   const [dailyPurchasesDate, setDailyPurchasesDate] = useState(new Date().toISOString().split('T')[0]);
-  const [reportData, setReportData]     = useState(null);
+  const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportError, setReportError]   = useState(null);
+  const [reportError, setReportError] = useState(null);
 
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
@@ -5646,14 +6175,14 @@ function ReportsTab({ data, loading, token }) {
     setReportData(null);
     try {
       let url;
-      if (activeReport === 'daily')   url = `${API_URL}/sales/daily-report?date=${dailyDate}`;
+      if (activeReport === 'daily') url = `${API_URL}/sales/daily-report?date=${dailyDate}`;
       else if (activeReport === 'weekly') url = `${API_URL}/sales/weekly-report?date=${weeklyDate}`;
       else if (activeReport === 'monthly-sales') url = `${API_URL}/sales/monthly-report?month=${monthlyMonth}`;
       else if (activeReport === 'yearly') url = `${API_URL}/sales/yearly-report?year=${yearlyYear}`;
       else if (activeReport === 'daily-purchases') url = `${API_URL}/purchases/daily-report?date=${dailyPurchasesDate}`;
       else url = `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
 
-      const res  = await fetch(url, { headers });
+      const res = await fetch(url, { headers });
       const json = await res.json();
       if (!res.ok) { setReportError(json?.message || 'Failed to load report.'); return; }
       setReportData(json.data);
@@ -5665,12 +6194,12 @@ function ReportsTab({ data, loading, token }) {
   const getPayColor = (m) => paymentColors[m] || '#64748b';
 
   const tabs = [
-    { id: 'overview',          label: 'Overview'           },
-    { id: 'daily',             label: 'Daily Sales'        },
-    { id: 'weekly',            label: 'Weekly Sales'       },
-    { id: 'monthly-sales',     label: 'Monthly Sales'      },
-    { id: 'yearly',            label: 'Yearly Report'      },
-    { id: 'daily-purchases',   label: 'Daily Purchases'    },
+    { id: 'overview', label: 'Overview' },
+    { id: 'daily', label: 'Daily Sales' },
+    { id: 'weekly', label: 'Weekly Sales' },
+    { id: 'monthly-sales', label: 'Monthly Sales' },
+    { id: 'yearly', label: 'Yearly Report' },
+    { id: 'daily-purchases', label: 'Daily Purchases' },
   ];
 
   return (
@@ -5706,9 +6235,9 @@ function ReportsTab({ data, loading, token }) {
           <div className="reports-kpi-grid">
             {[
               { label: 'Total Revenue', value: `UGX ${data.stats.totalSales.toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
-              { label: 'Total Costs',   value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
-              { label: 'Net Profit',    value: `UGX ${totalRevenue.toLocaleString()}`, icon: '📈', color: totalRevenue >= 0 ? '#16a34a' : '#dc2626', bg: totalRevenue >= 0 ? '#f0fdf4' : '#fef2f2' },
-              { label: 'Low Stock',     value: data.stats.lowStockCount, icon: '⚠️', color: data.stats.lowStockCount > 0 ? '#dc2626' : '#16a34a', bg: data.stats.lowStockCount > 0 ? '#fef2f2' : '#f0fdf4' },
+              { label: 'Total Costs', value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
+              { label: 'Net Profit', value: `UGX ${totalRevenue.toLocaleString()}`, icon: '📈', color: totalRevenue >= 0 ? '#16a34a' : '#dc2626', bg: totalRevenue >= 0 ? '#f0fdf4' : '#fef2f2' },
+              { label: 'Low Stock', value: data.stats.lowStockCount, icon: '⚠️', color: data.stats.lowStockCount > 0 ? '#dc2626' : '#16a34a', bg: data.stats.lowStockCount > 0 ? '#fef2f2' : '#f0fdf4' },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 22px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -5751,12 +6280,12 @@ function ReportsTab({ data, loading, token }) {
               <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Inventory Summary</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {[
-                  { label: 'Total Products',  value: data.stats.totalProducts, icon: '📦' },
-                  { label: 'Categories',      value: data.categories.length,   icon: '🏷️' },
-                  { label: 'Suppliers',       value: data.suppliers.length,    icon: '🏭' },
-                  { label: 'Customers',       value: data.customers.length,    icon: '👥' },
-                  { label: 'Total Sales',     value: data.sales.length,        icon: '💰' },
-                  { label: 'Total Purchases', value: data.purchases.length,    icon: '🛒' },
+                  { label: 'Total Products', value: data.stats.totalProducts, icon: '📦' },
+                  { label: 'Categories', value: data.categories.length, icon: '🏷️' },
+                  { label: 'Suppliers', value: data.suppliers.length, icon: '🏭' },
+                  { label: 'Customers', value: data.customers.length, icon: '👥' },
+                  { label: 'Total Sales', value: data.sales.length, icon: '💰' },
+                  { label: 'Total Purchases', value: data.purchases.length, icon: '🛒' },
                 ].map(r => (
                   <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>
                     <span style={{ fontSize: 14, color: '#475569' }}>{r.icon} {r.label}</span>
@@ -5833,10 +6362,10 @@ function ReportsTab({ data, loading, token }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                 {[
-                  { label: 'Date',         value: reportData.date },
+                  { label: 'Date', value: reportData.date },
                   { label: 'Transactions', value: reportData.total_transactions },
-                  { label: 'Total Sales',  value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
-                  { label: 'Total Cost',   value: `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}` },
+                  { label: 'Total Sales', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
+                  { label: 'Total Cost', value: `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}` },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
@@ -5920,10 +6449,10 @@ function ReportsTab({ data, loading, token }) {
               {/* KPI cards */}
               <div className="reports-kpi-grid">
                 {[
-                  { label: 'Week Start',    value: reportData.week_start },
-                  { label: 'Week End',      value: reportData.week_end },
-                  { label: 'Transactions',  value: reportData.total_transactions },
-                  { label: 'Total Sales',   value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
+                  { label: 'Week Start', value: reportData.week_start },
+                  { label: 'Week End', value: reportData.week_end },
+                  { label: 'Transactions', value: reportData.total_transactions },
+                  { label: 'Total Sales', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
@@ -6051,9 +6580,9 @@ function ReportsTab({ data, loading, token }) {
               {/* KPI cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {[
-                  { label: 'Month',        value: reportData.month },
+                  { label: 'Month', value: reportData.month },
                   { label: 'Transactions', value: reportData.total_transactions },
-                  { label: 'Total Sales',  value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
+                  { label: 'Total Sales', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
@@ -6215,10 +6744,10 @@ function ReportsTab({ data, loading, token }) {
               {/* ── KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
                 {[
-                  { label: 'Year',          value: reportData.year,                                                                          icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
-                  { label: 'Transactions',  value: reportData.total_transactions,                                                            icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
-                  { label: 'Total Revenue', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}`,                        icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
-                  { label: 'Total Cost',    value: `UGX ${parseFloat(reportData.total_cost  || 0).toLocaleString()}`,                        icon: '🛒', color: '#d97706', bg: '#fffbeb' },
+                  { label: 'Year', value: reportData.year, icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
+                  { label: 'Transactions', value: reportData.total_transactions, icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
+                  { label: 'Total Revenue', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
+                  { label: 'Total Cost', value: `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{ width: 42, height: 42, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{k.icon}</div>
@@ -6271,9 +6800,9 @@ function ReportsTab({ data, loading, token }) {
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {(reportData.by_month || []).map(m => {
-                        const revPct    = Math.round((parseFloat(m.total  || 0) / maxTotal) * 100);
+                        const revPct = Math.round((parseFloat(m.total || 0) / maxTotal) * 100);
                         const profitPct = Math.round((parseFloat(m.profit || 0) / maxTotal) * 100);
-                        const isProfit  = parseFloat(m.profit || 0) >= 0;
+                        const isProfit = parseFloat(m.profit || 0) >= 0;
                         return (
                           <div key={m.month}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -6315,7 +6844,7 @@ function ReportsTab({ data, loading, token }) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                     {reportData.by_quarter.map(q => {
                       const maxQ = Math.max(...reportData.by_quarter.map(x => parseFloat(x.total || 0)), 1);
-                      const pct  = Math.round((parseFloat(q.total || 0) / maxQ) * 100);
+                      const pct = Math.round((parseFloat(q.total || 0) / maxQ) * 100);
                       return (
                         <div key={q.quarter} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 14px' }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>{q.quarter}</div>
@@ -6398,9 +6927,9 @@ function ReportsTab({ data, loading, token }) {
               {/* KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                 {[
-                  { label: 'Date',         value: new Date(reportData.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
-                  { label: 'Transactions', value: reportData.total_transactions,                                                                                                              icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
-                  { label: 'Total Spent',  value: `UGX ${parseFloat(reportData.total_amount || 0).toLocaleString()}`,                                                                         icon: '💸', color: '#dc2626', bg: '#fef2f2' },
+                  { label: 'Date', value: new Date(reportData.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
+                  { label: 'Transactions', value: reportData.total_transactions, icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
+                  { label: 'Total Spent', value: `UGX ${parseFloat(reportData.total_amount || 0).toLocaleString()}`, icon: '💸', color: '#dc2626', bg: '#fef2f2' },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{ width: 44, height: 44, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{k.icon}</div>
@@ -6536,20 +7065,20 @@ function AiTab({ token, data }) {
       text: "Hi! I'm your AI business analyst. I have access to your sales, purchases, inventory, and revenue data.\n\nAsk me anything — or pick a quick question below to get started.",
     },
   ]);
-  const [input, setInput]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState(null);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [cooldown, setCooldown] = useState(0); // seconds remaining
-  const bottomRef               = useRef(null);
-  const cooldownRef             = useRef(null);
+  const bottomRef = useRef(null);
+  const cooldownRef = useRef(null);
 
   const QUICK_PROMPTS = [
     { label: 'Sales performance', icon: '📊', text: 'How did my sales perform this month compared to last month?' },
-    { label: 'Top products',      icon: '🏆', text: 'Which are my top 5 best-performing products by revenue?' },
-    { label: 'Forecast',          icon: '🔮', text: 'Based on my sales trend over the last 6 months, forecast my revenue for next month.' },
-    { label: 'Low stock alert',   icon: '⚠️',  text: 'Which products are running low on stock and what should I reorder first?' },
-    { label: 'Profit analysis',   icon: '💰', text: 'What is my estimated gross profit this month and how can I improve it?' },
-    { label: 'Busiest days',      icon: '📅', text: 'What are my busiest sales days and peak revenue periods?' },
+    { label: 'Top products', icon: '🏆', text: 'Which are my top 5 best-performing products by revenue?' },
+    { label: 'Forecast', icon: '🔮', text: 'Based on my sales trend over the last 6 months, forecast my revenue for next month.' },
+    { label: 'Low stock alert', icon: '⚠️', text: 'Which products are running low on stock and what should I reorder first?' },
+    { label: 'Profit analysis', icon: '💰', text: 'What is my estimated gross profit this month and how can I improve it?' },
+    { label: 'Busiest days', icon: '📅', text: 'What are my busiest sales days and peak revenue periods?' },
   ];
 
   useEffect(() => {
@@ -6575,7 +7104,7 @@ function AiTab({ token, data }) {
     setMessages(prev => [...prev, { role: 'user', text: q }]);
     setLoading(true);
     try {
-      const res  = await fetch(`${API_URL}/ai/chat`, { method: 'POST', headers, body: JSON.stringify({ question: q }) });
+      const res = await fetch(`${API_URL}/ai/chat`, { method: 'POST', headers, body: JSON.stringify({ question: q }) });
       const json = await res.json();
       if (!res.ok || !json.success) {
         const msg = res.status === 429
@@ -6722,11 +7251,11 @@ function AiTab({ token, data }) {
             <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Data in Context</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { icon: '💰', label: 'Total Sales',     value: `UGX ${data.stats.totalSales.toLocaleString()}` },
+                { icon: '💰', label: 'Total Sales', value: `UGX ${data.stats.totalSales.toLocaleString()}` },
                 { icon: '🛒', label: 'Total Purchases', value: `UGX ${data.stats.totalPurchases.toLocaleString()}` },
-                { icon: '📦', label: 'Products',        value: data.stats.totalProducts },
-                { icon: '🧾', label: 'Transactions',    value: data.sales.length },
-                { icon: '⚠️',  label: 'Low Stock',       value: data.stats.lowStockCount },
+                { icon: '📦', label: 'Products', value: data.stats.totalProducts },
+                { icon: '🧾', label: 'Transactions', value: data.sales.length },
+                { icon: '⚠️', label: 'Low Stock', value: data.stats.lowStockCount },
               ].map(s => (
                 <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #f8fafc' }}>
                   <span style={{ fontSize: 13, color: '#475569' }}>{s.icon} {s.label}</span>
@@ -6757,7 +7286,7 @@ function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleNa
   const allIds = Object.values(permissions).flat().map(p => p.id);
 
   const selectAll = () => onChange(allIds);
-  const clearAll  = () => onChange([]);
+  const clearAll = () => onChange([]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -6780,8 +7309,8 @@ function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleNa
       <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
         {Object.entries(permissions).map(([group, perms], gi) => {
           const groupIds = perms.map(p => p.id);
-          const allSel   = groupIds.every(id => selectedIds.includes(id));
-          const someSel  = groupIds.some(id => selectedIds.includes(id));
+          const allSel = groupIds.every(id => selectedIds.includes(id));
+          const someSel = groupIds.some(id => selectedIds.includes(id));
 
           const toggleGroup = () => {
             if (allSel) {
@@ -6805,7 +7334,7 @@ function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleNa
                   background: allSel ? '#7c3aed' : someSel ? '#ede9fe' : '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  {allSel  && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                  {allSel && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
                   {!allSel && someSel && <span style={{ color: '#7c3aed', fontSize: 11, lineHeight: 1, fontWeight: 900 }}>–</span>}
                 </div>
                 <span style={{ fontSize: 13 }}>{GROUP_ICONS[group] || '⚙️'}</span>
@@ -6862,20 +7391,20 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
     // for editing existing custom role permissions
     editCustomRoleId: null, editCustomPermIds: [],
   };
-  const [users, setUsers]           = useState([]);
-  const [roles, setRoles]           = useState([]);
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState({}); // grouped by category
-  const [loading, setLoading]       = useState(true);
-  const [showModal, setShowModal]   = useState(false);
-  const [editTarget, setEditTarget]         = useState(null);
-  const [form, setForm]                     = useState(EMPTY_FORM);
-  const [saving, setSaving]                 = useState(false);
-  const [formError, setFormError]           = useState(null);
-  const [deletingId, setDeletingId]         = useState(null);
-  const [confirmDelete, setConfirmDelete]   = useState(null); // holds user object pending deletion
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // holds user object pending deletion
   const [confirmDeleteRole, setConfirmDeleteRole] = useState(null); // holds role object pending deletion
   const [deletingRoleId, setDeletingRoleId] = useState(null);
-  const [search, setSearch]                 = useState('');
+  const [search, setSearch] = useState('');
   const [loadingUserDetail, setLoadingUserDetail] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -6917,7 +7446,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
     setLoadingUserDetail(true);
     setShowModal(true);
     try {
-      const res  = await fetch(`${API_URL}/users/${u.id}`, { headers });
+      const res = await fetch(`${API_URL}/users/${u.id}`, { headers });
       const json = await res.json();
       const fullUser = res.ok ? json.data : u;
 
@@ -6928,10 +7457,10 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       setEditTarget(fullUser);
       setForm({
         ...EMPTY_FORM,
-        name:    fullUser.name,
-        email:   fullUser.email,
+        name: fullUser.name,
+        email: fullUser.email,
         role_ids: (fullUser.roles || []).map(r => r.id),
-        editCustomRoleId:  customRole ? customRole.id : null,
+        editCustomRoleId: customRole ? customRole.id : null,
         editCustomPermIds,
       });
     } catch {
@@ -6952,6 +7481,32 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Custom validation
+    if (!form.name.trim()) {
+      setFormError('User name is required');
+      return;
+    }
+    if (form.name.trim().length < 2) {
+      setFormError('User name must be at least 2 characters');
+      return;
+    }
+    if (!form.email.trim()) {
+      setFormError('Email is required');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setFormError('Please enter a valid email address');
+      return;
+    }
+    if (!editTarget && !form.password) {
+      setFormError('Password is required for new users');
+      return;
+    }
+    if (!editTarget && form.password && form.password.length < 8) {
+      setFormError('Password must be at least 8 characters');
+      return;
+    }
+
     // ── ADD USER: Custom role path (atomic endpoint) ──────────────────────────
     if (!editTarget && form.useCustomRole) {
       if (!form.customRoleName.trim()) { setFormError('Please enter a name for the custom role.'); return; }
@@ -6959,15 +7514,15 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       setSaving(true);
       setFormError(null);
       try {
-        const res  = await fetch(`${API_URL}/users/with-custom-role`, {
+        const res = await fetch(`${API_URL}/users/with-custom-role`, {
           method: 'POST', headers,
           body: JSON.stringify({
-            name:             form.name,
-            email:            form.email,
-            password:         form.password,
-            role_name:        form.customRoleName.trim(),
+            name: form.name.trim(),
+            email: form.email.trim(),
+            password: form.password,
+            role_name: form.customRoleName.trim(),
             role_description: form.customRoleDesc.trim() || null,
-            permission_ids:   form.customPermIds,
+            permission_ids: form.customPermIds,
           }),
         });
         const json = await res.json();
@@ -7001,7 +7556,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
         const permRes = await fetch(`${API_URL}/users/${editTarget.id}/custom-role-permissions`, {
           method: 'PUT', headers,
           body: JSON.stringify({
-            role_id:        form.editCustomRoleId,
+            role_id: form.editCustomRoleId,
             permission_ids: form.editCustomPermIds,
           }),
         });
@@ -7013,7 +7568,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
         ? { name: form.name, email: form.email, role_ids: form.role_ids, ...(form.password ? { password: form.password } : {}) }
         : { name: form.name, email: form.email, password: form.password, role_ids: form.role_ids };
 
-      const res  = await fetch(`${API_URL}/users${isEdit ? `/${editTarget.id}` : ''}`, {
+      const res = await fetch(`${API_URL}/users${isEdit ? `/${editTarget.id}` : ''}`, {
         method: isEdit ? 'PUT' : 'POST',
         headers,
         body: JSON.stringify(body),
@@ -7106,79 +7661,79 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
           />
         ) : (
           <>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                {['User', 'Email', 'Roles', 'Joined', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pagedUsers.map(u => (
-                <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                  {/* Avatar + Name */}
-                  <td style={{ padding: '14px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 36, height: 36, borderRadius: '50%', background: '#ede9fe',
-                        color: '#7c3aed', fontWeight: 700, fontSize: 15,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        {u.name?.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{u.name}</div>
-                        {u.id === currentUser.id && (
-                          <span style={{ fontSize: 11, color: '#7c3aed', fontWeight: 500 }}>You</span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  {/* Email */}
-                  <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{u.email}</td>
-                  {/* Roles */}
-                  <td style={{ padding: '14px 14px' }}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {(u.roles || []).length > 0 ? u.roles.map(r => (
-                        <span key={r.id} style={{
-                          padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                          background: getRoleColor(r.name) + '18', color: getRoleColor(r.name),
-                          border: `1px solid ${getRoleColor(r.name)}40`,
-                        }}>{r.name}</span>
-                      )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>No role</span>}
-                    </div>
-                  </td>
-                  {/* Joined */}
-                  <td style={{ padding: '14px 14px', color: '#94a3b8', fontSize: 13 }}>
-                    {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
-                  </td>
-                  {/* Actions */}
-                  {(canEdit || canDelete) && (
-                  <td style={{ padding: '14px 14px' }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {canEdit && (
-                        <button onClick={() => openEdit(u)} style={{
-                          padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
-                          background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                        }}>Edit</button>
-                      )}
-                      {canDelete && u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
-                        <button onClick={() => setConfirmDelete(u)} disabled={deletingId === u.id} style={{
-                          padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
-                          background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                        }}>
-                          {deletingId === u.id ? '…' : 'Delete'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  )}
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                  {['User', 'Email', 'Roles', 'Joined', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <InlinePager page={uPage} totalPages={uTotalPages} total={uTotal} pageSize={uPageSize} setPage={setUPage} />
+              </thead>
+              <tbody>
+                {pagedUsers.map(u => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                    {/* Avatar + Name */}
+                    <td style={{ padding: '14px 14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: '50%', background: '#ede9fe',
+                          color: '#7c3aed', fontWeight: 700, fontSize: 15,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          {u.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{u.name}</div>
+                          {u.id === currentUser.id && (
+                            <span style={{ fontSize: 11, color: '#7c3aed', fontWeight: 500 }}>You</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    {/* Email */}
+                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{u.email}</td>
+                    {/* Roles */}
+                    <td style={{ padding: '14px 14px' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {(u.roles || []).length > 0 ? u.roles.map(r => (
+                          <span key={r.id} style={{
+                            padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                            background: getRoleColor(r.name) + '18', color: getRoleColor(r.name),
+                            border: `1px solid ${getRoleColor(r.name)}40`,
+                          }}>{r.name}</span>
+                        )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>No role</span>}
+                      </div>
+                    </td>
+                    {/* Joined */}
+                    <td style={{ padding: '14px 14px', color: '#94a3b8', fontSize: 13 }}>
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                    </td>
+                    {/* Actions */}
+                    {(canEdit || canDelete) && (
+                      <td style={{ padding: '14px 14px' }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {canEdit && (
+                            <button onClick={() => openEdit(u)} style={{
+                              padding: '5px 12px', borderRadius: 6, border: '1px solid #3b82f6',
+                              background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                            }}>Edit</button>
+                          )}
+                          {canDelete && u.id !== currentUser.id && (isOwner || !u.roles?.some(r => r.name === 'owner')) && (
+                            <button onClick={() => setConfirmDelete(u)} disabled={deletingId === u.id} style={{
+                              padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
+                              background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                            }}>
+                              {deletingId === u.id ? '…' : 'Delete'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <InlinePager page={uPage} totalPages={uTotalPages} total={uTotal} pageSize={uPageSize} setPage={setUPage} />
           </>
         )}
       </div>
@@ -7241,21 +7796,21 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                           )}
                         </td>
                         {isOwner && (
-                        <td style={{ padding: '13px 16px' }}>
-                          {!role.is_default && (
-                            <button
-                              onClick={() => setConfirmDeleteRole(role)}
-                              disabled={deletingRoleId === role.id}
-                              style={{
-                                padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
-                                background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                                opacity: deletingRoleId === role.id ? 0.6 : 1,
-                              }}
-                            >
-                              {deletingRoleId === role.id ? '…' : 'Delete'}
-                            </button>
-                          )}
-                        </td>
+                          <td style={{ padding: '13px 16px' }}>
+                            {!role.is_default && (
+                              <button
+                                onClick={() => setConfirmDeleteRole(role)}
+                                disabled={deletingRoleId === role.id}
+                                style={{
+                                  padding: '5px 12px', borderRadius: 6, border: '1px solid #ef4444',
+                                  background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                                  opacity: deletingRoleId === role.id ? 0.6 : 1,
+                                }}
+                              >
+                                {deletingRoleId === role.id ? '…' : 'Delete'}
+                              </button>
+                            )}
+                          </td>
                         )}
                       </tr>
                     );
@@ -7363,73 +7918,73 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
             Loading user details…
           </div>
         ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-          {/* Row 1: Name + Email */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+            {/* Row 1: Name + Email */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <label style={supS.label}>Full Name *</label>
+                <input style={supS.input} placeholder="John Doe" value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <label style={supS.label}>Email *</label>
+                <input style={supS.input} type="email" placeholder="user@business.com" value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+              </div>
+            </div>
+
+            {/* Password */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Full Name *</label>
-              <input style={supS.input} placeholder="John Doe" value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+              <label style={supS.label}>{editTarget ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
+              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Min 8 chars, upper, lower, number'}
+                value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                required={!editTarget} minLength={editTarget ? 0 : 8} />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Email *</label>
-              <input style={supS.input} type="email" placeholder="user@business.com" value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
-            </div>
-          </div>
 
-          {/* Password */}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>{editTarget ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
-            <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Min 8 chars, upper, lower, number'}
-              value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              required={!editTarget} minLength={editTarget ? 0 : 8} />
-          </div>
+            {/* Role Mode Toggle — only shown when adding a new user (owners only can create custom roles) */}
+            {!editTarget && isOwner && (
+              <div style={{ display: 'flex', gap: 0, borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, useCustomRole: false, customRoleName: '', customRoleDesc: '', customPermIds: [] }))}
+                  style={{
+                    flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: 'none', borderRight: '1px solid #e2e8f0',
+                    background: !form.useCustomRole ? '#4f46e5' : '#f8fafc',
+                    color: !form.useCustomRole ? '#fff' : '#64748b',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  🎭 Predefined Role
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, useCustomRole: true, role_ids: [] }))}
+                  style={{
+                    flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: 'none',
+                    background: form.useCustomRole ? '#7c3aed' : '#f8fafc',
+                    color: form.useCustomRole ? '#fff' : '#64748b',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  ✨ Custom Role
+                </button>
+              </div>
+            )}
 
-          {/* Role Mode Toggle — only shown when adding a new user (owners only can create custom roles) */}
-          {!editTarget && isOwner && (
-            <div style={{ display: 'flex', gap: 0, borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, useCustomRole: false, customRoleName: '', customRoleDesc: '', customPermIds: [] }))}
-                style={{
-                  flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  border: 'none', borderRight: '1px solid #e2e8f0',
-                  background: !form.useCustomRole ? '#4f46e5' : '#f8fafc',
-                  color: !form.useCustomRole ? '#fff' : '#64748b',
-                  transition: 'all 0.15s',
-                }}
-              >
-                🎭 Predefined Role
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, useCustomRole: true, role_ids: [] }))}
-                style={{
-                  flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  border: 'none',
-                  background: form.useCustomRole ? '#7c3aed' : '#f8fafc',
-                  color: form.useCustomRole ? '#fff' : '#64748b',
-                  transition: 'all 0.15s',
-                }}
-              >
-                ✨ Custom Role
-              </button>
-            </div>
-          )}
-
-          {/* ── PREDEFINED ROLE PICKER ── */}
-          {(!form.useCustomRole || editTarget) && !(editTarget && form.editCustomRoleId) && (            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* ── PREDEFINED ROLE PICKER ── */}
+            {(!form.useCustomRole || editTarget) && !(editTarget && form.editCustomRoleId) && (<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <label style={supS.label}>Assign Roles *</label>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {roles.map(r => {
                   const selected = form.role_ids.includes(r.id);
-                  const color    = getRoleColor(r.name);
+                  const color = getRoleColor(r.name);
 
                   const ROLE_META = {
-                    owner:   { icon: '👑', desc: 'Full access to everything — settings, users, all reports, all data.', perms: ['Manage users & roles', 'All reports & analytics', 'View & edit all sales', 'Manage products & inventory', 'Manage suppliers & customers', 'All purchases'] },
-                    admin:   { icon: '🛡️', desc: 'Same as owner except cannot delete the owner account.', perms: ['Manage users & roles', 'All reports & analytics', 'View & edit all sales', 'Manage products & inventory', 'Manage suppliers & customers', 'All purchases'] },
+                    owner: { icon: '👑', desc: 'Full access to everything — settings, users, all reports, all data.', perms: ['Manage users & roles', 'All reports & analytics', 'View & edit all sales', 'Manage products & inventory', 'Manage suppliers & customers', 'All purchases'] },
+                    admin: { icon: '🛡️', desc: 'Same as owner except cannot delete the owner account.', perms: ['Manage users & roles', 'All reports & analytics', 'View & edit all sales', 'Manage products & inventory', 'Manage suppliers & customers', 'All purchases'] },
                     manager: { icon: '📋', desc: 'Operational access — can see all sales, run reports, manage stock.', perms: ['View all sales (any staff)', 'Daily, weekly, monthly & yearly reports', 'Manage products & inventory', 'Manage suppliers & customers', 'View purchases'] },
                     cashier: { icon: '🧾', desc: 'POS-only access — can process sales and view only their own transactions.', perms: ['Process sales (POS)', 'View own sales only', 'View products & stock levels', 'View customers'] },
                   };
@@ -7485,76 +8040,76 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                 <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Select at least one role</p>
               )}
             </div>
-          )}
+            )}
 
-          {/* ── EDIT: Custom Role Permission Manager (owner only) ── */}
-          {editTarget && form.editCustomRoleId && isOwner && (
-            <CustomRolePermissionEditor
-              permissions={permissions}
-              selectedIds={form.editCustomPermIds}
-              onChange={ids => setForm(f => ({ ...f, editCustomPermIds: ids }))}
-              roleName={(editTarget.roles || []).find(r => r.id === form.editCustomRoleId)?.name}
-            />
-          )}
-
-          {/* ── EDIT: Custom role info for non-owners (read-only notice) ── */}
-          {editTarget && form.editCustomRoleId && !isOwner && (
-            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#6d28d9' }}>
-              ✨ This user has a <strong>custom role</strong>. Only the owner can modify its permissions.
-            </div>
-          )}
-
-          {/* ── ADD USER: CUSTOM ROLE BUILDER ── */}
-          {form.useCustomRole && !editTarget && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#6d28d9' }}>
-                <strong>Custom Role</strong> — a new role will be created and assigned exclusively to this user. You pick exactly which permissions it includes.
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={supS.label}>Role Name *</label>
-                  <input
-                    style={supS.input}
-                    placeholder="e.g. Warehouse Staff"
-                    value={form.customRoleName}
-                    onChange={e => setForm(f => ({ ...f, customRoleName: e.target.value }))}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={supS.label}>Description (optional)</label>
-                  <input
-                    style={supS.input}
-                    placeholder="e.g. Can view stock and process sales"
-                    value={form.customRoleDesc}
-                    onChange={e => setForm(f => ({ ...f, customRoleDesc: e.target.value }))}
-                  />
-                </div>
-              </div>
-
+            {/* ── EDIT: Custom Role Permission Manager (owner only) ── */}
+            {editTarget && form.editCustomRoleId && isOwner && (
               <CustomRolePermissionEditor
                 permissions={permissions}
-                selectedIds={form.customPermIds}
-                onChange={ids => setForm(f => ({ ...f, customPermIds: ids }))}
+                selectedIds={form.editCustomPermIds}
+                onChange={ids => setForm(f => ({ ...f, editCustomPermIds: ids }))}
+                roleName={(editTarget.roles || []).find(r => r.id === form.editCustomRoleId)?.name}
               />
-            </div>
-          )}
+            )}
 
-          {formError && (
-            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
-              ⚠️ {formError}
-            </div>
-          )}
+            {/* ── EDIT: Custom role info for non-owners (read-only notice) ── */}
+            {editTarget && form.editCustomRoleId && !isOwner && (
+              <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#6d28d9' }}>
+                ✨ This user has a <strong>custom role</strong>. Only the owner can modify its permissions.
+              </div>
+            )}
 
-          <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
-              {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Add User'}
-            </Button>
-          </div>
-        </form>
+            {/* ── ADD USER: CUSTOM ROLE BUILDER ── */}
+            {form.useCustomRole && !editTarget && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#6d28d9' }}>
+                  <strong>Custom Role</strong> — a new role will be created and assigned exclusively to this user. You pick exactly which permissions it includes.
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={supS.label}>Role Name *</label>
+                    <input
+                      style={supS.input}
+                      placeholder="e.g. Warehouse Staff"
+                      value={form.customRoleName}
+                      onChange={e => setForm(f => ({ ...f, customRoleName: e.target.value }))}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <label style={supS.label}>Description (optional)</label>
+                    <input
+                      style={supS.input}
+                      placeholder="e.g. Can view stock and process sales"
+                      value={form.customRoleDesc}
+                      onChange={e => setForm(f => ({ ...f, customRoleDesc: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <CustomRolePermissionEditor
+                  permissions={permissions}
+                  selectedIds={form.customPermIds}
+                  onChange={ids => setForm(f => ({ ...f, customPermIds: ids }))}
+                />
+              </div>
+            )}
+
+            {formError && (
+              <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                ⚠️ {formError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+              <Button type="button" variant="secondary" onClick={() => setShowModal(false)} style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={saving} style={{ flex: 1 }}>
+                {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Add User'}
+              </Button>
+            </div>
+          </form>
         )}
       </Modal>
     </div>
@@ -7567,26 +8122,26 @@ function StockMovementsTab({ token, products, canCreate = true }) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
   const [movements, setMovements] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState('');
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [productFilter, setProductFilter] = useState('');
 
   // ── Adjust Stock form state ────────────────────────────────────────────────
-  const [adjProduct, setAdjProduct]   = useState('');
-  const [adjType, setAdjType]         = useState('IN');
-  const [adjQty, setAdjQty]           = useState('');
-  const [adjReason, setAdjReason]     = useState('');
-  const [adjDate, setAdjDate]         = useState('');
-  const [adjLoading, setAdjLoading]   = useState(false);
-  const [adjError, setAdjError]       = useState('');
-  const [adjSuccess, setAdjSuccess]   = useState('');
+  const [adjProduct, setAdjProduct] = useState('');
+  const [adjType, setAdjType] = useState('IN');
+  const [adjQty, setAdjQty] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+  const [adjDate, setAdjDate] = useState('');
+  const [adjLoading, setAdjLoading] = useState(false);
+  const [adjError, setAdjError] = useState('');
+  const [adjSuccess, setAdjSuccess] = useState('');
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const res  = await fetch(`${API_URL}/stock-movements`, { headers });
+        const res = await fetch(`${API_URL}/stock-movements`, { headers });
         const json = await res.json();
         setMovements(json.data || []);
       } catch { /* silent */ }
@@ -7596,8 +8151,8 @@ function StockMovementsTab({ token, products, canCreate = true }) {
   }, [token]);
 
   const adjTypeDescriptions = {
-    IN:         'Adds quantity to current stock.',
-    OUT:        'Removes quantity from current stock.',
+    IN: 'Adds quantity to current stock.',
+    OUT: 'Removes quantity from current stock.',
     ADJUSTMENT: 'Sets stock to an exact absolute level.',
   };
 
@@ -7612,15 +8167,15 @@ function StockMovementsTab({ token, products, canCreate = true }) {
     try {
       const body = {
         product_id: Number(adjProduct),
-        type:       adjType,
-        quantity:   Number(adjQty),
-        reason:     adjReason || undefined,
-        date:       adjDate   || undefined,
+        type: adjType,
+        quantity: Number(adjQty),
+        reason: adjReason || undefined,
+        date: adjDate || undefined,
       };
-      const res  = await fetch(`${API_URL}/stock-movements`, {
-        method:  'POST',
+      const res = await fetch(`${API_URL}/stock-movements`, {
+        method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.message || 'Failed to apply adjustment.');
@@ -7633,7 +8188,7 @@ function StockMovementsTab({ token, products, canCreate = true }) {
       setAdjType('IN');
 
       // Refresh movements list
-      const refreshRes  = await fetch(`${API_URL}/stock-movements`, { headers });
+      const refreshRes = await fetch(`${API_URL}/stock-movements`, { headers });
       const refreshJson = await refreshRes.json();
       setMovements(refreshJson.data || []);
     } catch (err) {
@@ -7651,7 +8206,7 @@ function StockMovementsTab({ token, products, canCreate = true }) {
     return true;
   });
 
-  const totalIn  = movements.filter(m => m.type === 'IN').reduce((s, m) => s + m.quantity, 0);
+  const totalIn = movements.filter(m => m.type === 'IN').reduce((s, m) => s + m.quantity, 0);
   const totalOut = movements.filter(m => m.type === 'OUT').reduce((s, m) => s + m.quantity, 0);
 
   return (
@@ -7670,8 +8225,8 @@ function StockMovementsTab({ token, products, canCreate = true }) {
       <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Total Movements', value: movements.length, color: '#4f46e5', borderColor: '#4f46e5' },
-          { label: 'Stock In',        value: totalIn,           color: '#16a34a', borderColor: '#16a34a' },
-          { label: 'Stock Out',       value: totalOut,          color: '#dc2626', borderColor: '#dc2626' },
+          { label: 'Stock In', value: totalIn, color: '#16a34a', borderColor: '#16a34a' },
+          { label: 'Stock Out', value: totalOut, color: '#dc2626', borderColor: '#dc2626' },
         ].map(k => (
           <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderTop: `3px solid ${k.borderColor}`, borderRadius: 12, padding: '18px 22px' }}>
             <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
@@ -7794,8 +8349,8 @@ function StockMovementsTab({ token, products, canCreate = true }) {
               </label>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {[
-                  { value: 'IN',         label: '⬆ Stock In',   activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#16a34a' },
-                  { value: 'OUT',        label: '⬇ Stock Out',  activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#dc2626' },
+                  { value: 'IN', label: '⬆ Stock In', activeColor: '#16a34a', activeBg: '#f0fdf4', activeBorder: '#16a34a' },
+                  { value: 'OUT', label: '⬇ Stock Out', activeColor: '#dc2626', activeBg: '#fef2f2', activeBorder: '#dc2626' },
                   { value: 'ADJUSTMENT', label: '🔧 Set Level', activeColor: '#7c3aed', activeBg: '#f5f3ff', activeBorder: '#7c3aed' },
                 ].map(opt => (
                   <button
@@ -7918,7 +8473,7 @@ function usePagination(items, pageSize = 15) {
 function InlinePager({ page, totalPages, total, pageSize, setPage }) {
   if (totalPages <= 1) return null;
   const from = (page - 1) * pageSize + 1;
-  const to   = Math.min(page * pageSize, total);
+  const to = Math.min(page * pageSize, total);
   const pages = [];
   for (let i = 1; i <= totalPages; i++) {
     if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
@@ -8498,4 +9053,1070 @@ styleSheet.textContent = `
 if (!document.head.querySelector('style[data-component="Dashboard"]')) {
   styleSheet.setAttribute('data-component', 'Dashboard');
   document.head.appendChild(styleSheet);
+}
+
+// ════════════════════════════════════════════════
+// PRINTABLE INVOICE MODAL
+// ════════════════════════════════════════════════
+function PrintableInvoiceModal({ invoice, user, onClose }) {
+  if (!invoice) return null;
+
+  const handlePrint = () => { window.print(); };
+
+  const tenant = user?.tenant || {};
+  const businessName    = tenant.name    || user?.name  || 'Smart Trendz';
+  const businessPhone   = tenant.phone   || user?.phone || '0776 293691';
+  const businessEmail   = tenant.email   || user?.email || '';
+  const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
+  const businessTagline = tenant.tagline || 'Best Unboxing Xperience';
+
+  const items    = invoice.items || invoice.sale_items || invoice.saleItems || [];
+  const subtotal = invoice.subtotal != null
+    ? parseFloat(invoice.subtotal)
+    : items.reduce((s, i) => s + (parseFloat(i.subtotal) || (parseFloat(i.price || 0) * parseFloat(i.quantity || 1))), 0);
+  const discount = parseFloat(invoice.discount_amount || 0);
+  const tax      = parseFloat(invoice.tax_amount || 0);
+  const total    = parseFloat(invoice.total_amount || (subtotal - discount + tax));
+  const paid     = parseFloat(invoice.amount_paid ?? total);
+  const balance  = Math.max(0, total - paid);
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const date = new Date(d);
+    // Avoid timezone offset shifting the date
+    const utc = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    return utc.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  };
+
+  const invoiceNumber = invoice.invoice_number || `INV/25-26/${String(invoice.id || '0125').padStart(4, '0')}`;
+  const invoiceDate   = fmtDate(invoice.invoice_date || invoice.sale_date || invoice.created_at);
+  const dueDate       = fmtDate(invoice.due_date || invoice.invoice_date || invoice.sale_date);
+  const sourceRef     = invoice.source_ref || `S${String(invoice.id || '00124').padStart(5, '0')}`;
+  const customerName    = invoice.customer_name || invoice.customer?.name || 'Valued Customer';
+  const customerPhone   = invoice.customer_phone || invoice.customer?.phone || invoice.customer?.contact || '';
+  const customerEmail   = invoice.customer_email || invoice.customer?.email || '';
+  const customerAddress = invoice.customer_address || invoice.customer?.address || '';
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="" size="xl" className="invoice-modal">
+      {/* ── Action bar (screen only, hidden on print) ── */}
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
+          <div>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoiceNumber}</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>{customerName}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
+          <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════
+          PRINTABLE INVOICE BODY
+          Matches the Smart Trendz proforma layout
+      ══════════════════════════════════════════════ */}
+      <div id="printable-invoice" style={{
+        background: '#ffffff',
+        padding: '36px 44px 32px',
+        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+        color: '#0f172a',
+        boxSizing: 'border-box',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+
+        {/* Decorative circle — top right, matches screenshot */}
+        <div style={{
+          position: 'absolute', top: -80, right: -80,
+          width: 260, height: 260, borderRadius: '50%',
+          background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+        }} />
+
+        {/* ── HEADER: logo/name + customer left · address right ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+
+          {/* Left: logo + business name, then customer details below */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <img
+                src="/zziwa logo.png"
+                alt={businessName}
+                style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
+              />
+              <div style={{ paddingTop: 2 }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#be123c', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                  {businessName}
+                </div>
+              </div>
+            </div>
+            {/* Customer details — sits directly below the logo */}
+            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8, paddingLeft: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>To:</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{customerName}</div>
+              {customerPhone   && <div>{customerPhone}</div>}
+              {customerEmail   && <div>{customerEmail}</div>}
+              {customerAddress && <div>{customerAddress}</div>}
+            </div>
+          </div>
+
+          {/* Right: business contact block + invoice title below */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+            <div style={{ textAlign: 'right', fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+              <div style={{ fontWeight: 700 }}>{businessName}</div>
+              <div>{businessAddress}</div>
+              <div>{businessPhone}</div>
+              {businessEmail && <div>{businessEmail}</div>}
+              <div>Kampala Uganda</div>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#be123c', letterSpacing: '-0.3px', textAlign: 'right' }}>
+              Invoice {invoiceNumber}
+            </div>
+          </div>
+        </div>
+
+        {/* ── DATE / DUE DATE / SOURCE INFO CARD ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          border: '1.5px solid #cbd5e1',
+          borderRadius: 10,
+          overflow: 'hidden',
+          marginBottom: 22,
+        }}>
+          {[
+            { label: 'Invoice Date', value: invoiceDate },
+            { label: 'Due Date',     value: dueDate     },
+            { label: 'Source',       value: sourceRef   },
+          ].map((cell, i, arr) => (
+            <div key={cell.label} style={{
+              padding: '12px 18px',
+              borderRight: i < arr.length - 1 ? '1.5px solid #cbd5e1' : 'none',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>{cell.label}</div>
+              <div style={{ fontSize: 13, color: '#475569' }}>{cell.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── LINE ITEMS TABLE ── */}
+        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#881337', color: '#ffffff' }}>
+                <th style={{ padding: '11px 18px', textAlign: 'left',   fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Items</th>
+                <th style={{ padding: '11px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 130 }}>Quantity</th>
+                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 150 }}>Unit Price</th>
+                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 160 }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan="4" style={{ padding: '20px 18px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No items</td>
+                </tr>
+              ) : items.map((item, idx) => {
+                const name      = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
+                const qty       = parseFloat(item.quantity || 1);
+                const price     = parseFloat(item.price || item.unit_price || 0);
+                const amt       = parseFloat(item.subtotal != null ? item.subtotal : qty * price);
+                const unitLabel = item.product?.unit || item.unit || 'Units';
+                const isLast    = idx === items.length - 1;
+
+                return (
+                  <tr key={idx} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '13px 18px', fontSize: 13, color: '#0f172a' }}>{name}</td>
+                    <td style={{ padding: '13px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
+                      {qty.toFixed(2)} {unitLabel}
+                    </td>
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
+                      {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#0f172a' }}>
+                      {amt.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── BOTTOM SECTION: payment note (left) + totals (right) ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, marginTop: 4 }}>
+
+          {/* Payment terms — only shown if the invoice has notes */}
+          <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+            {invoice.notes && (
+              <div style={{ fontSize: 12, color: '#475569', maxWidth: 380 }}>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>Terms: </span>{invoice.notes}
+              </div>
+            )}
+          </div>
+
+          {/* Totals block — matches screenshot (paid row + bold amount due) */}
+          <div style={{ minWidth: 300, border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
+            {/* Paid on date row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+              <span style={{ fontStyle: 'italic', color: '#475569' }}>Paid on {invoiceDate}</span>
+              <span style={{ color: '#0f172a' }}>
+                {paid.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+              </span>
+            </div>
+            {/* Amount Due row — bold, dark background when balance > 0 */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              padding: '12px 18px',
+              background: balance > 0 ? '#fff1f2' : '#f0fdf4',
+              fontSize: 14,
+            }}>
+              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
+              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>
+                {balance.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════
+// CREATE CUSTOM INVOICE MODAL
+// ════════════════════════════════════════════════
+function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }) {
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sourceRef, setSourceRef] = useState(`S00${Math.floor(100 + Math.random() * 900)}`);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  // Payment status state
+  const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [amountPaid, setAmountPaid] = useState('');
+  const [amountDue, setAmountDue] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
+
+  const [items, setItems] = useState([
+    { description: '', quantity: '1', price: '' }
+  ]);
+
+  const handleAddItem = () => {
+    setItems(prev => [...prev, { description: '', quantity: '1', price: '' }]);
+  };
+
+  const handleRemoveItem = (idx) => {
+    setItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleItemChange = (idx, field, val) => {
+    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+  };
+
+  const calculateTotal = () => {
+    return items.reduce((sum, item) => {
+      const q = parseFloat(item.quantity) || 0;
+      const p = parseFloat(item.price) || 0;
+      return sum + (q * p);
+    }, 0);
+  };
+
+  const handleSelectCustomer = (e) => {
+    const custId = e.target.value;
+    if (!custId) return;
+    const cust = customers.find(c => String(c.id) === String(custId));
+    if (cust) {
+      setCustomerName(cust.name || '');
+      setCustomerPhone(cust.phone || cust.contact || '');
+      setCustomerEmail(cust.email || '');
+    }
+  };
+
+  // When status changes, reset payment fields and auto-fill where appropriate
+  const handleStatusChange = (newStatus) => {
+    setPaymentStatus(newStatus);
+    const total = calculateTotal();
+    if (newStatus === 'paid') {
+      setAmountPaid(String(total));
+      setAmountDue('0');
+    } else if (newStatus === 'due') {
+      setAmountPaid('0');
+      setAmountDue(String(total));
+    } else {
+      // partial — clear both so user fills in
+      setAmountPaid('');
+      setAmountDue('');
+    }
+  };
+
+  // When partial amount paid changes, auto-calc amount due
+  const handlePartialPaidChange = (val) => {
+    setAmountPaid(val);
+    const total = calculateTotal();
+    const paid = parseFloat(val) || 0;
+    setAmountDue(String(Math.max(0, total - paid)));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitError('');
+    setFieldErrors({});
+
+    // Validate form
+    const errors = {};
+    
+    if (!customerName.trim()) {
+      errors.customerName = 'Customer name is required';
+    }
+    
+    const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
+    if (validItems.length === 0) {
+      errors.items = 'Please add at least one valid item with a description and price';
+    }
+    
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      errors.customerEmail = 'Please enter a valid email address';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setSubmitError('Please fix the errors below');
+      return;
+    }
+
+    const payload = {
+      invoice_date: invoiceDate,
+      due_date: dueDate,
+      source_ref: sourceRef,
+      customer_name: customerName.trim(),
+      customer_phone: customerPhone.trim() || null,
+      customer_email: customerEmail.trim() || null,
+      payment_status: paymentStatus,
+      amount_paid: parseFloat(amountPaid) || 0,
+      notes: paymentTerms.trim() || null,
+      items: validItems.map(i => ({
+        description: i.description.trim(),
+        quantity: parseFloat(i.quantity) || 1,
+        price: parseFloat(i.price) || 0,
+        subtotal: (parseFloat(i.quantity) || 1) * (parseFloat(i.price) || 0)
+      }))
+    };
+
+    try {
+      setSubmitting(true);
+      const res = await fetch(`${API}/invoices`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const msg = json.message || (json.errors ? Object.values(json.errors).flat().join(' ') : 'Failed to save invoice.');
+        setSubmitError(msg);
+        return;
+      }
+      onCreated(json.data);
+    } catch (err) {
+      setSubmitError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="720px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {customers && customers.length > 0 && (
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Quick Select Customer (Optional)
+            </label>
+            <select
+              onChange={handleSelectCustomer}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff' }}
+            >
+              <option value="">— Select an existing customer —</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Customer Name *</label>
+            <input
+              type="text"
+              placeholder="e.g. Asher"
+              value={customerName}
+              onChange={e => { setCustomerName(e.target.value); if (fieldErrors.customerName) setFieldErrors(prev => ({ ...prev, customerName: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerName ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+            {fieldErrors.customerName && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Phone Number</label>
+            <input
+              type="text"
+              placeholder="e.g. 0776 000000"
+              value={customerPhone}
+              onChange={e => setCustomerPhone(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Source / Ref</label>
+            <input
+              type="text"
+              placeholder="e.g. S00124"
+              value={sourceRef}
+              onChange={e => setSourceRef(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Invoice Date</label>
+            <input
+              type="date"
+              value={invoiceDate}
+              onChange={e => setInvoiceDate(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Due Date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <label style={{ fontSize: 13, fontWeight: 800, color: '#881337', textTransform: 'uppercase' }}>
+              Invoice Line Items
+            </label>
+            <button
+              type="button"
+              onClick={handleAddItem}
+              style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#be123c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+            >
+              + Add Item Line
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {items.map((item, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 40px', gap: 10, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Description (e.g. Apple iPhone 17 Pro Max 512GB)"
+                  value={item.description}
+                  onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+                  required
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Qty"
+                  value={item.quantity}
+                  onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Unit Price (UGX)"
+                  value={item.price}
+                  onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
+                  required
+                />
+                {items.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(idx)}
+                    style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, height: 36, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '14px 20px', borderRadius: 10, border: '1.5px solid #e2e8f0' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>Total Invoice Amount:</span>
+          <span style={{ fontSize: 18, fontWeight: 900, color: '#881337' }}>UGX {calculateTotal().toLocaleString()}</span>
+        </div>
+
+        {/* ── PAYMENT STATUS ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Status
+            </label>
+            <select
+              value={paymentStatus}
+              onChange={e => handleStatusChange(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            >
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+              <option value="due">Due</option>
+            </select>
+          </div>
+
+          {/* PAID — show amount paid (pre-filled with total, editable) */}
+          {paymentStatus === 'paid' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Amount Paid (UGX)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountPaid}
+                onChange={e => setAmountPaid(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+
+          {/* PARTIAL — amount paid (user fills) + amount due (auto-calculated) */}
+          {paymentStatus === 'partial' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Amount Paid (UGX)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Enter partial amount paid"
+                  value={amountPaid}
+                  onChange={e => handlePartialPaidChange(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Amount Due (UGX) — Auto
+                </label>
+                <input
+                  type="number"
+                  readOnly
+                  value={amountDue}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 700, background: '#fef2f2', color: '#b91c1c', boxSizing: 'border-box', cursor: 'not-allowed' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* DUE — amount due (user fills manually) */}
+          {paymentStatus === 'due' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Amount Due (UGX)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter amount due"
+                value={amountDue}
+                onChange={e => setAmountDue(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ── PAYMENT TERMS & CONDITIONS ── */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Payment Terms &amp; Conditions
+          </label>
+          <textarea
+            rows={3}
+            value={paymentTerms}
+            onChange={e => setPaymentTerms(e.target.value)}
+            placeholder="Explicit due date (e.g., Net 30, Due on Receipt), accepted payment methods, and penalties for late payment"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1.5px solid #cbd5e1',
+              borderRadius: 8,
+              fontSize: 13,
+              color: '#0f172a',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              fontFamily: 'inherit',
+              lineHeight: 1.6,
+            }}
+          />
+        </div>
+
+        {submitError && (
+          <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
+            {submitError}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.75 : 1, boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
+          >
+            {submitting ? 'Saving…' : 'Generate Invoice 📄'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════
+// INVOICE EDIT STATUS MODAL
+// ════════════════════════════════════════════════
+function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
+  const [status, setStatus] = useState(invoice.payment_status || 'paid');
+  const [amountPaid, setAmountPaid] = useState(String(invoice.amount_paid ?? invoice.total_amount ?? ''));
+  const [saving, setSaving] = useState(false);
+
+  const total = parseFloat(invoice.total_amount || 0);
+  const paid = parseFloat(amountPaid) || 0;
+  const balance = Math.max(0, total - paid);
+
+  // Auto-derive status from amount paid when user changes the amount
+  const handleAmountChange = (val) => {
+    setAmountPaid(val);
+    const p = parseFloat(val) || 0;
+    if (p >= total) setStatus('paid');
+    else if (p > 0) setStatus('partial');
+    else setStatus('due');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(invoice.id, status, parseFloat(amountPaid) || 0);
+    setSaving(false);
+  };
+
+  const statusOptions = [
+    { value: 'paid',    label: 'Paid',    bg: '#dcfce7', color: '#15803d' },
+    { value: 'partial', label: 'Partial', bg: '#fef3c7', color: '#b45309' },
+    { value: 'due',     label: 'Due',     bg: '#fee2e2', color: '#b91c1c' },
+  ];
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Edit Payment Status" maxWidth="440px">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Invoice reference */}
+        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 16px', border: '1px solid #e2e8f0' }}>
+          <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Invoice</p>
+          <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoice.invoice_number}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 13, color: '#475569' }}>{invoice.customer_name} · Total: <strong>UGX {total.toLocaleString()}</strong></p>
+        </div>
+
+        {/* Status selector */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Payment Status
+          </label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {statusOptions.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatus(opt.value)}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  border: status === opt.value ? `2px solid ${opt.color}` : '2px solid #e2e8f0',
+                  background: status === opt.value ? opt.bg : '#fff',
+                  color: status === opt.value ? opt.color : '#64748b',
+                  transition: 'all 0.12s'
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Amount paid */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Amount Paid (UGX)
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountPaid}
+            onChange={e => handleAmountChange(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12, color: '#64748b' }}>
+            <span>Balance remaining: <strong style={{ color: balance > 0 ? '#b91c1c' : '#15803d' }}>UGX {balance.toLocaleString()}</strong></span>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+              background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13,
+              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.75 : 1,
+              boxShadow: '0 4px 12px rgba(136,19,55,0.25)'
+            }}
+          >
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════
+// INVOICES TAB COMPONENT
+// ════════════════════════════════════════════════
+function InvoicesTab({ sales, customers, user, token, toast }) {
+  const [customInvoices, setCustomInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);   // invoice being status-edited
+  const [search, setSearch] = useState('');
+
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  // Fetch persisted custom invoices from the backend on mount
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const res = await fetch(`${API}/invoices`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+        });
+        const json = await res.json();
+        if (json.success) {
+          setCustomInvoices(json.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to load invoices', err);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    fetchInvoices();
+  }, [API, token]);
+
+  // Derive invoice rows from sales (sale-based invoices, always present)
+  const saleInvoices = (sales || []).map(s => ({
+    id: `sale-${s.id}`,
+    _type: 'sale',
+    invoice_number: `INV/25-26/${String(s.id).padStart(4, '0')}`,
+    invoice_date: (s.sale_date || s.created_at || '').slice(0, 10),
+    due_date: (s.sale_date || s.created_at || '').slice(0, 10),
+    customer_name: s.customer?.name || 'Walk-in Customer',
+    customer_email: s.customer?.email || '',
+    customer_phone: s.customer?.phone || s.customer?.contact || '',
+    customer_address: s.customer?.address || '',
+    total_amount: parseFloat(s.total_amount || 0),
+    amount_paid: parseFloat(s.total_amount || 0),
+    payment_status: 'paid',
+    items: s.sale_items || s.saleItems || [],
+    source_ref: `S${String(s.id).padStart(5, '0')}`
+  }));
+
+  // Normalise custom invoices from DB for the same shape
+  const dbInvoices = customInvoices.map(inv => ({
+    ...inv,
+    _type: 'custom',
+    invoice_date: inv.invoice_date ? String(inv.invoice_date).slice(0, 10) : '',
+    due_date: inv.due_date ? String(inv.due_date).slice(0, 10) : '',
+    total_amount: parseFloat(inv.total_amount || 0),
+    amount_paid: parseFloat(inv.amount_paid || 0),
+  }));
+
+  // Merge: custom invoices first (newest), then sale-based
+  const invoicesList = [...dbInvoices, ...saleInvoices];
+
+  const filteredInvoices = invoicesList.filter(inv =>
+    !search ||
+    inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+    inv.customer_name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleDeleteInvoice = async (inv) => {
+    if (inv._type !== 'custom') return;
+    if (!window.confirm(`Delete invoice ${inv.invoice_number}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API}/invoices/${inv.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCustomInvoices(prev => prev.filter(i => i.id !== inv.id));
+        if (selectedInvoice?.id === inv.id) setSelectedInvoice(null);
+        toast && toast.success('Invoice deleted', 'The invoice has been removed.');
+      } else {
+        toast && toast.error('Delete failed', json.message || 'Failed to delete invoice.');
+      }
+    } catch (err) {
+      toast && toast.error('Network error', 'Please try again.');
+    }
+  };
+
+  const handleSaveStatus = async (invoiceId, newStatus, amountPaid) => {
+    try {
+      const res = await fetch(`${API}/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ payment_status: newStatus, amount_paid: amountPaid })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCustomInvoices(prev =>
+          prev.map(i => i.id === invoiceId ? { ...i, payment_status: json.data.payment_status, amount_paid: parseFloat(json.data.amount_paid) } : i)
+        );
+        setEditingInvoice(null);
+        toast && toast.success('Status updated', 'Invoice payment status has been saved.');
+      } else {
+        toast && toast.error('Update failed', json.message || 'Failed to update invoice.');
+      }
+    } catch (err) {
+      toast && toast.error('Network error', 'Please try again.');
+    }
+  };
+
+  const statusStyle = (status) => {
+    if (status === 'paid') return { background: '#dcfce7', color: '#15803d' };
+    if (status === 'partial') return { background: '#fef3c7', color: '#b45309' };
+    return { background: '#fee2e2', color: '#b91c1c' };
+  };
+
+  return (
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
+      {/* Top Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Invoices & Proforma Generator</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring Zziwa & Sons branding</p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            padding: '10px 20px', borderRadius: 10, border: 'none',
+            background: '#881337', color: '#ffffff', fontWeight: 700,
+            fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+            boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
+          }}
+        >
+          <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
+        </button>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Total Invoices', value: invoicesList.length, color: '#881337', icon: '📄' },
+          { label: 'Total Invoiced Value', value: `UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}`, color: '#be123c', icon: '💰' },
+          { label: 'Collected Amount', value: `UGX ${invoicesList.reduce((s, i) => s + i.amount_paid, 0).toLocaleString()}`, color: '#16a34a', icon: '✅' },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', borderTop: `3px solid ${k.color}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{k.value}</h3>
+              </div>
+              <span style={{ fontSize: 24 }}>{k.icon}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Search Input */}
+      <div style={{ marginBottom: 20 }}>
+        <input
+          type="text"
+          placeholder="Search by invoice # or customer name..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: '100%', maxWidth: 400, padding: '10px 14px', borderRadius: 10, border: '1.5px solid #cbd5e1', fontSize: 13 }}
+        />
+      </div>
+
+      {/* Invoices List Table */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
+        {loadingInvoices ? (
+          <div style={{ padding: 36, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>Loading invoices…</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
+                {['Invoice #', 'Customer', 'Date', 'Amount', 'Status', 'Type', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '12px 18px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredInvoices.length > 0 ? filteredInvoices.map(inv => (
+                <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 800, color: '#881337' }}>{inv.invoice_number}</td>
+                  <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.customer_name}</td>
+                  <td style={{ padding: '14px 18px', fontSize: 13, color: '#64748b' }}>{inv.invoice_date}</td>
+                  <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {inv.total_amount.toLocaleString()}</td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, ...statusStyle(inv.payment_status) }}>
+                      {(inv.payment_status || 'paid').toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                      background: inv._type === 'custom' ? '#eff6ff' : '#f0fdf4',
+                      color: inv._type === 'custom' ? '#1d4ed8' : '#15803d'
+                    }}>
+                      {inv._type === 'custom' ? 'Custom' : 'Sale'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button
+                        onClick={() => setSelectedInvoice(inv)}
+                        style={{
+                          padding: '6px 14px', borderRadius: 6, border: '1px solid #881337',
+                          background: '#fff1f2', color: '#881337', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        <span>📄</span> View / Print
+                      </button>
+                      {inv._type === 'custom' && (
+                        <button
+                          onClick={() => setEditingInvoice(inv)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #bfdbfe',
+                            background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                          }}
+                          title="Edit payment status"
+                        >
+                          ✏️ Status
+                        </button>
+                      )}
+                      {inv._type === 'custom' && (
+                        <button
+                          onClick={() => handleDeleteInvoice(inv)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #fecaca',
+                            background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                          }}
+                          title="Delete invoice"
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                    No invoices found matching search query.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Printable Invoice Modal */}
+      {selectedInvoice && (
+        <PrintableInvoiceModal
+          invoice={selectedInvoice}
+          user={user}
+          onClose={() => setSelectedInvoice(null)}
+        />
+      )}
+
+      {/* Create Custom Invoice Modal */}
+      {showCreateModal && (
+        <CustomInvoiceCreateModal
+          user={user}
+          customers={customers}
+          token={token}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(savedInvoice) => {
+            setCustomInvoices(prev => [savedInvoice, ...prev]);
+            setShowCreateModal(false);
+            setSelectedInvoice({ ...savedInvoice, _type: 'custom' });
+            toast && toast.success('Invoice created', 'Saved successfully and ready to print.');
+          }}
+        />
+      )}
+
+      {/* Edit Payment Status Modal */}
+      {editingInvoice && (
+        <InvoiceEditStatusModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSave={handleSaveStatus}
+        />
+      )}
+    </div>
+  );
 }

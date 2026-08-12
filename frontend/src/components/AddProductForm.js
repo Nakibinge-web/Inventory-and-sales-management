@@ -477,11 +477,16 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, error }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
       {label && <label style={s.label}>{label}</label>}
       {children}
+      {error && (
+        <span style={s.fieldError}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -494,6 +499,13 @@ const s = {
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
     boxSizing: 'border-box', background: '#fff', color: '#0f172a',
     transition: 'border-color 0.2s',
+  },
+  fieldError: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: 500,
+    marginTop: 2,
+    display: 'block',
   },
   // Card
   card: {
