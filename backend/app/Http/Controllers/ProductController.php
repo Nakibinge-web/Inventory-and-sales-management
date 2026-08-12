@@ -7,13 +7,165 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
+    // ── SKU helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Build the two-letter prefix from the product name.
+     * "Apple Watch" → "Ap", "iPhone" → "iP", "TV" → "TV"
+     */
+    private function skuPrefix(string $name): string
+    {
+        // Strip leading/trailing whitespace, collapse inner spaces
+        $clean = trim(preg_replace('/\s+/', ' ', $name));
+        if (strlen($clean) === 0) return 'XX';
+
+        $words = explode(' ', $clean);
+        if (count($words) >= 2) {
+            // First letter of first word + first letter of second word, preserve original case
+            return substr($words[0], 0, 1) . substr($words[1], 0, 1);
+        }
+        // Single word: first two chars
+        return mb_substr($clean, 0, 2);
+    }
+
+    /**
+     * Find the next available sequential SKU for the given prefix and tenant.
+     * Returns e.g. "Ap-001", "Ap-002", …
+     */
+    private function nextSku(string $prefix, int $tenantId, ?int $excludeProductId = null): string
+    {
+        for ($n = 1; $n <= 9999; $n++) {
+            $candidate = $prefix . '-' . str_pad($n, 3, '0', STR_PAD_LEFT);
+            $query = Product::where('tenant_id', $tenantId)->where('sku', $candidate);
+            if ($excludeProductId) {
+                $query->where('id', '!=', $excludeProductId);
+            }
+            if (!$query->exists()) {
+                return $candidate;
+            }
+        }
+        // Fallback (should never happen in practice)
+        return $prefix . '-' . uniqid();
+    }
+
+    // ── API: generate SKU preview ────────────────────────────────────────────
+
+    public function generateSku(Request $request): JsonResponse
+    {
+        $name = trim($request->query('name', ''));
+        if (!$name) {
+            return response()->json(['success' => false, 'message' => 'name is required'], 422);
+        }
+
+        $prefix = $this->skuPrefix($name);
+        $sku    = $this->nextSku($prefix, auth()->user()->tenant_id);
+
+        return response()->json(['success' => true, 'sku' => $sku]);
+    }
+
     public function index(): JsonResponse
     {
         $products = Product::with(['category', 'supplier'])->get();
         return response()->json(['success' => true, 'data' => $products]);
+    }
+
+    public function bulkStore(Request $request): JsonResponse
+    {
+        $request->validate([
+            'products'                    => 'required|array|min:1|max:50',
+            'products.*.name'             => 'required|string|max:255',
+            'products.*.sku'              => 'nullable|string|max:100',
+            'products.*.barcode'          => 'nullable|string|max:100',
+            'products.*.unit'             => 'nullable|string|max:50',
+            'products.*.category_id'      => 'nullable|exists:categories,id',
+            'products.*.new_category'     => 'nullable|string|max:255',
+            'products.*.supplier_id'      => 'nullable|exists:suppliers,id',
+            'products.*.stock'            => 'required|numeric|min:0',
+            'products.*.cost_price'       => 'nullable|numeric|min:0',
+            'products.*.price'            => 'required|numeric|min:0',
+            'products.*.reorder_level'    => 'nullable|numeric|min:0',
+            'products.*.description'      => 'nullable|string',
+            'products.*.track_expiry'     => 'nullable|boolean',
+            'products.*.manufacture_date' => 'nullable|date',
+            'products.*.expiry_date'      => 'nullable|date',
+            'images'                      => 'nullable|array',
+            'images.*'                    => 'nullable|image|max:2048',
+        ]);
+
+        $tenantId = auth()->user()->tenant_id;
+        $created  = [];
+        $errors   = [];
+
+        \DB::transaction(function () use ($request, $tenantId, &$created, &$errors) {
+            foreach ($request->input('products') as $index => $data) {
+                try {
+                    // Resolve category
+                    $categoryId = $data['category_id'] ?? null;
+                    if (empty($categoryId) && !empty($data['new_category'])) {
+                        $cat        = Category::firstOrCreate(
+                            ['name' => trim($data['new_category']), 'tenant_id' => $tenantId]
+                        );
+                        $categoryId = $cat->id;
+                    }
+
+                    $sku = !empty($data['sku'])
+                        ? $data['sku']
+                        : $this->nextSku($this->skuPrefix($data['name']), $tenantId);
+
+                    // Handle per-product image upload
+                    $imagePath = null;
+                    if ($request->hasFile("images.$index")) {
+                        $imagePath = $request->file("images.$index")->store('products', 'public');
+                    }
+
+                    $product = Product::create([
+                        'tenant_id'        => $tenantId,
+                        'name'             => $data['name'],
+                        'sku'              => $sku,
+                        'barcode'          => $data['barcode']          ?? null,
+                        'unit'             => $data['unit']             ?? null,
+                        'category_id'      => $categoryId,
+                        'supplier_id'      => $data['supplier_id']      ?? null,
+                        'stock'            => $data['stock'],
+                        'cost_price'       => $data['cost_price']       ?? null,
+                        'price'            => $data['price'],
+                        'reorder_level'    => $data['reorder_level']    ?? 0,
+                        'description'      => $data['description']      ?? null,
+                        'track_expiry'     => $data['track_expiry']     ?? false,
+                        'manufacture_date' => $data['manufacture_date'] ?? null,
+                        'expiry_date'      => $data['expiry_date']      ?? null,
+                        'image_path'       => $imagePath,
+                    ]);
+
+                    $created[] = $product->load(['category', 'supplier']);
+                } catch (\Exception $e) {
+                    $errors[] = ['index' => $index, 'name' => $data['name'] ?? "Product #$index", 'error' => $e->getMessage()];
+                }
+            }
+
+            // Roll back everything if any product failed
+            if (!empty($errors)) {
+                throw new \Exception('One or more products failed to save.');
+            }
+        });
+
+        if (!empty($errors)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Some products could not be saved.',
+                'errors'  => $errors,
+            ], 422);
+        }
+
+        return response()->json([
+            'success'  => true,
+            'message'  => count($created) . ' product(s) created successfully.',
+            'data'     => $created,
+        ], 201);
     }
 
     public function store(Request $request): JsonResponse
@@ -55,7 +207,7 @@ class ProductController extends Controller
         $product = Product::create([
             'tenant_id'        => auth()->user()->tenant_id,
             'name'             => $validated['name'],
-            'sku'              => $validated['sku'] ?? null,
+            'sku'              => $validated['sku'] ?? $this->nextSku($this->skuPrefix($validated['name']), auth()->user()->tenant_id),
             'barcode'          => $validated['barcode'] ?? null,
             'unit'             => $validated['unit'] ?? null,
             'category_id'      => $validated['category_id'] ?? null,

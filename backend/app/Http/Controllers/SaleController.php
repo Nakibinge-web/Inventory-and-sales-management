@@ -123,12 +123,13 @@ class SaleController extends Controller
                     $product->decrement('stock', $item['quantity']);
 
                     StockMovement::create([
-                        'tenant_id'  => Auth::user()->tenant_id,
-                        'product_id' => $item['product_id'],
-                        'type'       => 'OUT',
-                        'quantity'   => $item['quantity'],
-                        'reference_id' => $sale->id,
-                        'date'       => now(),
+                        'tenant_id'      => Auth::user()->tenant_id,
+                        'product_id'     => $item['product_id'],
+                        'type'           => 'OUT',
+                        'quantity'       => $item['quantity'],
+                        'reference_id'   => $sale->id,
+                        'reference_type' => 'sale',
+                        'date'           => now(),
                     ]);
                 }
 
@@ -230,12 +231,13 @@ class SaleController extends Controller
                         if ($product) {
                             $product->increment('stock', $oldItem->quantity);
                             StockMovement::create([
-                                'tenant_id'    => Auth::user()->tenant_id,
-                                'product_id'   => $oldItem->product_id,
-                                'type'         => 'IN',
-                                'quantity'     => $oldItem->quantity,
-                                'reference_id' => $sale->id,
-                                'date'         => now(),
+                                'tenant_id'      => Auth::user()->tenant_id,
+                                'product_id'     => $oldItem->product_id,
+                                'type'           => 'IN',
+                                'quantity'       => $oldItem->quantity,
+                                'reference_id'   => $sale->id,
+                                'reference_type' => 'sale',
+                                'date'           => now(),
                             ]);
                         }
                     }
@@ -256,12 +258,13 @@ class SaleController extends Controller
                         ]);
                         $product->decrement('stock', $item['quantity']);
                         StockMovement::create([
-                            'tenant_id'    => Auth::user()->tenant_id,
-                            'product_id'   => $item['product_id'],
-                            'type'         => 'OUT',
-                            'quantity'     => $item['quantity'],
-                            'reference_id' => $sale->id,
-                            'date'         => now(),
+                            'tenant_id'      => Auth::user()->tenant_id,
+                            'product_id'     => $item['product_id'],
+                            'type'           => 'OUT',
+                            'quantity'       => $item['quantity'],
+                            'reference_id'   => $sale->id,
+                            'reference_type' => 'sale',
+                            'date'           => now(),
                         ]);
                     }
                 }
@@ -321,12 +324,13 @@ class SaleController extends Controller
                         $product->increment('stock', $item->quantity);
 
                         StockMovement::create([
-                            'tenant_id'    => $sale->tenant_id,
-                            'product_id'   => $item->product_id,
-                            'type'         => 'IN',
-                            'quantity'     => $item->quantity,
-                            'reference_id' => $sale->id,
-                            'date'         => now(),
+                            'tenant_id'      => $sale->tenant_id,
+                            'product_id'     => $item->product_id,
+                            'type'           => 'IN',
+                            'quantity'       => $item->quantity,
+                            'reference_id'   => $sale->id,
+                            'reference_type' => 'sale',
+                            'date'           => now(),
                         ]);
                     }
                 }

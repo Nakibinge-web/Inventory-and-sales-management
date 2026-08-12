@@ -94,7 +94,7 @@ export default function EditProductForm({ token, product, categories, suppliers,
     <form onSubmit={submit} style={s.form}>
 
       {/* Row 1: Name + SKU */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Product Name *">
           <input style={s.input} name="name" placeholder="e.g. Paracetamol 500mg"
             value={form.name} onChange={handle} required />
@@ -106,7 +106,7 @@ export default function EditProductForm({ token, product, categories, suppliers,
       </div>
 
       {/* Row 2: Barcode + Unit */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Barcode (optional)">
           <input style={s.input} name="barcode" placeholder="Scan or type barcode"
             value={form.barcode} onChange={handle} />
@@ -136,7 +136,7 @@ export default function EditProductForm({ token, product, categories, suppliers,
       </Field>
 
       {/* Row 3: Qty + Reorder */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Quantity *">
           <input style={s.input} name="stock" type="number" min="0"
             placeholder="0" value={form.stock} onChange={handle} required />
@@ -148,7 +148,7 @@ export default function EditProductForm({ token, product, categories, suppliers,
       </div>
 
       {/* Row 4: Cost + Selling price */}
-      <div style={s.row}>
+      <div className="product-form-row" style={s.row}>
         <Field label="Cost Price">
           <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
             placeholder="0.00" value={form.cost_price} onChange={handle} />
@@ -203,7 +203,7 @@ export default function EditProductForm({ token, product, categories, suppliers,
 
       {form.track_expiry && (
         <div style={s.expiryBox}>
-          <div style={s.row}>
+          <div className="product-form-row" style={s.row}>
             <Field label="Manufacture Date">
               <input style={s.input} name="manufacture_date" type="date"
                 value={form.manufacture_date} onChange={handle} />

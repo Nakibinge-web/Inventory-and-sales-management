@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import Button from './ui/Button';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -9,236 +9,471 @@ const UNITS = [
   'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans',
 ];
 
-const EMPTY = {
-  name: '', sku: '', barcode: '', unit: '',
-  category_id: '', new_category: '', category_mode: 'existing',
-  supplier_id: '',
-  stock: '', cost_price: '', price: '', reorder_level: '',
-  description: '', track_expiry: false,
-  manufacture_date: '', expiry_date: '',
-};
+const emptyProduct = () => ({
+  _id:              Math.random().toString(36).slice(2), // local key only
+  name:             '',
+  sku:              '',
+  skuAuto:          false,
+  skuLoading:       false,
+  barcode:          '',
+  unit:             '',
+  category_mode:    'existing',
+  category_id:      '',
+  new_category:     '',
+  supplier_id:      '',
+  stock:            '',
+  cost_price:       '',
+  price:            '',
+  reorder_level:    '',
+  description:      '',
+  track_expiry:     false,
+  manufacture_date: '',
+  expiry_date:      '',
+  image:            null,   // File object
+  imagePreview:     null,   // object URL for display
+});
 
 export default function AddProductForm({ token, categories, suppliers, onSuccess, onCancel }) {
-  const [form, setForm]       = useState(EMPTY);
-  const [image, setImage]     = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-  const fileRef               = useRef();
+  const [products, setProducts] = useState([emptyProduct()]);
+  const [expanded, setExpanded] = useState(new Set(['0'])); // expanded by index string
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState(null);
+  const [saved,    setSaved]    = useState([]); // successfully saved products preview
 
+  /* ── field update helper ─────────────────────────────── */
+  const updateField = (idx, key, value) => {
+    setProducts(prev => prev.map((p, i) => i === idx ? { ...p, [key]: value } : p));
+  };
+
+  /* ── auto-generate SKU on name blur ──────────────────── */
+  const handleNameBlur = useCallback(async (idx, name) => {
+    if (!name.trim()) return;
+    const p = products[idx];
+    if (p.sku && !p.skuAuto) return; // user typed their own SKU — leave it
+
+    updateField(idx, 'skuLoading', true);
+    try {
+      const res  = await fetch(`${API}/products/generate-sku?name=${encodeURIComponent(name)}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProducts(prev => prev.map((p, i) =>
+          i === idx ? { ...p, sku: data.sku, skuAuto: true, skuLoading: false } : p
+        ));
+        return;
+      }
+    } catch { /* silent */ }
+    updateField(idx, 'skuLoading', false);
+  }, [products, token]);
+
+  /* ── add / remove product entries ───────────────────── */
+  const addProduct = () => {
+    const next = emptyProduct();
+    setProducts(prev => [...prev, next]);
+    // auto-expand the new card
+    setExpanded(prev => new Set([...prev, String(products.length)]));
+  };
+
+  const removeProduct = (idx) => {
+    if (products.length === 1) return; // always keep at least one
+    setProducts(prev => prev.filter((_, i) => i !== idx));
+    setExpanded(prev => {
+      const s = new Set(prev);
+      s.delete(String(idx));
+      return s;
+    });
+  };
+
+  const toggleExpand = (idx) => {
+    setExpanded(prev => {
+      const s = new Set(prev);
+      s.has(String(idx)) ? s.delete(String(idx)) : s.add(String(idx));
+      return s;
+    });
+  };
+
+  /* ── submit all products ─────────────────────────────── */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    // Basic client-side validation
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i];
+      if (!p.name.trim())  { setError(`Product ${i + 1}: Name is required.`); setExpanded(prev => new Set([...prev, String(i)])); return; }
+      if (p.price === '')  { setError(`Product ${i + 1}: Selling price is required.`); setExpanded(prev => new Set([...prev, String(i)])); return; }
+      if (p.stock === '')  { setError(`Product ${i + 1}: Quantity is required.`); setExpanded(prev => new Set([...prev, String(i)])); return; }
+    }
+
+    setSaving(true);
+    try {
+      if (products.length === 1) {
+        // ── Single product via FormData (supports image) ──────────────────
+        const p  = products[0];
+        const fd = new FormData();
+        fd.append('name',          p.name.trim());
+        if (p.sku.trim())          fd.append('sku',              p.sku.trim());
+        if (p.barcode.trim())      fd.append('barcode',          p.barcode.trim());
+        if (p.unit)                fd.append('unit',             p.unit);
+        if (p.category_mode === 'existing' && p.category_id)
+                                   fd.append('category_id',      p.category_id);
+        if (p.category_mode === 'new' && p.new_category.trim())
+                                   fd.append('new_category',     p.new_category.trim());
+        if (p.supplier_id)         fd.append('supplier_id',      p.supplier_id);
+        fd.append('stock',         parseFloat(p.stock));
+        if (p.cost_price !== '')   fd.append('cost_price',       parseFloat(p.cost_price));
+        fd.append('price',         parseFloat(p.price));
+        fd.append('reorder_level', p.reorder_level !== '' ? parseFloat(p.reorder_level) : 0);
+        if (p.description.trim())  fd.append('description',      p.description.trim());
+        fd.append('track_expiry',  p.track_expiry ? 1 : 0);
+        if (p.track_expiry) {
+          if (p.manufacture_date)  fd.append('manufacture_date', p.manufacture_date);
+          if (p.expiry_date)       fd.append('expiry_date',      p.expiry_date);
+        }
+        if (p.image)               fd.append('image',            p.image);
+
+        const res  = await fetch(`${API}/products`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) { setError(data?.message || `Error ${res.status}`); return; }
+        onSuccess([data.data]);
+
+      } else {
+        // ── Multiple products via FormData (supports per-product images) ──
+        const fd = new FormData();
+        products.forEach((p, i) => {
+          const pre = `products[${i}]`;
+          fd.append(`${pre}[name]`,          p.name.trim());
+          if (p.sku.trim())          fd.append(`${pre}[sku]`,              p.sku.trim());
+          if (p.barcode.trim())      fd.append(`${pre}[barcode]`,          p.barcode.trim());
+          if (p.unit)                fd.append(`${pre}[unit]`,             p.unit);
+          if (p.category_mode === 'existing' && p.category_id)
+                                     fd.append(`${pre}[category_id]`,      p.category_id);
+          if (p.category_mode === 'new' && p.new_category.trim())
+                                     fd.append(`${pre}[new_category]`,     p.new_category.trim());
+          if (p.supplier_id)         fd.append(`${pre}[supplier_id]`,      p.supplier_id);
+          fd.append(`${pre}[stock]`,         parseFloat(p.stock));
+          if (p.cost_price !== '')   fd.append(`${pre}[cost_price]`,       parseFloat(p.cost_price));
+          fd.append(`${pre}[price]`,         parseFloat(p.price));
+          fd.append(`${pre}[reorder_level]`, p.reorder_level !== '' ? parseFloat(p.reorder_level) : 0);
+          if (p.description.trim())  fd.append(`${pre}[description]`,      p.description.trim());
+          fd.append(`${pre}[track_expiry]`,  p.track_expiry ? 1 : 0);
+          if (p.track_expiry) {
+            if (p.manufacture_date)  fd.append(`${pre}[manufacture_date]`, p.manufacture_date);
+            if (p.expiry_date)       fd.append(`${pre}[expiry_date]`,      p.expiry_date);
+          }
+          // Image keyed separately so Laravel can access $request->file("images.$i")
+          if (p.image)               fd.append(`images[${i}]`,             p.image);
+        });
+
+        const res  = await fetch(`${API}/products/bulk`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const msg = data?.errors?.map(e => `"${e.name}": ${e.error}`).join('\n') || data?.message || `Error ${res.status}`;
+          setError(msg);
+          return;
+        }
+        onSuccess(data.data);
+      }
+    } catch {
+      setError('Failed to save products. Check your connection.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const completedCount = products.filter(p => p.name.trim() && p.price !== '' && p.stock !== '').length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ── Product cards ── */}
+      {products.map((p, idx) => {
+        const isOpen   = expanded.has(String(idx));
+        const isDone   = p.name.trim() && p.price !== '' && p.stock !== '';
+        return (
+          <div key={p._id} style={s.card}>
+
+            {/* Card header */}
+            <div
+              style={s.cardHeader}
+              onClick={() => toggleExpand(idx)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* Status dot */}
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                  background: isDone ? '#16a34a' : '#f59e0b',
+                }} />
+                <span style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>
+                  {p.name.trim() || `Product ${idx + 1}`}
+                </span>
+                {isDone && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '1px 8px', borderRadius: 20 }}>
+                    Ready
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {products.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); removeProduct(idx); }}
+                    style={s.removeBtn}
+                    title="Remove this product"
+                  >
+                    ✕
+                  </button>
+                )}
+                <span style={{ fontSize: 11, color: '#94a3b8', userSelect: 'none' }}>
+                  {isOpen ? '▲' : '▼'}
+                </span>
+              </div>
+            </div>
+
+            {/* Card body */}
+            {isOpen && (
+              <div style={s.cardBody}>
+                <ProductFields
+                  p={p}
+                  idx={idx}
+                  categories={categories}
+                  suppliers={suppliers}
+                  onField={updateField}
+                  onNameBlur={handleNameBlur}
+                  onImageChange={(idx, file, preview) => {
+                    setProducts(prev => prev.map((p, i) =>
+                      i === idx ? { ...p, image: file, imagePreview: preview } : p
+                    ));
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ── Add another product button ── */}
+      <button type="button" onClick={addProduct} style={s.addMoreBtn}>
+        <span style={{ fontSize: 18, lineHeight: 1 }}>＋</span>
+        Add another product
+      </button>
+
+      {error && (
+        <div style={s.error}>
+          <span>⚠️</span>
+          <span style={{ whiteSpace: 'pre-line' }}>{error}</span>
+        </div>
+      )}
+
+      {/* ── Footer ── */}
+      <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+        <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          variant="success"
+          loading={saving}
+          onClick={handleSubmit}
+          style={{ flex: 2 }}
+          disabled={completedCount === 0}
+        >
+          {saving
+            ? 'Saving…'
+            : products.length === 1
+              ? 'Add Product'
+              : `Save ${products.length} Products`
+          }
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ProductFields — all fields for one product entry
+───────────────────────────────────────────────────────────────────────────── */
+function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onImageChange }) {
+  const set = (key, value) => onField(idx, key, value);
+  const fileRef = useRef();
   const handle = e => {
     const { name, value, type, checked } = e.target;
-    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    set(name, type === 'checkbox' ? checked : value);
+    if (name === 'sku') set('skuAuto', false);
   };
 
   const handleImage = e => {
     const file = e.target.files[0];
     if (!file) return;
-    setImage(file);
-    setPreview(URL.createObjectURL(file));
+    const preview = URL.createObjectURL(file);
+    onImageChange(idx, file, preview);
   };
 
-  const submit = async e => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const fd = new FormData();
-    fd.append('name',          form.name);
-    fd.append('sku',           form.sku);
-    fd.append('barcode',       form.barcode);
-    fd.append('unit',          form.unit);
-    fd.append('supplier_id',   form.supplier_id);
-    fd.append('stock',         form.stock);
-    fd.append('cost_price',    form.cost_price);
-    fd.append('price',         form.price);
-    fd.append('reorder_level', form.reorder_level || 0);
-    fd.append('description',   form.description);
-    fd.append('track_expiry',  form.track_expiry ? 1 : 0);
-    if (form.track_expiry) {
-      fd.append('manufacture_date', form.manufacture_date);
-      fd.append('expiry_date',      form.expiry_date);
-    }
-
-    if (form.category_mode === 'existing') {
-      fd.append('category_id', form.category_id);
-    } else {
-      fd.append('new_category', form.new_category);
-    }
-
-    if (image) fd.append('image', image);
-
-    try {
-      const res = await fetch(`${API}/products`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
-        body: fd,
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data?.message || `Error ${res.status}`); }
-      else { onSuccess(data.data); }
-    } catch {
-      setError('Failed to add product. Check your connection.');
-    } finally {
-      setLoading(false);
-    }
+  const removeImage = () => {
+    if (p.imagePreview) URL.revokeObjectURL(p.imagePreview);
+    onImageChange(idx, null, null);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   return (
-    <form onSubmit={submit} style={s.form}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* ── Row 1: Name + SKU ── */}
-      <div style={s.row}>
+      {/* Row 1: Name + SKU */}
+      <div className="product-form-row" style={s.row}>
         <Field label="Product Name *">
-          <input style={s.input} name="name" placeholder="e.g. Paracetamol 500mg"
-            value={form.name} onChange={handle} required />
+          <input
+            style={s.input}
+            name="name"
+            placeholder="e.g. Paracetamol 500mg"
+            value={p.name}
+            onChange={handle}
+            onBlur={e => onNameBlur(idx, e.target.value)}
+          />
         </Field>
-        <Field label="SKU">
-          <input style={s.input} name="sku" placeholder="e.g. MED-001"
-            value={form.sku} onChange={handle} />
+        <Field label={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            SKU
+            {p.skuLoading && <span style={{ fontSize: 10, color: '#94a3b8' }}>generating…</span>}
+            {p.skuAuto && !p.skuLoading && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#7c3aed', padding: '1px 7px', borderRadius: 20 }}>AUTO</span>
+            )}
+          </span>
+        }>
+          <input
+            style={{ ...s.input, background: p.skuAuto ? '#fafbff' : '#fff', borderColor: p.skuAuto ? '#c4b5fd' : '#e2e8f0' }}
+            name="sku"
+            placeholder={p.skuLoading ? 'Generating…' : 'e.g. AP-001'}
+            value={p.sku}
+            onChange={handle}
+          />
         </Field>
       </div>
 
-      {/* ── Row 2: Barcode + Unit ── */}
-      <div style={s.row}>
+      {/* Row 2: Barcode + Unit */}
+      <div className="product-form-row" style={s.row}>
         <Field label="Barcode (optional)">
-          <input style={s.input} name="barcode" placeholder="Scan or type barcode"
-            value={form.barcode} onChange={handle} />
+          <input style={s.input} name="barcode" placeholder="Scan or type barcode" value={p.barcode} onChange={handle} />
         </Field>
         <Field label="Unit of Measure">
-          <select style={s.input} name="unit" value={form.unit} onChange={handle}>
+          <select style={s.input} name="unit" value={p.unit} onChange={handle}>
             <option value="">— Select unit —</option>
             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
         </Field>
       </div>
 
-      {/* ── Category ── */}
+      {/* Category */}
       <Field label="Category">
         <div style={s.segmented}>
           {['existing', 'new'].map(m => (
             <button key={m} type="button"
-              style={{ ...s.seg, ...(form.category_mode === m ? s.segActive : {}) }}
-              onClick={() => setForm(f => ({ ...f, category_mode: m }))}>
+              style={{ ...s.seg, ...(p.category_mode === m ? s.segActive : {}) }}
+              onClick={() => set('category_mode', m)}>
               {m === 'existing' ? '📂 Existing' : '➕ New category'}
             </button>
           ))}
         </div>
-        {form.category_mode === 'existing' ? (
-          <select style={{ ...s.input, marginTop: 8 }} name="category_id"
-            value={form.category_id} onChange={handle}>
+        {p.category_mode === 'existing' ? (
+          <select style={{ ...s.input, marginTop: 8 }} name="category_id" value={p.category_id} onChange={handle}>
             <option value="">— Select category —</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         ) : (
           <input style={{ ...s.input, marginTop: 8 }} name="new_category"
-            placeholder="Type new category name" value={form.new_category} onChange={handle} />
+            placeholder="Type new category name" value={p.new_category} onChange={handle} />
         )}
       </Field>
 
-      {/* ── Supplier (optional) ── */}
+      {/* Supplier */}
       <Field label="Supplier (optional)">
-        <select style={s.input} name="supplier_id" value={form.supplier_id} onChange={handle}>
+        <select style={s.input} name="supplier_id" value={p.supplier_id} onChange={handle}>
           <option value="">— No supplier —</option>
           {suppliers.map(sup => <option key={sup.id} value={sup.id}>{sup.name}</option>)}
         </select>
       </Field>
 
-      {/* ── Row 3: Qty + Reorder ── */}
-      <div style={s.row}>
+      {/* Row 3: Qty + Reorder */}
+      <div className="product-form-row" style={s.row}>
         <Field label="Quantity *">
-          <input style={s.input} name="stock" type="number" min="0"
-            placeholder="0" value={form.stock} onChange={handle} required />
+          <input style={s.input} name="stock" type="number" min="0" placeholder="0" value={p.stock} onChange={handle} />
         </Field>
         <Field label="Reorder Level">
-          <input style={s.input} name="reorder_level" type="number" min="0"
-            placeholder="0" value={form.reorder_level} onChange={handle} />
+          <input style={s.input} name="reorder_level" type="number" min="0" placeholder="0" value={p.reorder_level} onChange={handle} />
         </Field>
       </div>
 
-      {/* ── Row 4: Cost + Selling price ── */}
-      <div style={s.row}>
+      {/* Row 4: Cost + Selling price */}
+      <div className="product-form-row" style={s.row}>
         <Field label="Cost Price">
-          <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
-            placeholder="0.00" value={form.cost_price} onChange={handle} />
+          <input style={s.input} name="cost_price" type="number" step="0.01" min="0" placeholder="0.00" value={p.cost_price} onChange={handle} />
         </Field>
         <Field label="Selling Price *">
-          <input style={s.input} name="price" type="number" step="0.01" min="0"
-            placeholder="0.00" value={form.price} onChange={handle} required />
+          <input style={s.input} name="price" type="number" step="0.01" min="0" placeholder="0.00" value={p.price} onChange={handle} />
         </Field>
       </div>
 
-      {/* ── Description ── */}
+      {/* Description */}
       <Field label="Description">
-        <textarea style={{ ...s.input, minHeight: 72, resize: 'vertical' }}
-          name="description" placeholder="Optional product description…"
-          value={form.description} onChange={handle} />
+        <textarea style={{ ...s.input, minHeight: 60, resize: 'vertical' }}
+          name="description" placeholder="Optional product description…" value={p.description} onChange={handle} />
       </Field>
 
-      {/* ── Product image ── */}
+      {/* Product Image */}
       <Field label="Product Image (optional)">
         <div style={s.imageArea} onClick={() => fileRef.current.click()}>
-          {preview
-            ? <img src={preview} alt="preview" style={s.imagePreview} />
-            : <div style={s.imagePlaceholder}>
-                <span style={{ fontSize: '2rem' }}>🖼️</span>
+          {p.imagePreview
+            ? <img src={p.imagePreview} alt="preview" style={s.imagePreview} />
+            : (
+              <div style={s.imagePlaceholder}>
+                <span style={{ fontSize: '1.6rem' }}>🖼️</span>
                 <span style={s.imageHint}>Click to upload image</span>
                 <span style={s.imageHint2}>PNG, JPG up to 2 MB</span>
               </div>
+            )
           }
         </div>
-        <input ref={fileRef} type="file" accept="image/*"
-          style={{ display: 'none' }} onChange={handleImage} />
-        {preview && (
-          <button type="button" style={s.removeImg}
-            onClick={() => { setImage(null); setPreview(null); }}>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImage} />
+        {p.imagePreview && (
+          <button type="button" style={s.removeImg} onClick={removeImage}>
             ✕ Remove image
           </button>
         )}
       </Field>
 
-      {/* ── Track expiry toggle ── */}
+      {/* Track expiry toggle */}
       <label style={s.toggle}>
-        <div style={{ ...s.toggleTrack, background: form.track_expiry ? '#4f46e5' : '#e2e8f0' }}>
-          <div style={{ ...s.toggleThumb, transform: form.track_expiry ? 'translateX(20px)' : 'translateX(2px)' }} />
+        <div style={{ ...s.toggleTrack, background: p.track_expiry ? '#4f46e5' : '#e2e8f0' }}>
+          <div style={{ ...s.toggleThumb, transform: p.track_expiry ? 'translateX(20px)' : 'translateX(2px)' }} />
         </div>
-        <input type="checkbox" name="track_expiry" checked={form.track_expiry}
-          onChange={handle} style={{ display: 'none' }} />
+        <input type="checkbox" name="track_expiry" checked={p.track_expiry} onChange={handle} style={{ display: 'none' }} />
         <div>
-          <div style={s.toggleLabel}>Track Expiry Date for this Product</div>
-          <div style={s.toggleSub}>Enable to record and monitor expiry dates on stock entries</div>
+          <div style={s.toggleLabel}>Track Expiry Date</div>
+          <div style={s.toggleSub}>Record manufacture & expiry dates for this product</div>
         </div>
       </label>
 
-      {/* ── Expiry date fields (shown when track_expiry is on) ── */}
-      {form.track_expiry && (
+      {p.track_expiry && (
         <div style={s.expiryBox}>
-          <div style={s.row}>
+          <div className="product-form-row" style={s.row}>
             <Field label="Manufacture Date">
-              <input style={s.input} name="manufacture_date" type="date"
-                value={form.manufacture_date} onChange={handle} />
+              <input style={s.input} name="manufacture_date" type="date" value={p.manufacture_date} onChange={handle} />
             </Field>
             <Field label="Expiry Date *">
-              <input style={s.input} name="expiry_date" type="date"
-                value={form.expiry_date} onChange={handle}
-                min={form.manufacture_date || undefined} required />
+              <input style={s.input} name="expiry_date" type="date" value={p.expiry_date} onChange={handle} min={p.manufacture_date || undefined} />
             </Field>
           </div>
         </div>
       )}
-
-      {error && <div style={s.error}>⚠️ {error}</div>}
-
-      {/* ── Footer ── */}
-      <div style={s.footer}>
-        <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
-          Cancel
-        </Button>
-        <Button type="submit" variant="success" loading={loading} style={{ flex: 1 }}>
-          {loading ? 'Saving…' : 'Add Product'}
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -252,14 +487,37 @@ function Field({ label, children }) {
 }
 
 const s = {
-  form:  { display: 'flex', flexDirection: 'column', gap: 16 },
   row:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.03em', textTransform: 'uppercase' },
+  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.03em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 },
   input: {
     padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
     boxSizing: 'border-box', background: '#fff', color: '#0f172a',
     transition: 'border-color 0.2s',
+  },
+  // Card
+  card: {
+    border: '1.5px solid #e2e8f0', borderRadius: 12,
+    background: '#fff', overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+  },
+  cardHeader: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '12px 16px', cursor: 'pointer', userSelect: 'none',
+    background: '#f8fafc', borderBottom: '1px solid #f1f5f9',
+  },
+  cardBody: { padding: '16px' },
+  removeBtn: {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: '#ef4444', fontSize: 14, fontWeight: 700,
+    padding: '2px 6px', borderRadius: 6, lineHeight: 1,
+  },
+  addMoreBtn: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    padding: '11px 16px', borderRadius: 10,
+    border: '2px dashed #c7d2fe', background: '#fafbff',
+    color: '#4f46e5', fontSize: 14, fontWeight: 600,
+    cursor: 'pointer', transition: 'all 0.15s', width: '100%',
   },
   // Category segmented control
   segmented: { display: 'flex', gap: 6 },
@@ -269,43 +527,30 @@ const s = {
     transition: 'all 0.15s', color: '#64748b',
   },
   segActive: { background: '#ede9fe', borderColor: '#7c3aed', color: '#4f46e5', fontWeight: 600 },
-  // Image upload
-  imageArea: {
-    border: '2px dashed #e2e8f0', borderRadius: 10, padding: 16,
-    cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.2s',
-    background: '#f8fafc', minHeight: 100, display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  imagePlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
-  imageHint:  { fontSize: 13, color: '#64748b', fontWeight: 500 },
-  imageHint2: { fontSize: 11, color: '#94a3b8' },
-  imagePreview: { maxHeight: 120, maxWidth: '100%', borderRadius: 8, objectFit: 'contain' },
-  removeImg: {
-    marginTop: 6, background: 'none', border: 'none', color: '#ef4444',
-    fontSize: 12, cursor: 'pointer', fontWeight: 500,
-  },
   // Expiry toggle
   toggle: {
     display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
-    padding: '12px 14px', background: '#f8fafc', borderRadius: 10,
+    padding: '10px 12px', background: '#f8fafc', borderRadius: 10,
     border: '1.5px solid #e2e8f0',
   },
-  toggleTrack: {
-    width: 44, height: 24, borderRadius: 12, position: 'relative',
-    flexShrink: 0, transition: 'background 0.25s',
-  },
-  toggleThumb: {
-    position: 'absolute', top: 2, width: 20, height: 20,
-    background: '#fff', borderRadius: '50%', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-    transition: 'transform 0.25s',
-  },
+  toggleTrack: { width: 44, height: 24, borderRadius: 12, position: 'relative', flexShrink: 0, transition: 'background 0.25s' },
+  toggleThumb: { position: 'absolute', top: 2, width: 20, height: 20, background: '#fff', borderRadius: '50%', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'transform 0.25s' },
   toggleLabel: { fontSize: 13, fontWeight: 600, color: '#0f172a' },
   toggleSub:   { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  // Error + footer
-  error:  { padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 },
-  expiryBox: {
-    padding: '14px', background: '#f0fdf4', border: '1.5px solid #bbf7d0',
-    borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 12,
+  error:  { display: 'flex', gap: 8, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 },
+  expiryBox: { padding: '12px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10 },
+  // Image upload
+  imageArea: {
+    border: '2px dashed #e2e8f0', borderRadius: 10, padding: 14,
+    cursor: 'pointer', textAlign: 'center', background: '#f8fafc',
+    minHeight: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
-  footer: { display: 'flex', gap: 10, paddingTop: 4 },
+  imagePlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
+  imageHint:        { fontSize: 13, color: '#64748b', fontWeight: 500 },
+  imageHint2:       { fontSize: 11, color: '#94a3b8' },
+  imagePreview:     { maxHeight: 100, maxWidth: '100%', borderRadius: 8, objectFit: 'contain' },
+  removeImg: {
+    marginTop: 6, background: 'none', border: 'none', color: '#ef4444',
+    fontSize: 12, cursor: 'pointer', fontWeight: 500, padding: 0,
+  },
 };

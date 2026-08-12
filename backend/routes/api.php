@@ -137,11 +137,13 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Products
     Route::prefix('products')->group(function () {
-        Route::get('/', [ProductController::class, 'index']);
-        Route::post('/', [ProductController::class, 'store']);
-        Route::get('/low-stock', [ProductController::class, 'getLowStock']);
-        Route::get('/{product}', [ProductController::class, 'show']);
-        Route::put('/{product}', [ProductController::class, 'update']);
+        Route::get('/generate-sku', [ProductController::class, 'generateSku']);
+        Route::get('/low-stock',    [ProductController::class, 'getLowStock']);
+        Route::get('/',             [ProductController::class, 'index']);
+        Route::post('/',            [ProductController::class, 'store']);
+        Route::post('/bulk',        [ProductController::class, 'bulkStore']);
+        Route::get('/{product}',    [ProductController::class, 'show']);
+        Route::put('/{product}',    [ProductController::class, 'update']);
         Route::delete('/{product}', [ProductController::class, 'destroy']);
     });
 

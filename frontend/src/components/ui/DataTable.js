@@ -91,22 +91,24 @@ export default function DataTable({
   if (loading) {
     return (
       <div style={tableStyles}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={headerStyles}>
-            <tr>{columns.map((col, i) => <th key={i} style={headerCellStyles}>{col.title}</th>)}</tr>
-          </thead>
-          <tbody>
-            {[...Array(5)].map((_, ri) => (
-              <tr key={ri} style={skeletonRowStyles}>
-                {columns.map((_, ci) => (
-                  <td key={ci} style={cellStyles}>
-                    <div style={{ ...skeletonCellStyles, width: Math.random() * 60 + 40 + '%' }} />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+            <thead style={headerStyles}>
+              <tr>{columns.map((col, i) => <th key={i} style={headerCellStyles}>{col.title}</th>)}</tr>
+            </thead>
+            <tbody>
+              {[...Array(5)].map((_, ri) => (
+                <tr key={ri} style={skeletonRowStyles}>
+                  {columns.map((_, ci) => (
+                    <td key={ci} style={cellStyles}>
+                      <div style={{ ...skeletonCellStyles, width: Math.random() * 60 + 40 + '%' }} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -119,24 +121,56 @@ export default function DataTable({
 
   return (
     <div style={tableStyles} className={className}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead style={headerStyles}>
-          <tr>{columns.map((col, i) => <th key={i} style={headerCellStyles}>{col.title}</th>)}</tr>
-        </thead>
-        <tbody>
-          {paged.map((row, rowIndex) => (
-            <tr
-              key={row.id || rowIndex}
-              style={{ ...rowStyles, backgroundColor: rowIndex % 2 === 0 ? 'transparent' : theme.colors.neutral[25] }}
-              onMouseEnter={(e) => handleRowHover(e, true)}
-              onMouseLeave={(e) => handleRowHover(e, false)}
-              onClick={() => onRowClick && onRowClick(row)}
-            >
-              {columns.map((col, ci) => <td key={ci} style={cellStyles}>{renderCellContent(col, row)}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Desktop table — hidden on mobile via CSS */}
+      <div className="table-scroll">
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+          <thead style={headerStyles}>
+            <tr>{columns.map((col, i) => <th key={i} style={headerCellStyles} className="dt-table-row">{col.title}</th>)}</tr>
+          </thead>
+          <tbody>
+            {paged.map((row, rowIndex) => (
+              <tr
+                key={row.id || rowIndex}
+                className="dt-table-row"
+                style={{ ...rowStyles, backgroundColor: rowIndex % 2 === 0 ? 'transparent' : theme.colors.neutral[25] }}
+                onMouseEnter={(e) => handleRowHover(e, true)}
+                onMouseLeave={(e) => handleRowHover(e, false)}
+                onClick={() => onRowClick && onRowClick(row)}
+              >
+                {columns.map((col, ci) => <td key={ci} style={cellStyles}>{renderCellContent(col, row)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile card rows — hidden on desktop via CSS */}
+      <div>
+        {paged.map((row, rowIndex) => (
+          <div
+            key={`card-${row.id || rowIndex}`}
+            className="dt-card-row"
+            style={{
+              borderBottom: '1px solid ' + theme.colors.neutral[100],
+              padding: '12px 16px',
+              cursor: onRowClick ? 'pointer' : 'default',
+            }}
+            onClick={() => onRowClick && onRowClick(row)}
+          >
+            {columns.map((col, ci) => (
+              <div key={ci} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '4px 0', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: theme.colors.neutral[500], textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0, paddingTop: 2 }}>
+                  {col.title}
+                </span>
+                <span style={{ fontSize: 13, color: theme.colors.neutral[700], textAlign: 'right' }}>
+                  {renderCellContent(col, row)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
       {data.length > pageSize && (
         <PaginationBar total={data.length} page={page} pageSize={pageSize} onPageChange={setPage} />
       )}
