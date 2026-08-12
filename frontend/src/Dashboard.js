@@ -474,8 +474,6 @@ export default function Dashboard({ user, token, onLogout }) {
                 )}
               </div>
             )}
-              </div>
-            )}
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
