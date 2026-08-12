@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\ConnectionException;
 use Carbon\Carbon;
 
 class AiController extends Controller
@@ -59,12 +60,21 @@ PROMPT;
             'max_tokens'  => 1024,
         ];
 
-        $response = Http::timeout(30)
-            ->withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-Type'  => 'application/json',
-            ])
-            ->post('https://api.mistral.ai/v1/chat/completions', $payload);
+        try {
+            $response = $this->mistralClient()
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Content-Type'  => 'application/json',
+                ])
+                ->post('https://api.mistral.ai/v1/chat/completions', $payload);
+        } catch (\Throwable $e) {
+            $message = $this->connectionErrorMessage($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], 502);
+        }
 
         if (!$response->successful()) {
             $errorMsg = $response->json('message') ?? $response->json('error.message') ?? 'Unknown error';
@@ -181,5 +191,55 @@ CONTEXT;
     private function fmt(float $amount): string
     {
         return number_format($amount, 0);
+    }
+
+    /**
+     * HTTP client for Mistral API with SSL CA bundle support on Windows/local dev.
+     */
+    private function mistralClient()
+    {
+        $client = Http::timeout(30);
+
+        $caBundle = $this->resolveCaBundle();
+        if ($caBundle) {
+            $client = $client->withOptions(['verify' => $caBundle]);
+        }
+
+        return $client;
+    }
+
+    private function resolveCaBundle(): ?string
+    {
+        $candidates = array_filter([
+            config('services.mistral.ca_bundle'),
+            ini_get('curl.cainfo') ?: null,
+            ini_get('openssl.cafile') ?: null,
+            'C:\\xampp\\apache\\bin\\curl-ca-bundle.crt',
+            'C:\\xampp\\php\\extras\\ssl\\cacert.pem',
+        ]);
+
+        foreach ($candidates as $path) {
+            $path = trim((string) $path);
+            if ($path !== '' && is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private function connectionErrorMessage(\Throwable $e): string
+    {
+        $detail = $e->getMessage();
+
+        if (str_contains($detail, 'SSL certificate') || str_contains($detail, 'cURL error 60')) {
+            return 'SSL certificate verification failed. Add CURL_CA_BUNDLE=C:\\xampp\\apache\\bin\\curl-ca-bundle.crt to backend/.env, then restart the backend using XAMPP PHP: C:\\xampp\\php\\php.exe artisan serve';
+        }
+
+        if ($e instanceof ConnectionException) {
+            return 'Could not connect to the AI service. Please check your internet connection and try again.';
+        }
+
+        return 'Could not reach the AI service. Please try again in a moment.';
     }
 }
