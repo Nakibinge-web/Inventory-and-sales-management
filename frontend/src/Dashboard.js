@@ -13,6 +13,335 @@ import { ToastContainer, useToast } from './components/ui/Toast';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
+// ── Floating AI Chat Widget ──────────────────────────────────────────────────
+function FloatingAiChat({ token, data }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
+
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      text: "Hi! I'm your AI business analyst. Ask me anything about your business data.",
+    },
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const bottomRef = useRef(null);
+  const cooldownRef = useRef(null);
+
+  const QUICK_PROMPTS = [
+    { label: 'Sales performance', icon: '📊', text: 'How did my sales perform this month?' },
+    { label: 'Top products', icon: '🏆', text: 'Which are my top 5 products by revenue?' },
+    { label: 'Low stock', icon: '⚠️', text: 'Which products are running low on stock?' },
+  ];
+
+  useEffect(() => {
+    if (isOpen) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, loading, isOpen]);
+
+  const startCooldown = (seconds) => {
+    setCooldown(seconds);
+    clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) { clearInterval(cooldownRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const send = async (questionText) => {
+    const q = (questionText ?? input).trim();
+    if (!q || loading || cooldown > 0) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', text: q }]);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/ai/chat`, { method: 'POST', headers, body: JSON.stringify({ question: q }) });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const msg = res.status === 429
+          ? '⏳ Rate limited. Please wait 30 seconds.'
+          : json.message || 'AI service error.';
+        setMessages(prev => [...prev, { role: 'assistant', text: msg }]);
+        if (res.status === 429) startCooldown(30);
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', text: json.answer }]);
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Could not reach server.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderText = (text) => {
+    return text.split('\n').map((line, i) => {
+      const parts = line.split(/\*\*(.*?)\*\*/g).map((part, j) =>
+        j % 2 === 1 ? <strong key={j}>{part}</strong> : part
+      );
+      const isBullet = line.startsWith('- ') || line.startsWith('• ');
+      if (isBullet) {
+        return <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 2 }}><span style={{ color: '#4f46e5' }}>•</span><span>{parts}</span></div>;
+      }
+      return <div key={i} style={{ marginBottom: line ? 3 : 6 }}>{parts}</div>;
+    });
+  };
+
+  return (
+    <>
+      {/* Chat panel overlay */}
+      {isOpen && (
+        <div style={{
+          position: 'fixed',
+          bottom: 90,
+          right: 20,
+          width: 420,
+          maxHeight: 600,
+          background: '#fff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 16,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 1000,
+        }}>
+          {/* Header */}
+          <div style={{
+            background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+            padding: '16px 20px',
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 22 }}>🤖</div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>AI Assistant</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Powered by Mistral AI</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: '#fff',
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            minHeight: 300,
+            maxHeight: 400,
+          }}>
+            {messages.map((msg, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'flex-start',
+                flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+              }}>
+                <div style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: msg.role === 'user' ? '#4f46e5' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                  flexShrink: 0,
+                }}>
+                  {msg.role === 'user' ? '👤' : '🤖'}
+                </div>
+                <div style={{
+                  maxWidth: '75%',
+                  padding: '10px 14px',
+                  borderRadius: msg.role === 'user' ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
+                  background: msg.role === 'user' ? '#4f46e5' : '#f8fafc',
+                  border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0',
+                  color: msg.role === 'user' ? '#fff' : '#0f172a',
+                  fontSize: 13,
+                  lineHeight: '1.5',
+                }}>
+                  {renderText(msg.text)}
+                </div>
+              </div>
+            ))}
+
+            {loading && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                }}>
+                  🤖
+                </div>
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: '4px 12px 12px 12px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  gap: 4,
+                }}>
+                  {[0, 1, 2].map(d => (
+                    <div key={d} style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: '#94a3b8',
+                      animation: `aiPulse 1.2s ease-in-out ${d * 0.2}s infinite`,
+                    }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Quick prompts */}
+          <div style={{ padding: '0 16px 12px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {QUICK_PROMPTS.map(p => (
+              <button
+                key={p.label}
+                onClick={() => send(p.text)}
+                disabled={loading || cooldown > 0}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: '#475569',
+                  cursor: loading || cooldown > 0 ? 'not-allowed' : 'pointer',
+                  opacity: loading || cooldown > 0 ? 0.5 : 1,
+                }}
+              >
+                {p.icon} {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div style={{ padding: '12px 16px 16px', borderTop: '1px solid #f1f5f9' }}>
+            {cooldown > 0 && (
+              <div style={{
+                marginBottom: 8,
+                padding: '6px 10px',
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: 6,
+                fontSize: 11,
+                color: '#92400e',
+              }}>
+                ⏳ Ready in {cooldown}s
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') send(); }}
+                placeholder="Ask anything..."
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => send()}
+                disabled={!input.trim() || loading || cooldown > 0}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: input.trim() && !loading && !cooldown ? '#4f46e5' : '#e2e8f0',
+                  color: input.trim() && !loading && !cooldown ? '#fff' : '#94a3b8',
+                  cursor: input.trim() && !loading && !cooldown ? 'pointer' : 'not-allowed',
+                  fontSize: 14,
+                }}
+              >
+                ➤
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+          border: 'none',
+          color: '#fff',
+          fontSize: 24,
+          cursor: 'pointer',
+          boxShadow: '0 4px 20px rgba(79,70,229,0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999,
+          transition: 'all 0.2s ease',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'scale(1.05)';
+          e.currentTarget.style.boxShadow = '0 6px 24px rgba(79,70,229,0.5)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(79,70,229,0.4)';
+        }}
+      >
+        {isOpen ? '✕' : '🤖'}
+      </button>
+    </>
+  );
+}
+
 export default function Dashboard({ user, token, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -190,7 +519,6 @@ export default function Dashboard({ user, token, onLogout }) {
     ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' }] : []),
     ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
     ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
-    { id: 'ai',               label: 'AI Assistant',    icon: '🤖', color: 'primary' },
     ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
@@ -551,7 +879,6 @@ export default function Dashboard({ user, token, onLogout }) {
             />
           )}
           {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
-          {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
             <UsersTab token={token} user={user} toast={toast}
@@ -635,6 +962,9 @@ export default function Dashboard({ user, token, onLogout }) {
           </button>
         </div>
       </nav>
+
+      {/* Floating AI Assistant */}
+      <FloatingAiChat token={token} data={data} />
     </div>
   );
 }
