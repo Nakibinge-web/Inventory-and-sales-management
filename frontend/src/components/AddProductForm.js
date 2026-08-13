@@ -96,96 +96,64 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
   /* ── submit all products ─────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
     setError(null);
 
-    // Basic client-side validation
-    for (let i = 0; i < products.length; i++) {
-      const p = products[i];
-      if (!p.name.trim())  { setError(`Product ${i + 1}: Name is required.`); setExpanded(prev => new Set([...prev, String(i)])); return; }
-      if (p.price === '')  { setError(`Product ${i + 1}: Selling price is required.`); setExpanded(prev => new Set([...prev, String(i)])); return; }
-      if (p.stock === '')  { setError(`Product ${i + 1}: Quantity is required.`); setExpanded(prev => new Set([...prev, String(i)])); return; }
+    // Validate all products
+    const validProducts = products.filter(p => p.name.trim() && p.price !== '' && p.stock !== '');
+    if (validProducts.length === 0) {
+      setError('Please fill in at least one complete product (Name, Price, Stock)');
+      setSaving(false);
+      return;
     }
 
-    setSaving(true);
     try {
-      if (products.length === 1) {
-        // ── Single product via FormData (supports image) ──────────────────
-        const p  = products[0];
+      const savedProducts = [];
+      for (const p of validProducts) {
         const fd = new FormData();
-        fd.append('name',          p.name.trim());
-        if (p.sku.trim())          fd.append('sku',              p.sku.trim());
-        if (p.barcode.trim())      fd.append('barcode',          p.barcode.trim());
-        if (p.unit)                fd.append('unit',             p.unit);
-        if (p.category_mode === 'existing' && p.category_id)
-                                   fd.append('category_id',      p.category_id);
-        if (p.category_mode === 'new' && p.new_category.trim())
-                                   fd.append('new_category',     p.new_category.trim());
-        if (p.supplier_id)         fd.append('supplier_id',      p.supplier_id);
-        fd.append('stock',         parseFloat(p.stock));
-        if (p.cost_price !== '')   fd.append('cost_price',       parseFloat(p.cost_price));
-        fd.append('price',         parseFloat(p.price));
-        fd.append('reorder_level', p.reorder_level !== '' ? parseFloat(p.reorder_level) : 0);
-        if (p.description.trim())  fd.append('description',      p.description.trim());
-        fd.append('track_expiry',  p.track_expiry ? 1 : 0);
+        fd.append('name', p.name);
+        fd.append('sku', p.sku);
+        fd.append('barcode', p.barcode);
+        fd.append('unit', p.unit);
+        fd.append('supplier_id', p.supplier_id);
+        fd.append('stock', p.stock);
+        fd.append('cost_price', p.cost_price);
+        fd.append('price', p.price);
+        fd.append('reorder_level', p.reorder_level || 0);
+        fd.append('description', p.description);
+        fd.append('track_expiry', p.track_expiry ? 1 : 0);
+        
         if (p.track_expiry) {
-          if (p.manufacture_date)  fd.append('manufacture_date', p.manufacture_date);
-          if (p.expiry_date)       fd.append('expiry_date',      p.expiry_date);
+          fd.append('manufacture_date', p.manufacture_date);
+          fd.append('expiry_date', p.expiry_date);
         }
-        if (p.image)               fd.append('image',            p.image);
 
-        const res  = await fetch(`${API}/products`, {
+        if (p.category_mode === 'existing') {
+          fd.append('category_id', p.category_id);
+        } else if (p.new_category) {
+          fd.append('new_category', p.new_category);
+        }
+
+        if (p.image) {
+          fd.append('image', p.image);
+        }
+
+        const res = await fetch(`${API}/products`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
           body: fd,
         });
-        const data = await res.json();
-        if (!res.ok) { setError(data?.message || `Error ${res.status}`); return; }
-        onSuccess([data.data]);
-
-      } else {
-        // ── Multiple products via FormData (supports per-product images) ──
-        const fd = new FormData();
-        products.forEach((p, i) => {
-          const pre = `products[${i}]`;
-          fd.append(`${pre}[name]`,          p.name.trim());
-          if (p.sku.trim())          fd.append(`${pre}[sku]`,              p.sku.trim());
-          if (p.barcode.trim())      fd.append(`${pre}[barcode]`,          p.barcode.trim());
-          if (p.unit)                fd.append(`${pre}[unit]`,             p.unit);
-          if (p.category_mode === 'existing' && p.category_id)
-                                     fd.append(`${pre}[category_id]`,      p.category_id);
-          if (p.category_mode === 'new' && p.new_category.trim())
-                                     fd.append(`${pre}[new_category]`,     p.new_category.trim());
-          if (p.supplier_id)         fd.append(`${pre}[supplier_id]`,      p.supplier_id);
-          fd.append(`${pre}[stock]`,         parseFloat(p.stock));
-          if (p.cost_price !== '')   fd.append(`${pre}[cost_price]`,       parseFloat(p.cost_price));
-          fd.append(`${pre}[price]`,         parseFloat(p.price));
-          fd.append(`${pre}[reorder_level]`, p.reorder_level !== '' ? parseFloat(p.reorder_level) : 0);
-          if (p.description.trim())  fd.append(`${pre}[description]`,      p.description.trim());
-          fd.append(`${pre}[track_expiry]`,  p.track_expiry ? 1 : 0);
-          if (p.track_expiry) {
-            if (p.manufacture_date)  fd.append(`${pre}[manufacture_date]`, p.manufacture_date);
-            if (p.expiry_date)       fd.append(`${pre}[expiry_date]`,      p.expiry_date);
-          }
-          // Image keyed separately so Laravel can access $request->file("images.$i")
-          if (p.image)               fd.append(`images[${i}]`,             p.image);
-        });
-
-        const res  = await fetch(`${API}/products/bulk`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
-          body: fd,
-        });
+        
         const data = await res.json();
         if (!res.ok) {
-          const msg = data?.errors?.map(e => `"${e.name}": ${e.error}`).join('\n') || data?.message || `Error ${res.status}`;
-          setError(msg);
-          return;
+          throw new Error(data?.message || `Failed to save ${p.name}`);
         }
-        onSuccess(data.data);
+        savedProducts.push(data.data);
       }
-    } catch {
-      setError('Failed to save products. Check your connection.');
-    } finally {
+
+      onSuccess(savedProducts);
+    } catch (err) {
+      setError(err.message || 'Failed to save products. Check your connection.');
       setSaving(false);
     }
   };
@@ -477,11 +445,16 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, error }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
       {label && <label style={s.label}>{label}</label>}
       {children}
+      {error && (
+        <span style={s.fieldError}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }

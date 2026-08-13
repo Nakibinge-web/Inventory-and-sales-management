@@ -35,11 +35,56 @@ export default function EditProductForm({ token, product, categories, suppliers,
   );
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const fileRef               = useRef();
 
   const handle = e => {
     const { name, value, type, checked } = e.target;
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!form.name.trim()) {
+      errors.name = 'Product name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Product name must be at least 2 characters';
+    }
+    
+    if (!form.unit) {
+      errors.unit = 'Please select a unit of measure';
+    }
+    
+    if (!form.category_id) {
+      errors.category_id = 'Please select a category';
+    }
+    
+    if (!form.stock || form.stock < 0) {
+      errors.stock = 'Quantity is required and must be 0 or greater';
+    }
+    
+    if (!form.price || form.price <= 0) {
+      errors.price = 'Selling price is required and must be greater than 0';
+    }
+    
+    if (form.cost_price && form.price && parseFloat(form.cost_price) > parseFloat(form.price)) {
+      errors.price = 'Selling price should not be less than cost price';
+    }
+    
+    if (form.track_expiry && !form.expiry_date) {
+      errors.expiry_date = 'Expiry date is required when tracking expiry';
+    }
+    
+    if (form.manufacture_date && form.expiry_date && form.manufacture_date > form.expiry_date) {
+      errors.expiry_date = 'Expiry date must be after manufacture date';
+    }
+    
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleImage = e => {
@@ -51,8 +96,15 @@ export default function EditProductForm({ token, product, categories, suppliers,
 
   const submit = async e => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      setError('Please fix the errors below before submitting');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
+    setFieldErrors({});
 
     const fd = new FormData();
     fd.append('_method',       'PUT');
@@ -95,9 +147,9 @@ export default function EditProductForm({ token, product, categories, suppliers,
 
       {/* Row 1: Name + SKU */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Product Name *">
-          <input style={s.input} name="name" placeholder="e.g. Paracetamol 500mg"
-            value={form.name} onChange={handle} required />
+        <Field label="Product Name *" error={fieldErrors.name}>
+          <input style={{ ...s.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} name="name" placeholder="e.g. Paracetamol 500mg"
+            value={form.name} onChange={handle} />
         </Field>
         <Field label="SKU">
           <input style={s.input} name="sku" placeholder="e.g. MED-001"
@@ -111,8 +163,8 @@ export default function EditProductForm({ token, product, categories, suppliers,
           <input style={s.input} name="barcode" placeholder="Scan or type barcode"
             value={form.barcode} onChange={handle} />
         </Field>
-        <Field label="Unit of Measure">
-          <select style={s.input} name="unit" value={form.unit} onChange={handle}>
+        <Field label="Unit of Measure" error={fieldErrors.unit}>
+          <select style={{ ...s.input, borderColor: fieldErrors.unit ? '#dc2626' : '#e2e8f0' }} name="unit" value={form.unit} onChange={handle}>
             <option value="">— Select unit —</option>
             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
@@ -120,8 +172,8 @@ export default function EditProductForm({ token, product, categories, suppliers,
       </div>
 
       {/* Category */}
-      <Field label="Category">
-        <select style={s.input} name="category_id" value={form.category_id} onChange={handle}>
+      <Field label="Category" error={fieldErrors.category_id}>
+        <select style={{ ...s.input, borderColor: fieldErrors.category_id ? '#dc2626' : '#e2e8f0' }} name="category_id" value={form.category_id} onChange={handle}>
           <option value="">— Select category —</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
@@ -137,9 +189,9 @@ export default function EditProductForm({ token, product, categories, suppliers,
 
       {/* Row 3: Qty + Reorder */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Quantity *">
-          <input style={s.input} name="stock" type="number" min="0"
-            placeholder="0" value={form.stock} onChange={handle} required />
+        <Field label="Quantity *" error={fieldErrors.stock}>
+          <input style={{ ...s.input, borderColor: fieldErrors.stock ? '#dc2626' : '#e2e8f0' }} name="stock" type="number" min="0"
+            placeholder="0" value={form.stock} onChange={handle} />
         </Field>
         <Field label="Reorder Level">
           <input style={s.input} name="reorder_level" type="number" min="0"
@@ -153,9 +205,9 @@ export default function EditProductForm({ token, product, categories, suppliers,
           <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
             placeholder="0.00" value={form.cost_price} onChange={handle} />
         </Field>
-        <Field label="Selling Price *">
-          <input style={s.input} name="price" type="number" step="0.01" min="0"
-            placeholder="0.00" value={form.price} onChange={handle} required />
+        <Field label="Selling Price *" error={fieldErrors.price}>
+          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="number" step="0.01" min="0"
+            placeholder="0.00" value={form.price} onChange={handle} />
         </Field>
       </div>
 
@@ -231,11 +283,12 @@ export default function EditProductForm({ token, product, categories, suppliers,
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, error }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
       {label && <label style={s.label}>{label}</label>}
       {children}
+      {error && <span style={s.fieldError}>{error}</span>}
     </div>
   );
 }
@@ -248,6 +301,13 @@ const s = {
     padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8,
     fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
     boxSizing: 'border-box', background: '#fff', color: '#0f172a',
+  },
+  fieldError: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: 500,
+    marginTop: 2,
+    display: 'block',
   },
   imageArea: {
     border: '2px dashed #e2e8f0', borderRadius: 10, padding: 16,

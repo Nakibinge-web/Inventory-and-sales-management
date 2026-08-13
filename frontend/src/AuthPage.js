@@ -101,6 +101,59 @@ export default function AuthPage() {
     setLoading(true);
     setError(null);
 
+    // Custom validation
+    if (mode === 'register') {
+      if (!form.name.trim()) {
+        setError('Full name is required');
+        setLoading(false);
+        return;
+      }
+      if (form.name.trim().length < 2) {
+        setError('Full name must be at least 2 characters');
+        setLoading(false);
+        return;
+      }
+      if (!form.business_name.trim()) {
+        setError('Business name is required');
+        setLoading(false);
+        return;
+      }
+      if (form.business_name.trim().length < 2) {
+        setError('Business name must be at least 2 characters');
+        setLoading(false);
+        return;
+      }
+      if (form.password.length < 8) {
+        setError('Password must be at least 8 characters');
+        setLoading(false);
+        return;
+      }
+      if (form.password !== form.password_confirmation) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+      if (form.phone && !/^[\d\s\+\-\(\)]+$/.test(form.phone)) {
+        setError('Invalid phone number format');
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
+    if (!form.password) {
+      setError('Password is required');
+      setLoading(false);
+      return;
+    }
+
     const body = mode === 'login'
       ? { email: form.email, password: form.password }
       : { name: form.name, email: form.email, password: form.password,
@@ -209,7 +262,9 @@ export default function AuthPage() {
         <div className="brand-content">
           <div className="brand-logo-wrap">
             <div className="brand-logo-ring" />
-            <div className="brand-logo-icon">📦</div>
+            <div className="brand-logo-icon" style={{ background: '#ffffff', padding: 8 }}>
+              <img src="/zziwa logo.png" alt="Zziwa Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
           </div>
           <h1 className="brand-title">Business Yo!</h1>
           <p className="brand-sub">Inventory & Sales Management</p>
@@ -306,9 +361,9 @@ export default function AuthPage() {
           </form>
 
           <p className="auth-toggle">
-            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            {isLogin ? "Different Staff members can login from here " : 'Already have an account? '}
             <span className="auth-toggle-link" onClick={toggle}>
-              {isLogin ? 'Register your business' : 'Sign in'}
+              {isLogin ? 'Register a new account' : 'Sign in'}
             </span>
           </p>
         </div>
