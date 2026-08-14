@@ -9748,20 +9748,95 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
   const [amountDue, setAmountDue] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
 
+  // Products list for dropdown
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
   const [items, setItems] = useState([
-    { description: '', quantity: '1', price: '' }
+    { description: '', quantity: '1', price: '', mode: 'manual', product_id: '' }
   ]);
 
+  // Fetch products for dropdown
+  useState(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const res = await fetch(`${API}/products?tenant_id=${user.tenant_id}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setProducts(json.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch products:', err);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
   const handleAddItem = () => {
-    setItems(prev => [...prev, { description: '', quantity: '1', price: '' }]);
+    setItems(prev => [...prev, { description: '', quantity: '1', price: '', mode: 'manual', product_id: '' }]);
   };
 
   const handleRemoveItem = (idx) => {
     setItems(prev => prev.filter((_, i) => i !== idx));
+    // Clear item error when removed
+    if (fieldErrors[`item_${idx}`]) {
+      const newErrors = { ...fieldErrors };
+      delete newErrors[`item_${idx}`];
+      setFieldErrors(newErrors);
+    }
   };
 
   const handleItemChange = (idx, field, val) => {
     setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+    // Clear field error when user types
+    if (fieldErrors[`item_${idx}`]) {
+      setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
+    }
+  };
+
+  // Handle product selection from dropdown
+  const handleProductSelect = (idx, productId) => {
+    if (!productId) {
+      handleItemChange(idx, 'product_id', '');
+      handleItemChange(idx, 'mode', 'manual');
+      return;
+    }
+    
+    const product = products.find(p => String(p.id) === String(productId));
+    if (product) {
+      setItems(prev => prev.map((item, i) => i === idx ? {
+        ...item,
+        product_id: productId,
+        mode: 'product',
+        description: product.name,
+        price: String(product.price || 0)
+      } : item));
+      
+      // Clear error
+      if (fieldErrors[`item_${idx}`]) {
+        setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
+      }
+    }
+  };
+
+  // Toggle between product dropdown and manual entry
+  const toggleItemMode = (idx) => {
+    const currentMode = items[idx].mode;
+    const newMode = currentMode === 'manual' ? 'product' : 'manual';
+    
+    setItems(prev => prev.map((item, i) => i === idx ? {
+      ...item,
+      mode: newMode,
+      product_id: '',
+      description: '',
+      price: '',
+      quantity: '1'
+    } : item));
   };
 
   const calculateTotal = () => {
@@ -9780,6 +9855,10 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       setCustomerName(cust.name || '');
       setCustomerPhone(cust.phone || cust.contact || '');
       setCustomerEmail(cust.email || '');
+      // Clear customer errors
+      if (fieldErrors.customerName) {
+        setFieldErrors(prev => ({ ...prev, customerName: null }));
+      }
     }
   };
 
@@ -9798,6 +9877,8 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       setAmountPaid('');
       setAmountDue('');
     }
+    // Clear payment errors
+    setFieldErrors(prev => ({ ...prev, amountPaid: null, amountDue: null }));
   };
 
   // When partial amount paid changes, auto-calc amount due
@@ -9806,6 +9887,10 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
     const total = calculateTotal();
     const paid = parseFloat(val) || 0;
     setAmountDue(String(Math.max(0, total - paid)));
+    // Clear error
+    if (fieldErrors.amountPaid) {
+      setFieldErrors(prev => ({ ...prev, amountPaid: null }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -9813,32 +9898,132 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
     setSubmitError('');
     setFieldErrors({});
 
-    // Validate form
+    // ══════════════════════════════════════════════════════════════════════
+    // COMPREHENSIVE FORM VALIDATION
+    // ══════════════════════════════════════════════════════════════════════
     const errors = {};
     
+    // 1. Customer Name Validation
     if (!customerName.trim()) {
-      errors.customerName = 'Customer name is required';
+      errors.customerName = 'Customer name is required for invoice generation';
+    } else if (customerName.trim().length < 2) {
+      errors.customerName = 'Customer name must be at least 2 characters';
+    } else if (customerName.trim().length > 100) {
+      errors.customerName = 'Customer name must not exceed 100 characters';
     }
     
-    const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
-    if (validItems.length === 0) {
-      errors.items = 'Please add at least one valid item with a description and price';
+    // 2. Customer Phone Validation (optional but must be valid if provided)
+    if (customerPhone.trim() && !/^[\d\s\+\-\(\)]+$/.test(customerPhone)) {
+      errors.customerPhone = 'Phone number contains invalid characters';
     }
     
-    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-      errors.customerEmail = 'Please enter a valid email address';
+    // 3. Customer Email Validation (optional but must be valid if provided)
+    if (customerEmail.trim()) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+        errors.customerEmail = 'Please enter a valid email address (e.g., customer@example.com)';
+      }
+    }
+    
+    // 4. Invoice Date Validation
+    if (!invoiceDate) {
+      errors.invoiceDate = 'Invoice date is required';
+    }
+    
+    // 5. Due Date Validation
+    if (!dueDate) {
+      errors.dueDate = 'Due date is required';
+    } else if (invoiceDate && dueDate < invoiceDate) {
+      errors.dueDate = 'Due date cannot be earlier than invoice date';
+    }
+    
+    // 6. Items Validation - Comprehensive per-item validation
+    const validItems = [];
+    let hasItemErrors = false;
+    
+    items.forEach((item, idx) => {
+      const itemErrors = [];
+      
+      // Check description
+      if (!item.description.trim()) {
+        itemErrors.push('Description is required');
+        hasItemErrors = true;
+      }
+      
+      // Check quantity
+      const qty = parseFloat(item.quantity);
+      if (!item.quantity || isNaN(qty) || qty <= 0) {
+        itemErrors.push('Valid quantity required (must be greater than 0)');
+        hasItemErrors = true;
+      }
+      
+      // Check price
+      const price = parseFloat(item.price);
+      if (!item.price || isNaN(price) || price < 0) {
+        itemErrors.push('Valid price required (must be 0 or greater)');
+        hasItemErrors = true;
+      }
+      
+      // If this item has errors, record them
+      if (itemErrors.length > 0) {
+        errors[`item_${idx}`] = itemErrors.join(', ');
+      } else {
+        // Only add to valid items if no errors
+        validItems.push(item);
+      }
+    });
+    
+    // Overall items check
+    if (items.length === 0) {
+      errors.items = 'Please add at least one invoice line item';
+    } else if (validItems.length === 0) {
+      errors.items = 'Please provide valid details for at least one item (description, quantity, and price)';
+    }
+    
+    // 7. Payment Status Validation
+    const total = calculateTotal();
+    
+    if (paymentStatus === 'paid') {
+      const paid = parseFloat(amountPaid);
+      if (!amountPaid || isNaN(paid) || paid < 0) {
+        errors.amountPaid = 'Amount paid is required and must be 0 or greater';
+      } else if (paid > total) {
+        errors.amountPaid = `Amount paid (${paid.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
+      }
+    } else if (paymentStatus === 'partial') {
+      const paid = parseFloat(amountPaid);
+      if (!amountPaid || isNaN(paid) || paid <= 0) {
+        errors.amountPaid = 'For partial payment, amount paid must be greater than 0';
+      } else if (paid >= total) {
+        errors.amountPaid = 'For partial payment, amount paid must be less than total. Use "Paid" status instead.';
+      }
+    } else if (paymentStatus === 'due') {
+      const due = parseFloat(amountDue);
+      if (!amountDue || isNaN(due) || due <= 0) {
+        errors.amountDue = 'Amount due is required and must be greater than 0';
+      } else if (due > total) {
+        errors.amountDue = `Amount due (${due.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
+      }
     }
 
+    // 8. If there are validation errors, show them and stop submission
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setSubmitError('Please fix the errors below');
+      setSubmitError('Please fix all validation errors before submitting the invoice');
+      // Scroll to top to show error message
+      setTimeout(() => {
+        const modalContent = document.querySelector('[data-invoice-form]');
+        if (modalContent) modalContent.scrollTop = 0;
+      }, 100);
       return;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // PREPARE AND SUBMIT INVOICE DATA
+    // ══════════════════════════════════════════════════════════════════════
     const payload = {
       invoice_date: invoiceDate,
       due_date: dueDate,
-      source_ref: sourceRef,
+      source_ref: sourceRef.trim() || null,
       customer_name: customerName.trim(),
       customer_phone: customerPhone.trim() || null,
       customer_email: customerEmail.trim() || null,
@@ -9872,15 +10057,25 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       }
       onCreated(json.data);
     } catch (err) {
-      setSubmitError('Network error. Please check your connection and try again.');
+      setSubmitError('Network error. Unable to reach the server. Please check your internet connection and try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="720px">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="820px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }} data-invoice-form>
+        {submitError && (
+          <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fef2f2', border: '1.5px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Validation Error</div>
+              <div>{submitError}</div>
+            </div>
+          </div>
+        )}
+
         {customers && customers.length > 0 && (
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -9890,7 +10085,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
               onChange={handleSelectCustomer}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff' }}
             >
-              <option value="">— Select an existing customer —</option>
+              <option value="">— Select an existing customer to auto-fill details —</option>
               {customers.map(c => (
                 <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
               ))}
@@ -9900,31 +10095,38 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Customer Name *</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Customer Name (Required)
+            </label>
             <input
               type="text"
-              placeholder="e.g. Asher"
+              placeholder="e.g., Jane Nakato, Hotel Manager"
               value={customerName}
               onChange={e => { setCustomerName(e.target.value); if (fieldErrors.customerName) setFieldErrors(prev => ({ ...prev, customerName: null })); }}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerName ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
-            {fieldErrors.customerName && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
+            {fieldErrors.customerName && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Phone Number</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Phone Number (Optional)
+            </label>
             <input
               type="text"
-              placeholder="e.g. 0776 000000"
+              placeholder="+256 700 000 000"
               value={customerPhone}
-              onChange={e => setCustomerPhone(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setCustomerPhone(e.target.value); if (fieldErrors.customerPhone) setFieldErrors(prev => ({ ...prev, customerPhone: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerPhone ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.customerPhone && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerPhone}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Source / Ref</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Source / Reference
+            </label>
             <input
               type="text"
-              placeholder="e.g. S00124"
+              placeholder="e.g., ORDER-12345"
               value={sourceRef}
               onChange={e => setSourceRef(e.target.value)}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
@@ -9932,31 +10134,51 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Invoice Date</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Customer Email (Optional)
+            </label>
+            <input
+              type="email"
+              placeholder="customer@example.com"
+              value={customerEmail}
+              onChange={e => { setCustomerEmail(e.target.value); if (fieldErrors.customerEmail) setFieldErrors(prev => ({ ...prev, customerEmail: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerEmail ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+            {fieldErrors.customerEmail && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerEmail}</span>}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Invoice Date (Required)
+            </label>
             <input
               type="date"
               value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setInvoiceDate(e.target.value); if (fieldErrors.invoiceDate) setFieldErrors(prev => ({ ...prev, invoiceDate: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.invoiceDate ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.invoiceDate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.invoiceDate}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Due Date</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Due Date (Required)
+            </label>
             <input
               type="date"
               value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setDueDate(e.target.value); if (fieldErrors.dueDate) setFieldErrors(prev => ({ ...prev, dueDate: null })); }}
+              min={invoiceDate}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.dueDate ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.dueDate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.dueDate}</span>}
           </div>
         </div>
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 800, color: '#881337', textTransform: 'uppercase' }}>
-              Invoice Line Items
+              Invoice Line Items {fieldErrors.items && <span style={{ color: '#dc2626', fontSize: 11, marginLeft: 8 }}>⚠️ {fieldErrors.items}</span>}
             </label>
             <button
               type="button"
@@ -9969,40 +10191,136 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map((item, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 40px', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="text"
-                  placeholder="Description (e.g. Apple iPhone 17 Pro Max 512GB)"
-                  value={item.description}
-                  onChange={e => handleItemChange(idx, 'description', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
-                  required
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Qty"
-                  value={item.quantity}
-                  onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
-                  required
-                />
-                <input
-                  type="number"
-                  placeholder="Unit Price (UGX)"
-                  value={item.price}
-                  onChange={e => handleItemChange(idx, 'price', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
-                  required
-                />
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, height: 36, fontWeight: 800, cursor: 'pointer' }}
-                  >
-                    ✕
-                  </button>
+              <div key={idx} style={{ border: '1.5px solid', borderColor: fieldErrors[`item_${idx}`] ? '#dc2626' : '#e2e8f0', borderRadius: 10, padding: '12px', background: item.mode === 'product' ? '#fafbff' : '#fff' }}>
+                {/* Mode toggle */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleItemMode(idx)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700,
+                        border: '1.5px solid',
+                        borderColor: item.mode === 'manual' ? '#be123c' : '#3b82f6',
+                        background: item.mode === 'manual' ? '#be123c' : '#3b82f6',
+                        color: '#fff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {item.mode === 'manual' ? '✍️ Manual Entry' : '📦 From Products'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleItemMode(idx)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 16, fontSize: 11, fontWeight: 600,
+                        border: '1.5px solid #e2e8f0',
+                        background: '#f8fafc',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🔄 Switch Mode
+                    </button>
+                  </div>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontWeight: 800, cursor: 'pointer', fontSize: 12 }}
+                    >
+                      ✕ Remove
+                    </button>
+                  )}
+                </div>
+
+                {/* Product dropdown mode */}
+                {item.mode === 'product' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>SELECT PRODUCT</label>
+                      <select
+                        value={item.product_id}
+                        onChange={e => handleProductSelect(idx, e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff' }}
+                        disabled={loadingProducts}
+                      >
+                        <option value="">— Choose from inventory —</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} (UGX {parseFloat(p.price || 0).toLocaleString()})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>QUANTITY</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="1"
+                        value={item.quantity}
+                        onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>UNIT PRICE (UGX)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={item.price}
+                        onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right', background: '#f8fafc' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual entry mode */}
+                {item.mode === 'manual' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="Item description (e.g., Memory Foam Mattress Queen Size)"
+                      value={item.description}
+                      onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="Quantity"
+                      value={item.quantity}
+                      onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Unit Price (UGX)"
+                      value={item.price}
+                      onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
+                    />
+                  </div>
+                )}
+
+                {/* Subtotal display */}
+                {item.quantity && item.price && (
+                  <div style={{ marginTop: 8, textAlign: 'right', fontSize: 12, color: '#475569', fontWeight: 600 }}>
+                    Subtotal: <span style={{ color: '#881337', fontWeight: 800 }}>UGX {((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Item error */}
+                {fieldErrors[`item_${idx}`] && (
+                  <div style={{ marginTop: 8, padding: '6px 10px', background: '#fef2f2', borderRadius: 6, color: '#dc2626', fontSize: 11, fontWeight: 600 }}>
+                    ⚠️ {fieldErrors[`item_${idx}`]}
+                  </div>
                 )}
               </div>
             ))}
@@ -10018,16 +10336,16 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              Status
+              Payment Status (Required)
             </label>
             <select
               value={paymentStatus}
               onChange={e => handleStatusChange(e.target.value)}
               style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff', fontWeight: 600, cursor: 'pointer' }}
             >
-              <option value="paid">Paid</option>
-              <option value="partial">Partial</option>
-              <option value="due">Due</option>
+              <option value="paid">✅ Paid - Invoice has been fully paid</option>
+              <option value="partial">⏳ Partial - Invoice partially paid, balance due</option>
+              <option value="due">❌ Due - Invoice unpaid, full amount due</option>
             </select>
           </div>
 
@@ -10035,16 +10353,17 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           {paymentStatus === 'paid' && (
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                Amount Paid (UGX)
+                Amount Paid (UGX) (Required)
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={amountPaid}
-                onChange={e => setAmountPaid(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
+                onChange={e => { setAmountPaid(e.target.value); if (fieldErrors.amountPaid) setFieldErrors(prev => ({ ...prev, amountPaid: null })); }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
               />
+              {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
             </div>
           )}
 
@@ -10053,7 +10372,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  Amount Paid (UGX)
+                  Amount Paid (UGX) (Required)
                 </label>
                 <input
                   type="number"
@@ -10062,12 +10381,13 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                   placeholder="Enter partial amount paid"
                   value={amountPaid}
                   onChange={e => handlePartialPaidChange(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
                 />
+                {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  Amount Due (UGX) — Auto
+                  Amount Due (UGX) — Auto-Calculated
                 </label>
                 <input
                   type="number"
@@ -10083,17 +10403,18 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           {paymentStatus === 'due' && (
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                Amount Due (UGX)
+                Amount Due (UGX) (Required)
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Enter amount due"
+                placeholder="Enter full amount due"
                 value={amountDue}
-                onChange={e => setAmountDue(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
+                onChange={e => { setAmountDue(e.target.value); if (fieldErrors.amountDue) setFieldErrors(prev => ({ ...prev, amountDue: null })); }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountDue ? '#dc2626' : '#fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
               />
+              {fieldErrors.amountDue && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountDue}</span>}
             </div>
           )}
         </div>
@@ -10101,13 +10422,13 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
         {/* ── PAYMENT TERMS & CONDITIONS ── */}
         <div>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-            Payment Terms &amp; Conditions
+            Payment Terms &amp; Conditions (Optional)
           </label>
           <textarea
             rows={3}
             value={paymentTerms}
             onChange={e => setPaymentTerms(e.target.value)}
-            placeholder="Explicit due date (e.g., Net 30, Due on Receipt), accepted payment methods, and penalties for late payment"
+            placeholder="e.g., Payment due within 30 days. Accepted methods: Bank transfer, Mobile Money. Late payment fee: 5% per month."
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -10123,12 +10444,6 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           />
         </div>
 
-        {submitError && (
-          <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
-            {submitError}
-          </div>
-        )}
-
         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
           <button
             type="button"
@@ -10143,7 +10458,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
             disabled={submitting}
             style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.75 : 1, boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
           >
-            {submitting ? 'Saving…' : 'Generate Invoice 📄'}
+            {submitting ? '⏳ Saving Invoice…' : '📄 Generate Invoice'}
           </button>
         </div>
       </form>
