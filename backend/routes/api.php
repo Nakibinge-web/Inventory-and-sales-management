@@ -198,4 +198,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/date-range', [StockMovementController::class, 'getByDateRange']);
         Route::get('/{stockMovement}', [StockMovementController::class, 'show']);
     });
+
+    // Report Preferences
+    Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
 });

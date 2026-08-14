@@ -1,5 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=DM+Mono:wght@400;500&display=swap');
 
+/* ── Hide number input spinners ── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; overflow-x: hidden; }
@@ -684,83 +694,34 @@ textarea.field-input { resize:vertical;min-height:80px; }
 }
 
 /* ════════════════════════════════════════════════
-   PRINT STYLES FOR INVOICES & RECEIPTS
+   PRINT STYLES
    ════════════════════════════════════════════════ */
 @media print {
-  /* Hide everything except the invoice */
+  /* Hide everything by default */
   body * {
     visibility: hidden !important;
   }
 
-  body {
-    background: #ffffff !important;
-    color: #000000 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* Make the invoice and all its children visible */
-  #printable-invoice,
-  #printable-invoice * {
+  /* Show only the receipt and its contents */
+  #printable-receipt,
+  #printable-receipt * {
     visibility: visible !important;
   }
 
-  /* Position the invoice to fill the whole printed page */
-  #printable-invoice {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    min-height: 100vh !important;
-    margin: 0 !important;
-    padding: 28px 36px !important;
+  /* Reset body and container for printing */
+  body {
     background: #ffffff !important;
-    box-shadow: none !important;
-    border: none !important;
-    box-sizing: border-box !important;
-    font-size: 12pt !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  /* Ensure table backgrounds and colours print */
-  #printable-invoice table thead tr {
-    background: #881337 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important;
-  }
-
-  #printable-invoice table thead tr th {
-    color: #ffffff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Keep table borders visible */
-  #printable-invoice table,
-  #printable-invoice td,
-  #printable-invoice th {
-    border-color: #e2e8f0 !important;
-  }
-
-  /* Hide the action bar (Print / Close buttons) */
-  .no-print {
-    display: none !important;
-    visibility: hidden !important;
-  }
-
-  /* Remove modal overlay/chrome so only the invoice shows */
-  .modal-overlay-responsive {
-    background: transparent !important;
+    overflow: visible !important;
     padding: 0 !important;
   }
-
-  .modal-responsive {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
+  
+  #printable-receipt {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

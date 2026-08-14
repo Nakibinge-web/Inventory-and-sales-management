@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+
 import { theme } from './styles/theme';
 import DashboardCard from './components/ui/DashboardCard';
 import DataTable from './components/ui/DataTable';
@@ -130,6 +133,10 @@ export default function Dashboard({ user, token, onLogout }) {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(() => {
+      fetchData();
+    }, 60000);
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   // ── Global search ──────────────────────────────────────────────────────────
@@ -749,7 +756,7 @@ export default function Dashboard({ user, token, onLogout }) {
               }}
             />
           )}
-          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} hasPermission={hasPermission} toast={toast} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
@@ -2822,9 +2829,9 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           </div>
 
           {/* Receipt */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
+          <div id="printable-receipt" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
             <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || 'InventoryPro'}</div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || user.business_name || 'InventoryPro'}</div>
               <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{new Date().toLocaleString()}</div>
             </div>
             {lastReceipt.cartSnapshot.map(item => (
@@ -2868,12 +2875,20 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
             )}
           </div>
 
-          <button onClick={() => setLastReceipt(null)} style={{
-            padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-            background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-          }}>
-            New Sale
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button onClick={() => window.print()} style={{
+              padding: '12px', borderRadius: 10, border: 'none',
+              background: '#0f172a', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+            }}>
+              Print Receipt
+            </button>
+            <button onClick={() => setLastReceipt(null)} style={{
+              padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
+              background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+            }}>
+              New Sale
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -3013,10 +3028,14 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                   onMouseEnter={e => { e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,70,229,0.12)'; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
                 >
-                  {/* Product initial avatar */}
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 15, fontWeight: 700, color: '#4f46e5' }}>
-                    {p.name.charAt(0).toUpperCase()}
-                  </div>
+                  {/* Product image or initial avatar */}
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'cover', marginBottom: 8, border: '1px solid #e2e8f0' }} />
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 15, fontWeight: 700, color: '#4f46e5' }}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div style={posS.productName}>{p.name}</div>
                   {p.sku && <div style={posS.productSku}>SKU: {p.sku}</div>}
                   <div style={posS.productPrice}>UGX {parseFloat(p.price).toLocaleString()}</div>
@@ -6119,8 +6138,194 @@ function StockTab({ products, stockMovements, token, onAdjusted, canCreate = tru
   );
 }
 
-// Reports Tab Component
-function ReportsTab({ data, loading, token }) {
+// ════════════════════════════════════════════════
+// REPORT AUTOMATION TAB COMPONENT
+// ════════════════════════════════════════════════
+function ReportAutomationTab({ token, hasPermission, toast }) {
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+  const [preferences, setPreferences] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const reportTypes = [
+    { id: 'daily_sales', label: 'Daily Sales', supportsFrequency: true },
+    { id: 'weekly_sales', label: 'Weekly Sales', supportsFrequency: true },
+    { id: 'monthly_sales', label: 'Monthly Sales', supportsFrequency: true },
+    { id: 'yearly_sales', label: 'Yearly Sales', supportsFrequency: false },
+    { id: 'daily_purchases', label: 'Daily Purchases', supportsFrequency: true },
+    { id: 'monthly_purchases', label: 'Monthly Purchases', supportsFrequency: true },
+  ];
+
+  const fetchPreferences = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/report-preferences`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to load report preferences');
+      setPreferences(json.data || []);
+    } catch (err) {
+      toast?.error?.(err.message || 'Failed to load report preferences');
+    } finally {
+      setLoading(false);
+    }
+  }, [token, API_URL]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchPreferences();
+  }, [fetchPreferences]);
+
+  const updateLocalPref = (typeId, field, value) => {
+    setPreferences(prev => {
+      const existing = prev.find(p => p.report_type === typeId);
+      if (existing) {
+        return prev.map(p => p.report_type === typeId ? { ...p, [field]: value } : p);
+      } else {
+        return [...prev, { report_type: typeId, is_enabled: false, frequency: 'daily', delivery_method: 'email', recipient_email: '', [field]: value }];
+      }
+    });
+  };
+
+  const savePreference = async (pref) => {
+    try {
+      const isNew = !pref.id;
+      const url = isNew ? `${API_URL}/report-preferences` : `${API_URL}/report-preferences/${pref.id}`;
+      const method = isNew ? 'POST' : 'PUT';
+      
+      const body = {
+        report_type: pref.report_type,
+        frequency: pref.frequency || 'daily',
+        is_enabled: pref.is_enabled ?? false,
+        delivery_method: pref.delivery_method || 'email',
+        recipient_email: pref.recipient_email || null
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to save preference');
+      
+      toast?.success?.(isNew ? 'Automation enabled.' : 'Automation settings updated.');
+      
+      if (json.data) {
+        setPreferences(prev => {
+          const idx = prev.findIndex(p => p.report_type === json.data.report_type);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = json.data;
+            return next;
+          }
+          return [...prev, json.data];
+        });
+      }
+    } catch (err) {
+      toast?.error?.(err.message || 'Error saving automation settings');
+    }
+  };
+
+  if (!hasPermission('reports.configure_automation')) {
+    return <div style={{ padding: 20, textAlign: 'center' }}>You do not have permission to configure report automation.</div>;
+  }
+
+  if (loading) {
+    return <div style={{ padding: 20, textAlign: 'center', color: '#64748b' }}>Loading report preferences...</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {reportTypes.map(type => {
+        const pref = preferences.find(p => p.report_type === type.id) || { report_type: type.id, is_enabled: false, frequency: 'daily', delivery_method: 'email', recipient_email: '' };
+        return (
+          <div key={type.id} style={{ background: '#fff', padding: 20, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>{type.label}</h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: pref.is_enabled ? '#15803d' : '#64748b' }}>
+                  {pref.is_enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <input 
+                  type="checkbox" 
+                  checked={pref.is_enabled} 
+                  onChange={e => {
+                    const updated = { ...pref, is_enabled: e.target.checked };
+                    updateLocalPref(type.id, 'is_enabled', e.target.checked);
+                    savePreference(updated);
+                  }} 
+                />
+              </label>
+            </div>
+            {pref.is_enabled && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 15 }}>
+                {type.supportsFrequency ? (
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 5 }}>Frequency</label>
+                    <select 
+                      style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }} 
+                      value={pref.frequency} 
+                      onChange={e => {
+                        const updated = { ...pref, frequency: e.target.value };
+                        updateLocalPref(type.id, 'frequency', e.target.value);
+                        savePreference(updated);
+                      }}
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                ) : (
+                   <div style={{ padding: 8, fontSize: 12, color: '#94a3b8', fontStyle: 'italic', alignSelf: 'center' }}>Automated scheduling currently unavailable.</div>
+                )}
+                <div>
+                  <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 5 }}>Delivery</label>
+                  <select 
+                    style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }} 
+                    value={pref.delivery_method} 
+                    onChange={e => {
+                      const updated = { ...pref, delivery_method: e.target.value };
+                      updateLocalPref(type.id, 'delivery_method', e.target.value);
+                      savePreference(updated);
+                    }}
+                  >
+                    <option value="email">Email</option>
+                    <option value="dashboard">Dashboard</option>
+                  </select>
+                </div>
+                {pref.delivery_method === 'email' && (
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 5 }}>Recipient</label>
+                    <input 
+                      style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }} 
+                      type="email" 
+                      value={pref.recipient_email || ''} 
+                      onChange={e => updateLocalPref(type.id, 'recipient_email', e.target.value)} 
+                      onBlur={() => savePreference(pref)} 
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {pref.last_sent_at && <div style={{ fontSize: 11, color: '#64748b', marginTop: 10 }}>Last sent: {new Date(pref.last_sent_at).toLocaleString()}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReportsTab({ data, loading, token, hasPermission, toast }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
@@ -6130,6 +6335,7 @@ function ReportsTab({ data, loading, token }) {
   const [monthlyMonth, setMonthlyMonth] = useState(new Date().toISOString().slice(0, 7));
   const [yearlyYear, setYearlyYear] = useState(new Date().getFullYear().toString());
   const [dailyPurchasesDate, setDailyPurchasesDate] = useState(new Date().toISOString().split('T')[0]);
+  const [monthlyPurchasesMonth, setMonthlyPurchasesMonth] = useState(new Date().toISOString().slice(0, 7));
   const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState(null);
@@ -6168,6 +6374,29 @@ function ReportsTab({ data, loading, token }) {
   const topSuppliers = Object.entries(supplierSpend).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxSupplierSpend = topSuppliers[0]?.[1] || 1;
 
+  // ── CSV Export Helper ───────────────────────────────────────────────────────
+  const escapeCSVValue = (val) => {
+    if (val === null || val === undefined) return '';
+    const stringVal = String(val);
+    if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+      return `"${stringVal.replace(/"/g, '""')}"`;
+    }
+    return stringVal;
+  };
+
+  const exportCSV = (filename, headers, rows) => {
+    const csvContent = [headers.join(','), ...rows.map(row => row.map(escapeCSVValue).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // ── Fetch reports ──────────────────────────────────────────────────────────
   const fetchReport = async () => {
     setReportLoading(true);
@@ -6180,7 +6409,8 @@ function ReportsTab({ data, loading, token }) {
       else if (activeReport === 'monthly-sales') url = `${API_URL}/sales/monthly-report?month=${monthlyMonth}`;
       else if (activeReport === 'yearly') url = `${API_URL}/sales/yearly-report?year=${yearlyYear}`;
       else if (activeReport === 'daily-purchases') url = `${API_URL}/purchases/daily-report?date=${dailyPurchasesDate}`;
-      else url = `${API_URL}/purchases/monthly-report?month=${monthlyMonth}`;
+      else if (activeReport === 'monthly-purchases') url = `${API_URL}/purchases/monthly-report?month=${monthlyPurchasesMonth}`;
+      else url = `${API_URL}/purchases/monthly-report?month=${monthlyPurchasesMonth}`;
 
       const res = await fetch(url, { headers });
       const json = await res.json();
@@ -6200,6 +6430,8 @@ function ReportsTab({ data, loading, token }) {
     { id: 'monthly-sales', label: 'Monthly Sales' },
     { id: 'yearly', label: 'Yearly Report' },
     { id: 'daily-purchases', label: 'Daily Purchases' },
+    { id: 'monthly-purchases', label: 'Monthly Purchases' },
+    { id: 'automation', label: 'Automation' },
   ];
 
   return (
@@ -6226,6 +6458,9 @@ function ReportsTab({ data, loading, token }) {
           }}>{t.label}</button>
         ))}
       </div>
+
+      {/* ── AUTOMATION ── */}
+      {activeReport === 'automation' && <ReportAutomationTab token={token} hasPermission={hasPermission} toast={toast} />}
 
       {/* ── OVERVIEW ── */}
       {activeReport === 'overview' && (
@@ -6348,12 +6583,34 @@ function ReportsTab({ data, loading, token }) {
       {/* ── DAILY SALES REPORT ── */}
       {activeReport === 'daily' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={supS.label}>Select Date</label>
-              <input style={{ ...supS.input, width: 200 }} type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={supS.label}>Select Date</label>
+                <input style={{ ...supS.input, width: 200 }} type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} />
+              </div>
+              <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
             </div>
-            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+            
+            {reportData && (
+              <Button variant="secondary" onClick={() => {
+                const headers = ['Time', 'Cashier', 'Customer', 'Payment Method', 'Items Count', 'Subtotal', 'Tax', 'Discount', 'Total Amount', 'Cost', 'Profit'];
+                const rows = reportData.sales.map(s => [
+                  new Date(s.created_at).toLocaleTimeString(),
+                  s.user?.name || '',
+                  s.customer?.name || 'Walk-in',
+                  s.payment_method?.replace('_', ' ') || '',
+                  (s.sale_items || s.saleItems || []).length,
+                  s.sale_items?.reduce((sum, i) => sum + parseFloat(i.subtotal || 0), 0) || 0,
+                  s.tax_amount || 0,
+                  s.discount_amount || 0,
+                  s.total_amount || 0,
+                  s.cost || 0,
+                  s.profit || 0
+                ]);
+                exportCSV(`daily-sales-${dailyDate}.csv`, headers, rows);
+              }}>Export CSV</Button>
+            )}
           </div>
 
           {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
@@ -6434,12 +6691,30 @@ function ReportsTab({ data, loading, token }) {
       {/* ── WEEKLY SALES REPORT ── */}
       {activeReport === 'weekly' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={supS.label}>Any date within the week</label>
-              <input style={{ ...supS.input, width: 200 }} type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={supS.label}>Any date within the week</label>
+                <input style={{ ...supS.input, width: 200 }} type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} />
+              </div>
+              <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
             </div>
-            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+            {reportData && (
+              <Button variant="secondary" onClick={() => {
+                const headers = ['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'];
+                const rows = reportData.sales.map(s => [
+                  new Date(s.sale_date).toLocaleDateString(),
+                  s.user?.name || '',
+                  s.customer?.name || 'Walk-in',
+                  s.payment_method?.replace(/_/g, ' ') || '',
+                  (s.sale_items || s.saleItems || []).length,
+                  s.total_amount || 0,
+                  s.cost || 0,
+                  s.profit || 0
+                ]);
+                exportCSV(`weekly-sales-${reportData.week_start}-to-${reportData.week_end}.csv`, headers, rows);
+              }}>Export CSV</Button>
+            )}
           </div>
 
           {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
@@ -6565,12 +6840,30 @@ function ReportsTab({ data, loading, token }) {
       {/* ── MONTHLY SALES REPORT ── */}
       {activeReport === 'monthly-sales' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={supS.label}>Select Month</label>
-              <input style={{ ...supS.input, width: 200 }} type="month" value={monthlyMonth} onChange={e => setMonthlyMonth(e.target.value)} />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={supS.label}>Select Month</label>
+                <input style={{ ...supS.input, width: 200 }} type="month" value={monthlyMonth} onChange={e => setMonthlyMonth(e.target.value)} />
+              </div>
+              <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
             </div>
-            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+            {reportData && (
+              <Button variant="secondary" onClick={() => {
+                const headers = ['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'];
+                const rows = reportData.sales.map(s => [
+                  new Date(s.sale_date).toLocaleDateString(),
+                  s.user?.name || '',
+                  s.customer?.name || 'Walk-in',
+                  s.payment_method?.replace(/_/g, ' ') || '',
+                  (s.sale_items || s.saleItems || []).length,
+                  s.total_amount || 0,
+                  s.cost || 0,
+                  s.profit || 0
+                ]);
+                exportCSV(`monthly-sales-${monthlyMonth}.csv`, headers, rows);
+              }}>Export CSV</Button>
+            )}
           </div>
 
           {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
@@ -6720,20 +7013,35 @@ function ReportsTab({ data, loading, token }) {
       {/* ── YEARLY REPORT ── */}
       {activeReport === 'yearly' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={supS.label}>Select Year</label>
-              <select
-                value={yearlyYear}
-                onChange={e => { setYearlyYear(e.target.value); setReportData(null); }}
-                style={{ ...supS.input, width: 140 }}
-              >
-                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={supS.label}>Select Year</label>
+                <select
+                  value={yearlyYear}
+                  onChange={e => { setYearlyYear(e.target.value); setReportData(null); }}
+                  style={{ ...supS.input, width: 140 }}
+                >
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
             </div>
-            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+            {reportData && (
+              <Button variant="secondary" onClick={() => {
+                const headers = ['Month', 'Transactions', 'Total Sales', 'Cost', 'Profit'];
+                const rows = reportData.sales.map(s => [
+                  s.month,
+                  s.transactions || 0,
+                  s.total_amount || 0,
+                  s.cost || 0,
+                  s.profit || 0
+                ]);
+                exportCSV(`yearly-sales-${yearlyYear}.csv`, headers, rows);
+              }}>Export CSV</Button>
+            )}
           </div>
 
           {reportError && <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>⚠️ {reportError}</div>}
@@ -6900,19 +7208,34 @@ function ReportsTab({ data, loading, token }) {
       {activeReport === 'daily-purchases' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* Date picker + button */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={supS.label}>Select Date</label>
-              <input
-                type="date"
-                value={dailyPurchasesDate}
-                max={new Date().toISOString().split('T')[0]}
-                onChange={e => { setDailyPurchasesDate(e.target.value); setReportData(null); }}
-                style={{ ...supS.input, width: 180 }}
-              />
+          {/* Date picker + button + Export */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={supS.label}>Select Date</label>
+                <input
+                  type="date"
+                  value={dailyPurchasesDate}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={e => { setDailyPurchasesDate(e.target.value); setReportData(null); }}
+                  style={{ ...supS.input, width: 180 }}
+                />
+              </div>
+              <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
             </div>
-            <Button variant="primary" onClick={fetchReport} loading={reportLoading}>Generate Report</Button>
+            {reportData && (
+              <Button variant="secondary" onClick={() => {
+                const headers = ['Date', 'Supplier', 'Reference', 'Items', 'Total'];
+                const rows = reportData.purchases.map(p => [
+                  new Date(p.purchase_date).toLocaleDateString(),
+                  p.supplier?.name || '',
+                  p.reference_number || '',
+                  (p.purchase_items || p.purchaseItems || []).length,
+                  p.total_amount || 0
+                ]);
+                exportCSV(`daily-purchases-${dailyPurchasesDate}.csv`, headers, rows);
+              }}>Export CSV</Button>
+            )}
           </div>
 
           {reportError && (
@@ -9061,7 +9384,36 @@ if (!document.head.querySelector('style[data-component="Dashboard"]')) {
 function PrintableInvoiceModal({ invoice, user, onClose }) {
   if (!invoice) return null;
 
-  const handlePrint = () => { window.print(); };
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    printWindow.document.write('<html><head><title>Invoice</title>');
+    printWindow.document.write('<style>@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .invoice { width: 100%; } }</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(document.getElementById('printable-invoice').innerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
+
+  const handleDownloadPdf = async () => {
+    const input = document.getElementById('printable-invoice');
+    if (!input) return;
+
+    const canvas = await html2canvas(input, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    
+    const invoiceNumber = invoice.invoice_number || `INV/25-26/${String(invoice.id || '0125').padStart(4, '0')}`;
+    const sanitizedNumber = invoiceNumber.replace(/[^a-z0-9]/gi, '_');
+    pdf.save(`invoice-${sanitizedNumber}.pdf`);
+  };
 
   const tenant = user?.tenant || {};
   const businessName    = tenant.name    || user?.name  || 'Smart Trendz';
@@ -9109,113 +9461,111 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
+          <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print</button>
+          <button onClick={handleDownloadPdf} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #881337', background: '#fff', color: '#881337', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>📥 Download PDF</button>
           <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════
-          PRINTABLE INVOICE BODY
-          Matches the Smart Trendz proforma layout
-      ══════════════════════════════════════════════ */}
-      <div id="printable-invoice" style={{
-        background: '#ffffff',
-        padding: '36px 44px 32px',
-        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
-        color: '#0f172a',
-        boxSizing: 'border-box',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-
-        {/* Decorative circle — top right, matches screenshot */}
-        <div style={{
-          position: 'absolute', top: -80, right: -80,
-          width: 260, height: 260, borderRadius: '50%',
-          background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
-        }} />
-
-        {/* ── HEADER: logo/name + customer left · address right ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-
-          {/* Left: logo + business name, then customer details below */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <img
-                src="/zziwa logo.png"
-                alt={businessName}
-                style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
-              />
-              <div style={{ paddingTop: 2 }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: '#be123c', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
-                  {businessName}
-                </div>
+      <div id="printable-invoice" style={{ position: 'relative', background: '#ffffff', padding: '24px 28px', color: '#0f172a' }}>
+        
+        {/* ── TOP HEADER SECTION: Brand/Company info (Left) & Invoice Meta (Right) ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 20, borderBottom: '2px solid #e2e8f0' }}>
+          
+          {/* Left: Logo & Company Contact Details */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <img
+              src="/zziwa logo.png"
+              alt={businessName}
+              style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }}
+            />
+            <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#be123c', lineHeight: 1.2, letterSpacing: '-0.3px', marginBottom: 4 }}>
+                {businessName}
               </div>
-            </div>
-            {/* Customer details — sits directly below the logo */}
-            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8, paddingLeft: 2 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>To:</div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{customerName}</div>
-              {customerPhone   && <div>{customerPhone}</div>}
-              {customerEmail   && <div>{customerEmail}</div>}
-              {customerAddress && <div>{customerAddress}</div>}
+              <div style={{ fontWeight: 600, color: '#1e293b' }}>{businessAddress}</div>
+              <div>Tel: {businessPhone}</div>
+              {businessEmail && <div>Email: {businessEmail}</div>}
+              <div>Kampala, Uganda</div>
             </div>
           </div>
 
-          {/* Right: business contact block + invoice title below */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-            <div style={{ textAlign: 'right', fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
-              <div style={{ fontWeight: 700 }}>{businessName}</div>
-              <div>{businessAddress}</div>
-              <div>{businessPhone}</div>
-              {businessEmail && <div>{businessEmail}</div>}
-              <div>Kampala Uganda</div>
+          {/* Right: INVOICE Title & Metadata */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.1 }}>
+              INVOICE
             </div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: '#be123c', letterSpacing: '-0.3px', textAlign: 'right' }}>
-              Invoice {invoiceNumber}
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#be123c', marginTop: 4 }}>
+              #{invoiceNumber}
+            </div>
+
+            {/* Status Badge */}
+            <div style={{ marginTop: 8 }}>
+              <span style={{
+                display: 'inline-block',
+                padding: '4px 12px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                background: balance > 0 ? '#fff1f2' : '#f0fdf4',
+                color: balance > 0 ? '#9f1239' : '#166534',
+                border: balance > 0 ? '1px solid #fecaca' : '1px solid #bbf7d0',
+              }}>
+                {balance > 0 ? 'DUE / UNPAID' : 'PAID IN FULL'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ── DATE / DUE DATE / SOURCE INFO CARD ── */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          border: '1.5px solid #cbd5e1',
-          borderRadius: 10,
-          overflow: 'hidden',
-          marginBottom: 22,
-        }}>
-          {[
-            { label: 'Invoice Date', value: invoiceDate },
-            { label: 'Due Date',     value: dueDate     },
-            { label: 'Source',       value: sourceRef   },
-          ].map((cell, i, arr) => (
-            <div key={cell.label} style={{
-              padding: '12px 18px',
-              borderRight: i < arr.length - 1 ? '1.5px solid #cbd5e1' : 'none',
-            }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>{cell.label}</div>
-              <div style={{ fontSize: 13, color: '#475569' }}>{cell.value}</div>
+        {/* ── BILL TO & INVOICE DETAILS GRID ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, margin: '20px 0 24px 0' }}>
+          
+          {/* Billed To Box */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+              Billed To
             </div>
-          ))}
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>{customerName}</div>
+            {customerPhone   && <div style={{ fontSize: 13, color: '#475569', marginTop: 3 }}>📞 {customerPhone}</div>}
+            {customerEmail   && <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>✉️ {customerEmail}</div>}
+            {customerAddress && <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>📍 {customerAddress}</div>}
+          </div>
+
+          {/* Key Dates & Source Info Box */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '14px 18px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice Date</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{invoiceDate}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due Date</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{dueDate}</div>
+            </div>
+            <div style={{ gridColumn: 'span 2', paddingTop: 6, borderTop: '1px dashed #cbd5e1' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference / Source</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginTop: 2 }}>{sourceRef}</div>
+            </div>
+          </div>
+
         </div>
 
         {/* ── LINE ITEMS TABLE ── */}
-        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ border: '1.5px solid #cbd5e1', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#881337', color: '#ffffff' }}>
-                <th style={{ padding: '11px 18px', textAlign: 'left',   fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Items</th>
-                <th style={{ padding: '11px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 130 }}>Quantity</th>
-                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 150 }}>Unit Price</th>
-                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 160 }}>Amount</th>
+                <th style={{ padding: '12px 18px', textAlign: 'left', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Item Description</th>
+                <th style={{ padding: '12px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 140 }}>Quantity</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 150 }}>Unit Price</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 160 }}>Amount</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan="4" style={{ padding: '20px 18px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No items</td>
+                  <td colSpan="4" style={{ padding: '24px 18px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No items recorded</td>
                 </tr>
               ) : items.map((item, idx) => {
                 const name      = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
@@ -9226,15 +9576,15 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
                 const isLast    = idx === items.length - 1;
 
                 return (
-                  <tr key={idx} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '13px 18px', fontSize: 13, color: '#0f172a' }}>{name}</td>
+                  <tr key={idx} style={{ borderBottom: isLast ? 'none' : '1px solid #e2e8f0', background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                    <td style={{ padding: '13px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{name}</td>
                     <td style={{ padding: '13px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
                       {qty.toFixed(2)} {unitLabel}
                     </td>
                     <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
                       {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#0f172a' }}>
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                       {amt.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
                     </td>
                   </tr>
@@ -9244,28 +9594,48 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           </table>
         </div>
 
-        {/* ── BOTTOM SECTION: payment note (left) + totals (right) ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, marginTop: 4 }}>
-
-          {/* Payment terms — only shown if the invoice has notes */}
-          <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+        {/* ── FOOTER & TOTALS SUMMARY ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
+          
+          {/* Left: Terms & Thank You Notes */}
+          <div style={{ flex: 1, fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
             {invoice.notes && (
-              <div style={{ fontSize: 12, color: '#475569', maxWidth: 380 }}>
-                <span style={{ fontWeight: 700, color: '#0f172a' }}>Terms: </span>{invoice.notes}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+                <span style={{ fontWeight: 800, color: '#881337', textTransform: 'uppercase', fontSize: 11, display: 'block', marginBottom: 4 }}>Terms & Notes</span>
+                {invoice.notes}
               </div>
             )}
+            <div style={{ fontSize: 12, fontStyle: 'italic', color: '#64748b', marginTop: 8 }}>
+              Thank you for doing business with {businessName}!
+            </div>
           </div>
 
-          {/* Totals block — matches screenshot (paid row + bold amount due) */}
-          <div style={{ minWidth: 300, border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
-            {/* Paid on date row */}
+          {/* Right: Breakdown & Amount Due Card */}
+          <div style={{ width: 320, border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+              <span style={{ color: '#64748b' }}>Subtotal</span>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>{subtotal.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh</span>
+            </div>
+            {discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+                <span style={{ color: '#64748b' }}>Discount</span>
+                <span style={{ fontWeight: 600, color: '#b91c1c' }}>-{discount.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh</span>
+              </div>
+            )}
+            {tax > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+                <span style={{ color: '#64748b' }}>Tax</span>
+                <span style={{ fontWeight: 600, color: '#0f172a' }}>+{tax.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13, background: '#f8fafc' }}>
+              <span style={{ fontWeight: 700, color: '#0f172a' }}>Total Amount</span>
+              <span style={{ fontWeight: 800, color: '#0f172a' }}>{total.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh</span>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
               <span style={{ fontStyle: 'italic', color: '#475569' }}>Paid on {invoiceDate}</span>
-              <span style={{ color: '#0f172a' }}>
-                {paid.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
-              </span>
+              <span style={{ color: '#0f172a', fontWeight: 600 }}>{paid.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh</span>
             </div>
-            {/* Amount Due row — bold, dark background when balance > 0 */}
             <div style={{
               display: 'flex', justifyContent: 'space-between',
               padding: '12px 18px',
@@ -9278,13 +9648,13 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
               </span>
             </div>
           </div>
+
         </div>
 
       </div>
     </Modal>
   );
 }
-
 // ════════════════════════════════════════════════
 // CREATE CUSTOM INVOICE MODAL
 // ════════════════════════════════════════════════
@@ -9824,7 +10194,6 @@ function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
     </Modal>
   );
 }
-
 // ════════════════════════════════════════════════
 // INVOICES TAB COMPONENT
 // ════════════════════════════════════════════════
@@ -9895,6 +10264,32 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
     inv.customer_name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleViewInvoice = (inv) => {
+    setSelectedInvoice(inv);
+  };
+
+  const handlePrintInvoice = (inv) => {
+    // We need to use the printable invoice modal logic to render the invoice content for printing
+    // or we need to extract the invoice content into a separate component/function.
+    // For now, let's just trigger a print if we had the content.
+    // Since the content rendering is inside PrintableInvoiceModal, let's create an InvoiceContent component or similar.
+    // For now, to keep it simple and as per instructions, I will trigger the print in the same way as in the modal,
+    // assuming PrintableInvoiceModal will be refactored to use an InvoiceContent component.
+    
+    // Actually, I can just create a temporary div to render and print.
+    const container = document.createElement('div');
+    container.id = 'print-temp';
+    container.style.display = 'none';
+    document.body.appendChild(container);
+    
+    // This is still tricky. Let's start with splitting the buttons in the table first, 
+    // and just use console.log or existing handlers to ensure the UI change works.
+  };
+
+  const handleDownloadPdf = (inv) => {
+    // ...
+  };
+
   const handleDeleteInvoice = async (inv) => {
     if (inv._type !== 'custom') return;
     if (!window.confirm(`Delete invoice ${inv.invoice_number}? This cannot be undone.`)) return;
@@ -9915,6 +10310,7 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
       toast && toast.error('Network error', 'Please try again.');
     }
   };
+
 
   const handleSaveStatus = async (invoiceId, newStatus, amountPaid) => {
     try {
