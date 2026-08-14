@@ -1724,10 +1724,10 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
   const categoryFormJsx = (onCancel) => (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={catS.label}>Category Name *</label>
+        <label style={catS.label}>Category Name (Required)</label>
         <input
           style={{ ...catS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }}
-          placeholder="e.g. Electronics"
+          placeholder="e.g., Spring Mattresses, Memory Foam, Bedding Sheets, Pillows"
           value={form.name}
           onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
           autoFocus
@@ -1735,10 +1735,10 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
         {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.name}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={catS.label}>Description (optional)</label>
+        <label style={catS.label}>Category Description (Optional)</label>
         <textarea
           style={{ ...catS.input, minHeight: 80, resize: 'vertical', borderColor: fieldErrors.description ? '#dc2626' : '#e2e8f0' }}
-          placeholder="Brief description of this category…"
+          placeholder="e.g., High-quality memory foam mattresses in various sizes"
           value={form.description}
           onChange={e => { setForm(f => ({ ...f, description: e.target.value })); if (fieldErrors.description) setFieldErrors(prev => ({ ...prev, description: null })); }}
         />
@@ -2184,30 +2184,30 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {/* Row 1: Name (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier Name *</label>
-            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g. Kampala Distributors" value={form.name}
+            <label style={supS.label}>Supplier Company Name (Required)</label>
+            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g., Foam Factory Ltd, Textile Suppliers Uganda" value={form.name}
               onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }} />
             {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.name}</span>}
           </div>
           {/* Row 2: Contact + Email side by side */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Contact / Phone</label>
+              <label style={supS.label}>Supplier Phone Number</label>
               <input style={{ ...supS.input, borderColor: fieldErrors.contact ? '#dc2626' : '#e2e8f0' }} placeholder="+256 700 000 000" value={form.contact}
                 onChange={e => { setForm(f => ({ ...f, contact: e.target.value })); if (fieldErrors.contact) setFieldErrors(prev => ({ ...prev, contact: null })); }} />
               {fieldErrors.contact && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.contact}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Email</label>
-              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="supplier@example.com" value={form.email}
+              <label style={supS.label}>Supplier Email Address</label>
+              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="contact@supplier.com" value={form.email}
                 onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }} />
               {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.email}</span>}
             </div>
           </div>
           {/* Row 3: Address (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Address</label>
-            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="Street, City, Country" value={form.address}
+            <label style={supS.label}>Supplier Physical Address</label>
+            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="e.g., Plot 123, Industrial Area, Kampala" value={form.address}
               onChange={e => { setForm(f => ({ ...f, address: e.target.value })); if (fieldErrors.address) setFieldErrors(prev => ({ ...prev, address: null })); }} />
             {fieldErrors.address && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.address}</span>}
           </div>
@@ -2434,13 +2434,13 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
 
             <div style={custS.field}>
               <label style={custS.label}>
-                Full Name<span style={custS.required}>*</span>
+                Customer Full Name (Required)<span style={custS.required}>*</span>
               </label>
               <div style={{ ...custS.inputWrap, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>👤</span>
                 <input
                   style={custS.input}
-                  placeholder="e.g. Jane Nakato"
+                  placeholder="e.g., Jane Nakato, Hotel Manager"
                   value={form.name}
                   onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
@@ -2452,7 +2452,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
             </div>
 
             <div style={custS.field}>
-              <label style={custS.label}>Phone Number</label>
+              <label style={custS.label}>Customer Phone Number</label>
               <div style={{ ...custS.inputWrap, borderColor: fieldErrors.phone ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>📞</span>
                 <input
@@ -2468,12 +2468,12 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
               {fieldErrors.phone ? (
                 <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.phone}</span>
               ) : (
-                <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+                <p style={custS.hint}>For order confirmations and delivery coordination</p>
               )}
             </div>
 
             <div style={custS.field}>
-              <label style={custS.label}>Email Address</label>
+              <label style={custS.label}>Customer Email Address</label>
               <div style={{ ...custS.inputWrap, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>✉️</span>
                 <input
@@ -5643,9 +5643,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
           {/* Supplier */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier *</label>
+            <label style={supS.label}>Select Supplier (Required)</label>
             <select style={{ ...supS.input, borderColor: fieldErrors.supplier ? '#dc2626' : '#e2e8f0' }} value={supplierId} onChange={e => { setSupplierId(e.target.value); if (fieldErrors.supplier) setFieldErrors(prev => ({ ...prev, supplier: null })); }}>
-              <option value="">— Select supplier —</option>
+              <option value="">— Choose supplier for this purchase —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             {fieldErrors.supplier && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.supplier}</span>}
@@ -5654,7 +5654,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           {/* Product Lines */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={supS.label}>Products *</label>
+              <label style={supS.label}>Purchase Items (Required)</label>
               <button type="button" onClick={addLine} style={{ fontSize: 13, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 + Add Line
               </button>
@@ -5698,19 +5698,19 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                 {line.mode === 'existing' && (
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product (Required)</span>
                       <select style={inp} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
-                        <option value="">— Select product —</option>
+                        <option value="">— Choose inventory product —</option>
                         {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
                       </select>
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Quantity (Required)</span>
                       <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
                         onChange={e => setLine(i, 'quantity', e.target.value)} />
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
                       <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
                         onChange={e => setLine(i, 'cost_price', e.target.value)} />
                     </div>
@@ -5724,18 +5724,18 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 1: Name + SKU + Barcode */}
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name *</span>
-                        <input style={inp} placeholder="e.g. Brown Sugar 1kg" value={line.np_name}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name (Required)</span>
+                        <input style={inp} placeholder="e.g., Memory Foam Mattress Queen Size" value={line.np_name}
                           onChange={e => setLine(i, 'np_name', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU</span>
-                        <input style={inp} placeholder="e.g. SGR-001" value={line.np_sku}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU Code</span>
+                        <input style={inp} placeholder="e.g., MAT-QN-001" value={line.np_sku}
                           onChange={e => setLine(i, 'np_sku', e.target.value)} />
                       </div>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Barcode</span>
-                        <input style={inp} placeholder="Scan or type" value={line.np_barcode}
+                        <input style={inp} placeholder="Scan barcode" value={line.np_barcode}
                           onChange={e => setLine(i, 'np_barcode', e.target.value)} />
                       </div>
                     </div>
@@ -5743,7 +5743,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 2: Unit + Category */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit of Measure</span>
                         <select style={inp} value={line.np_unit}
                           onChange={e => setLine(i, 'np_unit', e.target.value)}>
                           <option value="">— Select unit —</option>
@@ -5753,7 +5753,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                         </select>
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Category</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Category</span>
                         <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
                           {['existing', 'new'].map(m => (
                             <button
@@ -5781,7 +5781,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                             ))}
                           </select>
                         ) : (
-                          <input style={inp} placeholder="Type new category name"
+                          <input style={inp} placeholder="e.g., Orthopedic Mattresses"
                             value={line.np_new_category}
                             onChange={e => setLine(i, 'np_new_category', e.target.value)} />
                         )}
@@ -5791,22 +5791,22 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 3: Selling Price + Reorder + Qty + Cost Price */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Selling Price (UGX) *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Retail Price (UGX) (Required)</span>
                         <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.np_price}
                           onChange={e => setLine(i, 'np_price', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Reorder Level</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Low Stock Alert Level</span>
                         <input style={inp} type="number" min="0" placeholder="0" value={line.np_reorder}
                           onChange={e => setLine(i, 'np_reorder', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty Purchased *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Quantity (Required)</span>
                         <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
                           onChange={e => setLine(i, 'quantity', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
                         <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
@@ -5814,9 +5814,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
                     {/* Description */}
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Description (optional)</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Description (Optional)</span>
                       <textarea style={{ ...inp, minHeight: 56, resize: 'vertical' }}
-                        placeholder="Optional product description…"
+                        placeholder="e.g., 12-inch thick memory foam with cooling gel technology"
                         value={line.np_description}
                         onChange={e => setLine(i, 'np_description', e.target.value)} />
                     </div>
@@ -8323,21 +8323,21 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
             {/* Row 1: Name + Email */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Full Name *</label>
-                <input style={supS.input} placeholder="John Doe" value={form.name}
+                <label style={supS.label}>Staff Full Name (Required)</label>
+                <input style={supS.input} placeholder="e.g., John Mukasa" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Email *</label>
-                <input style={supS.input} type="email" placeholder="user@business.com" value={form.email}
+                <label style={supS.label}>Staff Email Address (Required)</label>
+                <input style={supS.input} type="email" placeholder="staff@zziwa.com" value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
               </div>
             </div>
 
             {/* Password */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>{editTarget ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
-              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Min 8 chars, upper, lower, number'}
+              <label style={supS.label}>{editTarget ? 'New Password (Leave blank to keep current)' : 'Create Password (Required)'}</label>
+              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Minimum 8 characters with uppercase, lowercase & number'}
                 value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required={!editTarget} minLength={editTarget ? 0 : 8} />
             </div>
@@ -8376,7 +8376,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
 
             {/* ── PREDEFINED ROLE PICKER ── */}
             {(!form.useCustomRole || editTarget) && !(editTarget && form.editCustomRoleId) && (<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <label style={supS.label}>Assign Roles *</label>
+              <label style={supS.label}>Assign User Roles (Required)</label>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {roles.map(r => {

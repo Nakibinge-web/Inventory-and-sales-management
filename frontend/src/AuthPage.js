@@ -306,13 +306,13 @@ export default function AuthPage() {
               </Field>
             )}
 
-            <Field label="Email address" delay={0.1}>
+            <Field label="Business Email Address" delay={0.1}>
               <input className="field-input" name="email" type="email"
-                placeholder="you@business.com" value={form.email} onChange={handle} required />
+                placeholder="your-business@example.com" value={form.email} onChange={handle} required />
             </Field>
 
             <PasswordField
-              name="password" label="Password" placeholder="Enter your password"
+              name="password" label="Password" placeholder="Create a secure password (min 8 characters)"
               value={form.password} onChange={handle}
               showStrength={!isLogin} delay={0.15}
             />
@@ -320,27 +320,27 @@ export default function AuthPage() {
             {!isLogin && (
               <>
                 <PasswordField
-                  name="password_confirmation" label="Confirm password"
-                  placeholder="Repeat your password"
+                  name="password_confirmation" label="Confirm Password"
+                  placeholder="Re-enter your password to confirm"
                   value={form.password_confirmation} onChange={handle}
                   delay={0.2}
                 />
 
-                <div className="section-divider">Business details</div>
+                <div className="section-divider">Business Information</div>
 
-                <Field label="Business name" delay={0.25}>
-                  <input className="field-input" name="business_name" placeholder="Acme Ltd."
+                <Field label="Business/Shop Name" delay={0.25}>
+                  <input className="field-input" name="business_name" placeholder="e.g., Zziwa & Sons Trading Ltd"
                     value={form.business_name} onChange={handle} required />
                 </Field>
 
-                <Field label="Phone number" delay={0.3}>
+                <Field label="Business Phone Number" delay={0.3}>
                   <input className="field-input" name="phone" type="tel"
-                    placeholder="+256 700 000 000" value={form.phone} onChange={handle} />
+                    placeholder="e.g., +256 700 000 000 or 0700 000 000" value={form.phone} onChange={handle} />
                 </Field>
 
-                <Field label="Business address" delay={0.35}>
+                <Field label="Business Physical Address" delay={0.35}>
                   <textarea className="field-input" name="address"
-                    placeholder="Street, City, Country"
+                    placeholder="e.g., Shop 311, Level 3, Kooki Tower Kampala"
                     value={form.address} onChange={handle} />
                 </Field>
               </>
