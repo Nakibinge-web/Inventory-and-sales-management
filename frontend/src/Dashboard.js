@@ -115,6 +115,50 @@ export default function Dashboard({ user, token, onLogout }) {
     }
   }, [user.tenant_id, token]);
 
+  // Lightweight refresh for notifications only (doesn't show loading spinner)
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      const safeJson = async (res) => {
+        if (!res.ok) return { data: [] };
+        try { return await res.json(); } catch { return { data: [] }; }
+      };
+
+      // Only fetch data needed for notifications: products (for stock), latest sales, latest purchases
+      const [productsRes, salesRes, purchasesRes] = await Promise.all([
+        fetch(`${API}/products?tenant_id=${user.tenant_id}`, { headers }),
+        fetch(`${API}/sales?tenant_id=${user.tenant_id}&limit=10`, { headers }), // Only get latest 10
+        fetch(`${API}/purchases?tenant_id=${user.tenant_id}&limit=10`, { headers }), // Only get latest 10
+      ]);
+
+      const [products, sales, purchases] = await Promise.all([
+        safeJson(productsRes),
+        safeJson(salesRes),
+        safeJson(purchasesRes),
+      ]);
+
+      // Update only the notification-relevant data without disrupting other state
+      setData(prev => ({
+        ...prev,
+        products: products.data || prev.products,
+        sales: sales.data || prev.sales,
+        purchases: purchases.data || prev.purchases,
+        stats: {
+          ...prev.stats,
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
+        }
+      }));
+    } catch (err) {
+      console.error('Failed to refresh notifications:', err);
+      // Silent fail - don't disrupt user experience
+    }
+  }, [user.tenant_id, token]);
+
   const handleAddProduct = (newProduct) => {
     setData(prev => ({
       ...prev,
@@ -129,7 +173,15 @@ export default function Dashboard({ user, token, onLogout }) {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    
+    // Lightweight auto-refresh for notifications every 30 seconds
+    // Only updates stock levels, recent sales, and recent purchases
+    const notificationRefreshInterval = setInterval(() => {
+      refreshNotifications();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(notificationRefreshInterval);
+  }, [fetchData, refreshNotifications]);
 
   // ── Global search ──────────────────────────────────────────────────────────
   const handleSearch = (q) => {
@@ -333,7 +385,27 @@ export default function Dashboard({ user, token, onLogout }) {
               >
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
-                  <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button 
+                      onClick={() => refreshNotifications()} 
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        fontSize: 16, 
+                        color: '#4f46e5',
+                        padding: '4px',
+                        borderRadius: 4,
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f0f0ff'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      title="Refresh notifications"
+                    >
+                      🔄
+                    </button>
+                    <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                  </div>
                 </div>
                 
                 {/* Low/Out of Stock Section */}
@@ -600,21 +672,32 @@ export default function Dashboard({ user, token, onLogout }) {
                   const customerAlreadyExists = newCustomerEntry
                     ? prev.customers.some(c => c.id === newCustomerEntry.id)
                     : true;
+                  
+                  // Calculate new low stock count after sale
+                  const updatedProducts = prev.products.map(p => {
+                    const item = sale.sale_items?.find(i => i.product_id === p.id)
+                      || sale.saleItems?.find(i => i.product_id === p.id);
+                    return item ? { ...p, stock: p.stock - item.quantity } : p;
+                  });
+                  
                   return {
                     ...prev,
                     sales: [sale, ...prev.sales],
-                    stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
-                    products: prev.products.map(p => {
-                      const item = sale.sale_items?.find(i => i.product_id === p.id)
-                        || sale.saleItems?.find(i => i.product_id === p.id);
-                      return item ? { ...p, stock: p.stock - item.quantity } : p;
-                    }),
+                    stats: { 
+                      ...prev.stats, 
+                      totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0),
+                      lowStockCount: updatedProducts.filter(p => p.stock <= (p.reorder_level || 10)).length
+                    },
+                    products: updatedProducts,
                     customers: (!customerAlreadyExists && newCustomerEntry)
                       ? [...prev.customers, newCustomerEntry]
                       : prev.customers,
                   };
                 });
                 toast.success('Sale completed!', `UGX ${parseFloat(sale.total_amount || 0).toLocaleString()} recorded.`);
+                
+                // Refresh notifications to show updated stock levels
+                setTimeout(() => refreshNotifications(), 1000);
               }}
             />
           )}
@@ -2614,7 +2697,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState(null);
-  const [lastReceipt, setLastReceipt] = useState(null);
+  const [viewingSale, setViewingSale] = useState(null);
 
   // Customer selection state
   const [customerType, setCustomerType] = useState('walk_in');
@@ -2786,8 +2869,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
       });
       const data = await res.json();
       if (!res.ok) { setSaleError(data?.message || 'Checkout failed.'); return; }
-      setLastReceipt({ ...data.data, cartSnapshot: cart, paymentMethod, taxAmount, discountAmount, amountPaid: parseFloat(amountPaid) || cartTotal, changeAmount });
-      onSaleCompleted(data.data);
+      const saleWithDetails = data.data;
+      
+      // Auto-show receipt modal for printing with complete sale data
+      setViewingSale(saleWithDetails);
+      onSaleCompleted(saleWithDetails);
+      
       setCart([]);
       setSearch('');
       setCustomerType('walk_in');
@@ -2805,78 +2892,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     }
   };
 
-  if (lastReceipt) {
-    return (
-      <div style={styles.pageContainer}>
-        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Success banner */}
-          <div style={{ background: 'linear-gradient(135deg, #065f46, #16a34a)', borderRadius: 16, padding: '28px 32px', textAlign: 'center' }}>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <h2 style={{ margin: '0 0 6px', color: '#fff', fontSize: 22, fontWeight: 700 }}>Sale Complete</h2>
-            <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Transaction recorded successfully</p>
-          </div>
-
-          {/* Receipt */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
-            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || 'InventoryPro'}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{new Date().toLocaleString()}</div>
-            </div>
-            {lastReceipt.cartSnapshot.map(item => (
-              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '5px 0', color: '#475569' }}>
-                <span>{item.name} × {item.quantity}</span>
-                <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {item.subtotal.toLocaleString()}</span>
-              </div>
-            ))}
-            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12 }}>
-              {lastReceipt.discountAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#dc2626', marginBottom: 4 }}>
-                  <span>Discount</span>
-                  <span>− UGX {lastReceipt.discountAmount.toLocaleString()}</span>
-                </div>
-              )}
-              {lastReceipt.taxAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginBottom: 4 }}>
-                  <span>Tax</span>
-                  <span>+ UGX {lastReceipt.taxAmount.toLocaleString()}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, marginTop: 4 }}>
-                <span>Total</span>
-                <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
-              </div>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right', textTransform: 'capitalize' }}>
-              Payment: <strong>{lastReceipt.paymentMethod?.replace(/_/g, ' ')}</strong>
-            </div>
-            {lastReceipt.paymentMethod === 'cash' && (
-              <div style={{ marginTop: 8, borderTop: '1px dashed #e2e8f0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-                  <span>Amount Paid</span>
-                  <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {(lastReceipt.amountPaid || 0).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-                  <span>Change</span>
-                  <span style={{ fontWeight: 700, color: '#16a34a' }}>UGX {(lastReceipt.changeAmount || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button onClick={() => setLastReceipt(null)} style={{
-            padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-            background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-          }}>
-            New Sale
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // No longer need the lastReceipt view - receipt shows in modal instead
 
   return (
     <div style={styles.pageContainer}>
@@ -3257,13 +3273,13 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 disabled={cart.length === 0 || submitting || !canSell}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#16a34a',
+                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#be123c',
                   color: (cart.length === 0 || !canSell) ? '#94a3b8' : '#fff',
                   fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell) ? 'not-allowed' : 'pointer',
                   transition: 'background 0.15s', letterSpacing: '0.02em',
                 }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#15803d'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#16a34a'; }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#881337'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#be123c'; }}
               >
                 {!canSell ? 'No permission to sell' : submitting ? 'Processing…' : 'Complete Sale'}
               </button>
@@ -3271,6 +3287,214 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           </div>
         </div>
       </div>
+      
+      {/* Receipt Modal - Auto-shown after sale completion */}
+      {viewingSale && (
+        <Modal
+          isOpen={true}
+          onClose={() => setViewingSale(null)}
+          title=""
+          size="md"
+          footer={
+            <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 22 }}>✓</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>Sale Completed Successfully!</span>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Button variant="secondary" onClick={() => setViewingSale(null)}>Close &amp; New Sale</Button>
+                <Button
+                  variant="success"
+                  style={{ background: '#be123c', borderColor: '#be123c' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#881337'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
+                  onClick={() => {
+                  const src = document.getElementById('pos-receipt-content');
+                  if (!src) {
+                    alert('Receipt content not found. Please try again.');
+                    return;
+                  }
+                  
+                  const win = window.open('', '_blank', 'width=800,height=900');
+                  if (!win) {
+                    alert('Pop-up blocked. Please allow pop-ups for this site.');
+                    return;
+                  }
+                  
+                  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
+    @media print {
+      body { padding: 20px; }
+      button { display: none !important; }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+    
+    @media screen {
+      body {
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        margin: 20px auto;
+      }
+    }
+  </style>
+</head>
+<body>${src.innerHTML}</body>
+</html>`);
+                  win.document.close();
+                  
+                  // Wait for images to load
+                  win.addEventListener('load', () => {
+                    setTimeout(() => {
+                      win.focus();
+                      win.print();
+                    }, 500);
+                  });
+                }}
+              >
+                🖨️ Print / Save PDF
+              </Button>
+              </div>
+            </div>
+          }
+        >
+          {(() => {
+            const items = viewingSale.sale_items || viewingSale.saleItems || [];
+            const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
+            const discount = parseFloat(viewingSale.discount_amount) || 0;
+            const tax = parseFloat(viewingSale.tax_amount) || 0;
+            const total = parseFloat(viewingSale.total_amount) || 0;
+            const tenant = user?.tenant || {};
+            const tenantName = tenant.name || 'InventoryPro';
+            const businessPhone = tenant.phone || user?.phone || '0776 293691';
+            const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
+            const datePart = saleDate.replace(/-/g, '').slice(0, 8);
+            const saleId = String(viewingSale.id).padStart(4, '0');
+            const receiptRef = `SAL-${datePart}-${saleId}`;
+
+            return (
+              <div id="pos-receipt-content" style={{ fontFamily: 'inherit', position: 'relative' }}>
+                <div style={{
+                  position: 'absolute', top: -60, right: -60,
+                  width: 200, height: 200, borderRadius: '50%',
+                  background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+                }} />
+
+                <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
+                  <img
+                    src="/zziwa logo.png"
+                    alt={tenantName}
+                    style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
+                  />
+                  <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
+                  <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
+                    {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
+                  </div>
+                  {tenant.address && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{tenant.address}</div>}
+                  <div style={{
+                    marginTop: 10,
+                    display: 'inline-block',
+                    padding: '4px 12px',
+                    background: '#be123c',
+                    color: '#fff',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: '0.5px'
+                  }}>RECEIPT</div>
+                </div>
+
+                <div style={{ padding: '16px 0', borderBottom: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>Receipt Ref:</span>
+                    <span style={{ fontWeight: 700, color: '#be123c' }}>{receiptRef}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>Date & Time:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{new Date(saleDate).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', marginTop: 16, marginBottom: 16 }}>
+                  <thead>
+                    <tr style={{ background: '#881337', color: '#fff' }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 12, fontWeight: 700 }}>Item</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', fontSize: 12, fontWeight: 700 }}>Qty</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, fontWeight: 700 }}>Price</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, fontWeight: 700 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 8px', fontSize: 13, color: '#0f172a' }}>{item.product?.name || 'Item'}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: 13, color: '#64748b' }}>{item.quantity}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontSize: 13, color: '#64748b' }}>UGX {parseFloat(item.price).toLocaleString()}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>UGX {parseFloat(item.subtotal).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div style={{ borderTop: '2px solid #be123c', paddingTop: 12 }}>
+                  {discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>Subtotal:</span>
+                      <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14, color: '#dc2626' }}>
+                      <span>Discount:</span>
+                      <span style={{ fontWeight: 600 }}>− UGX {discount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {tax > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14, color: '#881337' }}>
+                      <span>Tax:</span>
+                      <span style={{ fontWeight: 600 }}>+ UGX {tax.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 18 }}>
+                    <span style={{ fontWeight: 700, color: '#0f172a' }}>TOTAL:</span>
+                    <span style={{ fontWeight: 800, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 14 }}>
+                    <span style={{ color: '#64748b' }}>Payment:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a', textTransform: 'capitalize' }}>
+                      {viewingSale.payment_method?.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px dashed #e2e8f0' }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#be123c', marginBottom: 4 }}>Thank you for your business!</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8' }}>For support, contact us at {tenant.phone || businessPhone}</p>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6137,6 +6361,87 @@ function ReportsTab({ data, loading, token }) {
 
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
+  // ── Export Functions ──────────────────────────────────────────────────────
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+    
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const value = row[header] || '';
+        // Escape commas and quotes
+        return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+          ? `"${value.replace(/"/g, '""')}"` 
+          : value;
+      }).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const exportOverviewToCSV = () => {
+    const overviewData = [
+      { metric: 'Total Revenue', value: `UGX ${data.stats.totalSales.toLocaleString()}` },
+      { metric: 'Total Costs', value: `UGX ${data.stats.totalPurchases.toLocaleString()}` },
+      { metric: 'Net Profit', value: `UGX ${totalRevenue.toLocaleString()}` },
+      { metric: 'Low Stock Items', value: data.stats.lowStockCount },
+      { metric: 'Total Products', value: data.stats.totalProducts },
+      { metric: 'Total Sales Count', value: data.sales.length },
+      { metric: 'Total Purchases Count', value: data.purchases.length },
+      { metric: 'Total Customers', value: data.customers.length },
+      { metric: 'Total Suppliers', value: data.suppliers.length },
+    ];
+    exportToCSV(overviewData, 'overview_report');
+  };
+
+  const exportSalesData = () => {
+    const salesData = data.sales.map(sale => ({
+      id: sale.id,
+      date: sale.sale_date || sale.created_at,
+      customer: sale.customer?.name || 'Walk-in',
+      payment_method: sale.payment_method,
+      total_amount: sale.total_amount,
+      discount: sale.discount_amount || 0,
+      tax: sale.tax_amount || 0,
+      items_count: (sale.sale_items || []).length
+    }));
+    exportToCSV(salesData, 'sales_report');
+  };
+
+  const exportPurchasesData = () => {
+    const purchasesData = data.purchases.map(purchase => ({
+      id: purchase.id,
+      date: purchase.purchase_date || purchase.created_at,
+      supplier: purchase.supplier?.name || 'Unknown',
+      total_amount: purchase.total_amount,
+      items_count: (purchase.purchase_items || []).length
+    }));
+    exportToCSV(purchasesData, 'purchases_report');
+  };
+
+  const exportProductsData = () => {
+    const productsData = data.products.map(product => ({
+      sku: product.sku || '',
+      name: product.name,
+      category: product.category?.name || '',
+      stock: product.stock,
+      unit: product.unit || '',
+      cost_price: product.cost_price || 0,
+      selling_price: product.price,
+      reorder_level: product.reorder_level || 0,
+      status: product.stock <= (product.reorder_level || 10) ? 'Low Stock' : 'In Stock'
+    }));
+    exportToCSV(productsData, 'products_inventory');
+  };
+
   // ── Derived analytics from existing data ──────────────────────────────────
 
   // Sales by payment method
@@ -6209,10 +6514,105 @@ function ReportsTab({ data, loading, token }) {
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
         borderRadius: 16, padding: '28px 32px', marginBottom: 28,
         boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
       }}>
-        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
-        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
+        </div>
+        
+        {/* Export Buttons */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={exportOverviewToCSV}
+            style={{
+              padding: '10px 16px',
+              background: '#16a34a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+            onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}
+          >
+            📊 Export Overview
+          </button>
+          <button
+            onClick={exportSalesData}
+            style={{
+              padding: '10px 16px',
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            💰 Export Sales
+          </button>
+          <button
+            onClick={exportPurchasesData}
+            style={{
+              padding: '10px 16px',
+              background: '#7c3aed',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          >
+            🛒 Export Purchases
+          </button>
+          <button
+            onClick={exportProductsData}
+            style={{
+              padding: '10px 16px',
+              background: '#d97706',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#c2410c'}
+            onMouseLeave={e => e.currentTarget.style.background = '#d97706'}
+          >
+            📦 Export Inventory
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -9098,6 +9498,45 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
   const customerEmail   = invoice.customer_email || invoice.customer?.email || '';
   const customerAddress = invoice.customer_address || invoice.customer?.address || '';
 
+  // Export invoice to CSV
+  const handleExportInvoice = () => {
+    const invoiceData = items.map(item => ({
+      product: item.product?.name || item.name || `Item ${item.product_id}`,
+      quantity: item.quantity || 1,
+      unit_price: item.price || 0,
+      subtotal: item.subtotal || (item.price * item.quantity)
+    }));
+    
+    const csvHeader = ['Item', 'Quantity', 'Unit Price', 'Subtotal'].join(',');
+    const csvRows = invoiceData.map(row => 
+      `"${row.product}",${row.quantity},${row.unit_price},${row.subtotal}`
+    );
+    
+    // Add summary rows
+    csvRows.push('');
+    csvRows.push(`"Subtotal",,,"${subtotal}"`);
+    if (discount > 0) csvRows.push(`"Discount",,,"${discount}"`);
+    if (tax > 0) csvRows.push(`"Tax",,,"${tax}"`);
+    csvRows.push(`"Total",,,"${total}"`);
+    csvRows.push(`"Amount Paid",,,"${paid}"`);
+    csvRows.push(`"Balance",,,"${balance}"`);
+    
+    const csvContent = [
+      `Invoice: ${invoiceNumber}`,
+      `Customer: ${customerName}`,
+      `Date: ${invoiceDate}`,
+      '',
+      csvHeader,
+      ...csvRows
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `invoice_${invoiceNumber.replace(/\//g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
     <Modal isOpen={true} onClose={onClose} title="" size="xl" className="invoice-modal">
       {/* ── Action bar (screen only, hidden on print) ── */}
@@ -9110,6 +9549,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleExportInvoice} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(22,163,74,0.3)' }}>📥 Export CSV</button>
           <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
           <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
         </div>
@@ -9952,22 +10392,193 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
       {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Invoices & Proforma Generator</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring Zziwa & Sons branding</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            padding: '10px 20px', borderRadius: 10, border: 'none',
-            background: '#881337', color: '#ffffff', fontWeight: 700,
-            fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-            boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
-          }}
-        >
-          <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {/* Refresh Button */}
+          <button
+            onClick={() => {
+              const fetchInvoices = async () => {
+                try {
+                  const res = await fetch(`${API}/invoices`, {
+                    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+                  });
+                  const json = await res.json();
+                  if (json.success) {
+                    setCustomInvoices(json.data || []);
+                    toast && toast.success('Refreshed', 'Invoice list updated successfully.');
+                  }
+                } catch (err) {
+                  toast && toast.error('Refresh failed', 'Could not reload invoices.');
+                }
+              };
+              fetchInvoices();
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: '1px solid #cbd5e1',
+              background: '#fff', color: '#475569', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+          >
+            🔄 Refresh
+          </button>
+          
+          {/* Export Button */}
+          <button
+            onClick={() => {
+              const exportData = invoicesList.map(inv => ({
+                invoice_number: inv.invoice_number,
+                customer: inv.customer_name,
+                invoice_date: inv.invoice_date,
+                due_date: inv.due_date,
+                total_amount: inv.total_amount,
+                amount_paid: inv.amount_paid,
+                balance: inv.total_amount - inv.amount_paid,
+                status: inv.payment_status,
+                type: inv._type === 'custom' ? 'Custom' : 'Sale'
+              }));
+              
+              const headers = Object.keys(exportData[0] || {});
+              const csvContent = [
+                headers.join(','),
+                ...exportData.map(row => headers.map(h => {
+                  const value = row[h] || '';
+                  return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+                    ? `"${value.replace(/"/g, '""')}"` 
+                    : value;
+                }).join(','))
+              ].join('\n');
+              
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = `invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              
+              toast && toast.success('Exported', `${exportData.length} invoices exported to CSV.`);
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: 'none',
+              background: '#2563eb', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            📥 Export CSV
+          </button>
+          
+          {/* Print Button */}
+          <button
+            onClick={() => {
+              const printContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8"/>
+                  <title>Invoices List - ${new Date().toLocaleDateString()}</title>
+                  <style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: 'Arial', sans-serif; padding: 40px; }
+                    h1 { margin-bottom: 10px; color: #881337; }
+                    .meta { margin-bottom: 30px; color: #64748b; font-size: 14px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+                    th { background: #f8fafc; font-weight: 700; font-size: 12px; text-transform: uppercase; color: #475569; }
+                    td { font-size: 14px; }
+                    .total-row { font-weight: 700; background: #f8fafc; }
+                    @media print {
+                      body { padding: 20px; }
+                      @page { margin: 0.5in; }
+                    }
+                  </style>
+                </head>
+                <body>
+                  <h1>Invoices List</h1>
+                  <div class="meta">
+                    Generated: ${new Date().toLocaleString()}<br/>
+                    Total Invoices: ${invoicesList.length}<br/>
+                    Total Value: UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Invoice #</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${invoicesList.map(inv => `
+                        <tr>
+                          <td>${inv.invoice_number}</td>
+                          <td>${inv.customer_name}</td>
+                          <td>${inv.invoice_date}</td>
+                          <td>UGX ${inv.total_amount.toLocaleString()}</td>
+                          <td>${(inv.payment_status || 'paid').toUpperCase()}</td>
+                          <td>${inv._type === 'custom' ? 'Custom' : 'Sale'}</td>
+                        </tr>
+                      `).join('')}
+                      <tr class="total-row">
+                        <td colspan="3">TOTAL</td>
+                        <td>UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}</td>
+                        <td colspan="2">${invoicesList.length} invoices</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </body>
+                </html>
+              `;
+              
+              const win = window.open('', '_blank');
+              if (!win) {
+                alert('Pop-up blocked. Please allow pop-ups for this site.');
+                return;
+              }
+              win.document.write(printContent);
+              win.document.close();
+              win.addEventListener('load', () => {
+                setTimeout(() => {
+                  win.focus();
+                  win.print();
+                }, 300);
+              });
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: 'none',
+              background: '#7c3aed', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          >
+            🖨️ Print List
+          </button>
+          
+          {/* Create Invoice Button */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '10px 20px', borderRadius: 10, border: 'none',
+              background: '#881337', color: '#ffffff', fontWeight: 700,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
+            }}
+          >
+            <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
