@@ -333,7 +333,7 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
           <input
             style={s.input}
             name="name"
-            placeholder="e.g. Paracetamol 500mg"
+            placeholder="e.g. Paracetamol 500mg, Memory Foam Mattress"
             value={p.name}
             onChange={handle}
             onBlur={e => onNameBlur(idx, e.target.value)}
@@ -341,7 +341,7 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
         </Field>
         <Field label={
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            SKU
+            SKU Code
             {p.skuLoading && <span style={{ fontSize: 10, color: '#94a3b8' }}>generating…</span>}
             {p.skuAuto && !p.skuLoading && (
               <span style={{ fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#7c3aed', padding: '1px 7px', borderRadius: 20 }}>AUTO</span>
@@ -351,7 +351,7 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
           <input
             style={{ ...s.input, background: p.skuAuto ? '#fafbff' : '#fff', borderColor: p.skuAuto ? '#c4b5fd' : '#e2e8f0' }}
             name="sku"
-            placeholder={p.skuLoading ? 'Generating…' : 'e.g. AP-001'}
+            placeholder={p.skuLoading ? 'Generating…' : 'e.g. MAT-QN-001'}
             value={p.sku}
             onChange={handle}
           />
@@ -372,19 +372,19 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
       </div>
 
       {/* Category */}
-      <Field label="Category">
+      <Field label="Product Category">
         <div style={s.segmented}>
           {['existing', 'new'].map(m => (
             <button key={m} type="button"
               style={{ ...s.seg, ...(p.category_mode === m ? s.segActive : {}) }}
               onClick={() => set('category_mode', m)}>
-              {m === 'existing' ? '📂 Existing' : '➕ New category'}
+              {m === 'existing' ? '📂 Existing Category' : '➕ Create New Category'}
             </button>
           ))}
         </div>
         {p.category_mode === 'existing' ? (
           <select style={{ ...s.input, marginTop: 8 }} name="category_id" value={p.category_id} onChange={handle}>
-            <option value="">— Select category —</option>
+            <option value="">— Choose from existing categories —</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         ) : (
@@ -396,7 +396,7 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
       {/* Supplier */}
       <Field label="Supplier (optional)">
         <select style={s.input} name="supplier_id" value={p.supplier_id} onChange={handle}>
-          <option value="">— No supplier —</option>
+          <option value="">— No supplier assigned —</option>
           {suppliers.map(sup => <option key={sup.id} value={sup.id}>{sup.name}</option>)}
         </select>
       </Field>
@@ -404,16 +404,16 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
       {/* Row 3: Qty + Reorder */}
       <div className="product-form-row" style={s.row}>
         <Field label="Quantity *">
-          <input style={s.input} name="stock" type="number" min="0" placeholder="0" value={p.stock} onChange={handle} />
+          <input style={s.input} name="stock" type="number" min="0" placeholder="Enter quantity" value={p.stock} onChange={handle} />
         </Field>
-        <Field label="Reorder Level">
-          <input style={s.input} name="reorder_level" type="number" min="0" placeholder="0" value={p.reorder_level} onChange={handle} />
+        <Field label="Low Stock Alert Level">
+          <input style={s.input} name="reorder_level" type="number" min="0" placeholder="e.g. 5" value={p.reorder_level} onChange={handle} />
         </Field>
       </div>
 
       {/* Row 4: Cost + Selling price */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Cost Price">
+        <Field label="Purchase Cost Price (UGX)">
           <input style={s.input} name="cost_price" type="number" step="0.01" min="0" placeholder="0.00" value={p.cost_price} onChange={handle} />
         </Field>
         <Field label="Selling Price *">
@@ -422,13 +422,13 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
       </div>
 
       {/* Description */}
-      <Field label="Description">
+      <Field label="Description (optional)">
         <textarea style={{ ...s.input, minHeight: 60, resize: 'vertical' }}
           name="description" placeholder="Optional product description…" value={p.description} onChange={handle} />
       </Field>
 
       {/* Product Image */}
-      <Field label="Product Image (optional)">
+      <Field label="Product Photo (optional)">
         <div style={s.imageArea} onClick={() => fileRef.current.click()}>
           {p.imagePreview
             ? <img src={p.imagePreview} alt="preview" style={s.imagePreview} />
@@ -456,7 +456,7 @@ function ProductFields({ p, idx, categories, suppliers, onField, onNameBlur, onI
         </div>
         <input type="checkbox" name="track_expiry" checked={p.track_expiry} onChange={handle} style={{ display: 'none' }} />
         <div>
-          <div style={s.toggleLabel}>Track Expiry Date</div>
+          <div style={s.toggleLabel}>Track Expiry / Warranty Date</div>
           <div style={s.toggleSub}>Record manufacture & expiry dates for this product</div>
         </div>
       </label>
