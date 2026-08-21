@@ -3383,9 +3383,14 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
             const discount = parseFloat(viewingSale.discount_amount) || 0;
             const tax = parseFloat(viewingSale.tax_amount) || 0;
             const total = parseFloat(viewingSale.total_amount) || 0;
+            const businessPhone = '0705364749 / 0788111823';
+            const businessEmail = 'zziwa.biz@gmail.com';
+            const businessAddress = 'Mukwano arcade shop AG 84';
             const tenant = user?.tenant || {};
             const tenantName = tenant.name || 'InventoryPro';
-            const businessPhone = tenant.phone || user?.phone || '0776 293691';
+            const receiptPhone = '0705364749 / 0788111823';
+            const receiptEmail = 'zziwa.biz@gmail.com';
+            const receiptAddress = 'Mukwano arcade shop AG 84';
             const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
             const datePart = saleDate.replace(/-/g, '').slice(0, 8);
             const saleId = String(viewingSale.id).padStart(4, '0');
@@ -3407,9 +3412,9 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                   />
                   <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
                   <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
-                    {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
+                    {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
                   </div>
-                  {tenant.address && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{tenant.address}</div>}
+                  {receiptAddress && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{receiptAddress}</div>}
                   <div style={{
                     marginTop: 10,
                     display: 'inline-block',
@@ -3488,7 +3493,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 
                 <div style={{ textAlign: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px dashed #e2e8f0' }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: '#be123c', marginBottom: 4 }}>Thank you for your business!</p>
-                  <p style={{ fontSize: 12, color: '#94a3b8' }}>For support, contact us at {tenant.phone || businessPhone}</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8' }}>For support, contact us at {receiptPhone}</p>
                 </div>
               </div>
             );
@@ -4482,6 +4487,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           const { date, time } = formatSaleDateTime(viewingSale.sale_date, viewingSale.created_at);
           const tenant = user?.tenant || {};
           const tenantName = tenant.name || 'InventoryPro';
+          const receiptPhone = '0705364749 / 0788111823';
+          const receiptEmail = 'zziwa.biz@gmail.com';
+          const receiptAddress = 'Mukwano arcade shop AG 84';
           // Build a SAL-YYYYMMDD-NNNN style ref using the sale date
           const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
           const datePart = saleDate.replace(/-/g, '').slice(0, 8);
@@ -4515,9 +4523,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                 />
                 <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
                 <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
-                  {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
+                  {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
                 </div>
-                {tenant.address && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{tenant.address}</div>}
+                {receiptAddress && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{receiptAddress}</div>}
                 {/* Receipt Badge */}
                 <div style={{
                   marginTop: 10,
