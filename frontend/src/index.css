@@ -23,6 +23,17 @@ input[type="submit"], input[type="button"] {
   cursor: pointer;
 }
 
+/* ── Remove spinners from number inputs ── */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ── Mono utility ── */
 .mono {
   font-family: 'DM Mono','Fira Code','Cascadia Code',monospace;

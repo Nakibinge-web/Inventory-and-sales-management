@@ -115,6 +115,50 @@ export default function Dashboard({ user, token, onLogout }) {
     }
   }, [user.tenant_id, token]);
 
+  // Lightweight refresh for notifications only (doesn't show loading spinner)
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      const safeJson = async (res) => {
+        if (!res.ok) return { data: [] };
+        try { return await res.json(); } catch { return { data: [] }; }
+      };
+
+      // Only fetch data needed for notifications: products (for stock), latest sales, latest purchases
+      const [productsRes, salesRes, purchasesRes] = await Promise.all([
+        fetch(`${API}/products?tenant_id=${user.tenant_id}`, { headers }),
+        fetch(`${API}/sales?tenant_id=${user.tenant_id}&limit=10`, { headers }), // Only get latest 10
+        fetch(`${API}/purchases?tenant_id=${user.tenant_id}&limit=10`, { headers }), // Only get latest 10
+      ]);
+
+      const [products, sales, purchases] = await Promise.all([
+        safeJson(productsRes),
+        safeJson(salesRes),
+        safeJson(purchasesRes),
+      ]);
+
+      // Update only the notification-relevant data without disrupting other state
+      setData(prev => ({
+        ...prev,
+        products: products.data || prev.products,
+        sales: sales.data || prev.sales,
+        purchases: purchases.data || prev.purchases,
+        stats: {
+          ...prev.stats,
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
+        }
+      }));
+    } catch (err) {
+      console.error('Failed to refresh notifications:', err);
+      // Silent fail - don't disrupt user experience
+    }
+  }, [user.tenant_id, token]);
+
   const handleAddProduct = (newProduct) => {
     setData(prev => ({
       ...prev,
@@ -129,7 +173,15 @@ export default function Dashboard({ user, token, onLogout }) {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    
+    // Lightweight auto-refresh for notifications every 30 seconds
+    // Only updates stock levels, recent sales, and recent purchases
+    const notificationRefreshInterval = setInterval(() => {
+      refreshNotifications();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(notificationRefreshInterval);
+  }, [fetchData, refreshNotifications]);
 
   // ── Global search ──────────────────────────────────────────────────────────
   const handleSearch = (q) => {
@@ -333,7 +385,27 @@ export default function Dashboard({ user, token, onLogout }) {
               >
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
-                  <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button 
+                      onClick={() => refreshNotifications()} 
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        fontSize: 16, 
+                        color: '#4f46e5',
+                        padding: '4px',
+                        borderRadius: 4,
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f0f0ff'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      title="Refresh notifications"
+                    >
+                      🔄
+                    </button>
+                    <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                  </div>
                 </div>
                 
                 {/* Low/Out of Stock Section */}
@@ -600,21 +672,32 @@ export default function Dashboard({ user, token, onLogout }) {
                   const customerAlreadyExists = newCustomerEntry
                     ? prev.customers.some(c => c.id === newCustomerEntry.id)
                     : true;
+                  
+                  // Calculate new low stock count after sale
+                  const updatedProducts = prev.products.map(p => {
+                    const item = sale.sale_items?.find(i => i.product_id === p.id)
+                      || sale.saleItems?.find(i => i.product_id === p.id);
+                    return item ? { ...p, stock: p.stock - item.quantity } : p;
+                  });
+                  
                   return {
                     ...prev,
                     sales: [sale, ...prev.sales],
-                    stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
-                    products: prev.products.map(p => {
-                      const item = sale.sale_items?.find(i => i.product_id === p.id)
-                        || sale.saleItems?.find(i => i.product_id === p.id);
-                      return item ? { ...p, stock: p.stock - item.quantity } : p;
-                    }),
+                    stats: { 
+                      ...prev.stats, 
+                      totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0),
+                      lowStockCount: updatedProducts.filter(p => p.stock <= (p.reorder_level || 10)).length
+                    },
+                    products: updatedProducts,
                     customers: (!customerAlreadyExists && newCustomerEntry)
                       ? [...prev.customers, newCustomerEntry]
                       : prev.customers,
                   };
                 });
                 toast.success('Sale completed!', `UGX ${parseFloat(sale.total_amount || 0).toLocaleString()} recorded.`);
+                
+                // Refresh notifications to show updated stock levels
+                setTimeout(() => refreshNotifications(), 1000);
               }}
             />
           )}
@@ -1641,10 +1724,10 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
   const categoryFormJsx = (onCancel) => (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={catS.label}>Category Name *</label>
+        <label style={catS.label}>Category Name (Required)</label>
         <input
           style={{ ...catS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }}
-          placeholder="e.g. Electronics"
+          placeholder="e.g., Spring Mattresses, Memory Foam, Bedding Sheets, Pillows"
           value={form.name}
           onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
           autoFocus
@@ -1652,10 +1735,10 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
         {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.name}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={catS.label}>Description (optional)</label>
+        <label style={catS.label}>Category Description (Optional)</label>
         <textarea
           style={{ ...catS.input, minHeight: 80, resize: 'vertical', borderColor: fieldErrors.description ? '#dc2626' : '#e2e8f0' }}
-          placeholder="Brief description of this category…"
+          placeholder="e.g., High-quality memory foam mattresses in various sizes"
           value={form.description}
           onChange={e => { setForm(f => ({ ...f, description: e.target.value })); if (fieldErrors.description) setFieldErrors(prev => ({ ...prev, description: null })); }}
         />
@@ -2101,30 +2184,30 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {/* Row 1: Name (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier Name *</label>
-            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g. Kampala Distributors" value={form.name}
+            <label style={supS.label}>Supplier Company Name (Required)</label>
+            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g., Foam Factory Ltd, Textile Suppliers Uganda" value={form.name}
               onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }} />
             {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.name}</span>}
           </div>
           {/* Row 2: Contact + Email side by side */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Contact / Phone</label>
+              <label style={supS.label}>Supplier Phone Number</label>
               <input style={{ ...supS.input, borderColor: fieldErrors.contact ? '#dc2626' : '#e2e8f0' }} placeholder="+256 700 000 000" value={form.contact}
                 onChange={e => { setForm(f => ({ ...f, contact: e.target.value })); if (fieldErrors.contact) setFieldErrors(prev => ({ ...prev, contact: null })); }} />
               {fieldErrors.contact && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.contact}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Email</label>
-              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="supplier@example.com" value={form.email}
+              <label style={supS.label}>Supplier Email Address</label>
+              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="contact@supplier.com" value={form.email}
                 onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }} />
               {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.email}</span>}
             </div>
           </div>
           {/* Row 3: Address (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Address</label>
-            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="Street, City, Country" value={form.address}
+            <label style={supS.label}>Supplier Physical Address</label>
+            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="e.g., Plot 123, Industrial Area, Kampala" value={form.address}
               onChange={e => { setForm(f => ({ ...f, address: e.target.value })); if (fieldErrors.address) setFieldErrors(prev => ({ ...prev, address: null })); }} />
             {fieldErrors.address && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.address}</span>}
           </div>
@@ -2351,13 +2434,13 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
 
             <div style={custS.field}>
               <label style={custS.label}>
-                Full Name<span style={custS.required}>*</span>
+                Customer Full Name (Required)<span style={custS.required}>*</span>
               </label>
               <div style={{ ...custS.inputWrap, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>👤</span>
                 <input
                   style={custS.input}
-                  placeholder="e.g. Jane Nakato"
+                  placeholder="e.g., Jane Nakato, Hotel Manager"
                   value={form.name}
                   onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
@@ -2369,7 +2452,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
             </div>
 
             <div style={custS.field}>
-              <label style={custS.label}>Phone Number</label>
+              <label style={custS.label}>Customer Phone Number</label>
               <div style={{ ...custS.inputWrap, borderColor: fieldErrors.phone ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>📞</span>
                 <input
@@ -2385,12 +2468,12 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
               {fieldErrors.phone ? (
                 <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.phone}</span>
               ) : (
-                <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+                <p style={custS.hint}>For order confirmations and delivery coordination</p>
               )}
             </div>
 
             <div style={custS.field}>
-              <label style={custS.label}>Email Address</label>
+              <label style={custS.label}>Customer Email Address</label>
               <div style={{ ...custS.inputWrap, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>✉️</span>
                 <input
@@ -2614,7 +2697,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState(null);
-  const [lastReceipt, setLastReceipt] = useState(null);
+  const [viewingSale, setViewingSale] = useState(null);
 
   // Customer selection state
   const [customerType, setCustomerType] = useState('walk_in');
@@ -2786,8 +2869,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
       });
       const data = await res.json();
       if (!res.ok) { setSaleError(data?.message || 'Checkout failed.'); return; }
-      setLastReceipt({ ...data.data, cartSnapshot: cart, paymentMethod, taxAmount, discountAmount, amountPaid: parseFloat(amountPaid) || cartTotal, changeAmount });
-      onSaleCompleted(data.data);
+      const saleWithDetails = data.data;
+      
+      // Auto-show receipt modal for printing with complete sale data
+      setViewingSale(saleWithDetails);
+      onSaleCompleted(saleWithDetails);
+      
       setCart([]);
       setSearch('');
       setCustomerType('walk_in');
@@ -2805,78 +2892,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     }
   };
 
-  if (lastReceipt) {
-    return (
-      <div style={styles.pageContainer}>
-        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Success banner */}
-          <div style={{ background: 'linear-gradient(135deg, #065f46, #16a34a)', borderRadius: 16, padding: '28px 32px', textAlign: 'center' }}>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <h2 style={{ margin: '0 0 6px', color: '#fff', fontSize: 22, fontWeight: 700 }}>Sale Complete</h2>
-            <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Transaction recorded successfully</p>
-          </div>
-
-          {/* Receipt */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
-            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || 'InventoryPro'}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{new Date().toLocaleString()}</div>
-            </div>
-            {lastReceipt.cartSnapshot.map(item => (
-              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '5px 0', color: '#475569' }}>
-                <span>{item.name} × {item.quantity}</span>
-                <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {item.subtotal.toLocaleString()}</span>
-              </div>
-            ))}
-            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12 }}>
-              {lastReceipt.discountAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#dc2626', marginBottom: 4 }}>
-                  <span>Discount</span>
-                  <span>− UGX {lastReceipt.discountAmount.toLocaleString()}</span>
-                </div>
-              )}
-              {lastReceipt.taxAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginBottom: 4 }}>
-                  <span>Tax</span>
-                  <span>+ UGX {lastReceipt.taxAmount.toLocaleString()}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, marginTop: 4 }}>
-                <span>Total</span>
-                <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
-              </div>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right', textTransform: 'capitalize' }}>
-              Payment: <strong>{lastReceipt.paymentMethod?.replace(/_/g, ' ')}</strong>
-            </div>
-            {lastReceipt.paymentMethod === 'cash' && (
-              <div style={{ marginTop: 8, borderTop: '1px dashed #e2e8f0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-                  <span>Amount Paid</span>
-                  <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {(lastReceipt.amountPaid || 0).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-                  <span>Change</span>
-                  <span style={{ fontWeight: 700, color: '#16a34a' }}>UGX {(lastReceipt.changeAmount || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button onClick={() => setLastReceipt(null)} style={{
-            padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-            background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-          }}>
-            New Sale
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // No longer need the lastReceipt view - receipt shows in modal instead
 
   return (
     <div style={styles.pageContainer}>
@@ -3257,13 +3273,13 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 disabled={cart.length === 0 || submitting || !canSell}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#16a34a',
+                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#be123c',
                   color: (cart.length === 0 || !canSell) ? '#94a3b8' : '#fff',
                   fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell) ? 'not-allowed' : 'pointer',
                   transition: 'background 0.15s', letterSpacing: '0.02em',
                 }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#15803d'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#16a34a'; }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#881337'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#be123c'; }}
               >
                 {!canSell ? 'No permission to sell' : submitting ? 'Processing…' : 'Complete Sale'}
               </button>
@@ -3271,6 +3287,219 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           </div>
         </div>
       </div>
+      
+      {/* Receipt Modal - Auto-shown after sale completion */}
+      {viewingSale && (
+        <Modal
+          isOpen={true}
+          onClose={() => setViewingSale(null)}
+          title=""
+          size="md"
+          footer={
+            <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 22 }}>✓</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>Sale Completed Successfully!</span>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Button variant="secondary" onClick={() => setViewingSale(null)}>Close &amp; New Sale</Button>
+                <Button
+                  variant="success"
+                  style={{ background: '#be123c', borderColor: '#be123c' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#881337'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
+                  onClick={() => {
+                  const src = document.getElementById('pos-receipt-content');
+                  if (!src) {
+                    alert('Receipt content not found. Please try again.');
+                    return;
+                  }
+                  
+                  const win = window.open('', '_blank', 'width=800,height=900');
+                  if (!win) {
+                    alert('Pop-up blocked. Please allow pop-ups for this site.');
+                    return;
+                  }
+                  
+                  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
+    @media print {
+      body { padding: 20px; }
+      button { display: none !important; }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+    
+    @media screen {
+      body {
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        margin: 20px auto;
+      }
+    }
+  </style>
+</head>
+<body>${src.innerHTML}</body>
+</html>`);
+                  win.document.close();
+                  
+                  // Wait for images to load
+                  win.addEventListener('load', () => {
+                    setTimeout(() => {
+                      win.focus();
+                      win.print();
+                    }, 500);
+                  });
+                }}
+              >
+                🖨️ Print / Save PDF
+              </Button>
+              </div>
+            </div>
+          }
+        >
+          {(() => {
+            const items = viewingSale.sale_items || viewingSale.saleItems || [];
+            const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
+            const discount = parseFloat(viewingSale.discount_amount) || 0;
+            const tax = parseFloat(viewingSale.tax_amount) || 0;
+            const total = parseFloat(viewingSale.total_amount) || 0;
+            const businessPhone = '0705364749 / 0788111823';
+            const businessEmail = 'zziwa.biz@gmail.com';
+            const businessAddress = 'Mukwano arcade shop AG 84';
+            const tenant = user?.tenant || {};
+            const tenantName = tenant.name || 'InventoryPro';
+            const receiptPhone = '0705364749 / 0788111823';
+            const receiptEmail = 'zziwa.biz@gmail.com';
+            const receiptAddress = 'Mukwano arcade shop AG 84';
+            const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
+            const datePart = saleDate.replace(/-/g, '').slice(0, 8);
+            const saleId = String(viewingSale.id).padStart(4, '0');
+            const receiptRef = `SAL-${datePart}-${saleId}`;
+
+            return (
+              <div id="pos-receipt-content" style={{ fontFamily: 'inherit', position: 'relative' }}>
+                <div style={{
+                  position: 'absolute', top: -60, right: -60,
+                  width: 200, height: 200, borderRadius: '50%',
+                  background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+                }} />
+
+                <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
+                  <img
+                    src="/zziwa logo.png"
+                    alt={tenantName}
+                    style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
+                  />
+                  <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
+                  <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
+                    {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
+                  </div>
+                  {receiptAddress && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{receiptAddress}</div>}
+                  <div style={{
+                    marginTop: 10,
+                    display: 'inline-block',
+                    padding: '4px 12px',
+                    background: '#be123c',
+                    color: '#fff',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: '0.5px'
+                  }}>RECEIPT</div>
+                </div>
+
+                <div style={{ padding: '16px 0', borderBottom: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>Receipt Ref:</span>
+                    <span style={{ fontWeight: 700, color: '#be123c' }}>{receiptRef}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>Date & Time:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{new Date(saleDate).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', marginTop: 16, marginBottom: 16 }}>
+                  <thead>
+                    <tr style={{ background: '#881337', color: '#fff' }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 12, fontWeight: 700 }}>Item</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'center', fontSize: 12, fontWeight: 700 }}>Qty</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, fontWeight: 700 }}>Price</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, fontWeight: 700 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 8px', fontSize: 13, color: '#0f172a' }}>{item.product?.name || 'Item'}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: 13, color: '#64748b' }}>{item.quantity}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontSize: 13, color: '#64748b' }}>UGX {parseFloat(item.price).toLocaleString()}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>UGX {parseFloat(item.subtotal).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div style={{ borderTop: '2px solid #be123c', paddingTop: 12 }}>
+                  {discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
+                      <span style={{ color: '#64748b' }}>Subtotal:</span>
+                      <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14, color: '#dc2626' }}>
+                      <span>Discount:</span>
+                      <span style={{ fontWeight: 600 }}>− UGX {discount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {tax > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14, color: '#881337' }}>
+                      <span>Tax:</span>
+                      <span style={{ fontWeight: 600 }}>+ UGX {tax.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 18 }}>
+                    <span style={{ fontWeight: 700, color: '#0f172a' }}>TOTAL:</span>
+                    <span style={{ fontWeight: 800, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 14 }}>
+                    <span style={{ color: '#64748b' }}>Payment:</span>
+                    <span style={{ fontWeight: 600, color: '#0f172a', textTransform: 'capitalize' }}>
+                      {viewingSale.payment_method?.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px dashed #e2e8f0' }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#be123c', marginBottom: 4 }}>Thank you for your business!</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8' }}>For support, contact us at {receiptPhone}</p>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -4258,6 +4487,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           const { date, time } = formatSaleDateTime(viewingSale.sale_date, viewingSale.created_at);
           const tenant = user?.tenant || {};
           const tenantName = tenant.name || 'InventoryPro';
+          const receiptPhone = '0705364749 / 0788111823';
+          const receiptEmail = 'zziwa.biz@gmail.com';
+          const receiptAddress = 'Mukwano arcade shop AG 84';
           // Build a SAL-YYYYMMDD-NNNN style ref using the sale date
           const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
           const datePart = saleDate.replace(/-/g, '').slice(0, 8);
@@ -4291,9 +4523,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                 />
                 <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
                 <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
-                  {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
+                  {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
                 </div>
-                {tenant.address && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{tenant.address}</div>}
+                {receiptAddress && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{receiptAddress}</div>}
                 {/* Receipt Badge */}
                 <div style={{
                   marginTop: 10,
@@ -5419,9 +5651,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
           {/* Supplier */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier *</label>
+            <label style={supS.label}>Select Supplier (Required)</label>
             <select style={{ ...supS.input, borderColor: fieldErrors.supplier ? '#dc2626' : '#e2e8f0' }} value={supplierId} onChange={e => { setSupplierId(e.target.value); if (fieldErrors.supplier) setFieldErrors(prev => ({ ...prev, supplier: null })); }}>
-              <option value="">— Select supplier —</option>
+              <option value="">— Choose supplier for this purchase —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             {fieldErrors.supplier && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.supplier}</span>}
@@ -5430,7 +5662,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           {/* Product Lines */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={supS.label}>Products *</label>
+              <label style={supS.label}>Purchase Items (Required)</label>
               <button type="button" onClick={addLine} style={{ fontSize: 13, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 + Add Line
               </button>
@@ -5474,19 +5706,19 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                 {line.mode === 'existing' && (
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product (Required)</span>
                       <select style={inp} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
-                        <option value="">— Select product —</option>
+                        <option value="">— Choose inventory product —</option>
                         {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
                       </select>
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Quantity (Required)</span>
                       <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
                         onChange={e => setLine(i, 'quantity', e.target.value)} />
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
                       <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
                         onChange={e => setLine(i, 'cost_price', e.target.value)} />
                     </div>
@@ -5500,18 +5732,18 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 1: Name + SKU + Barcode */}
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name *</span>
-                        <input style={inp} placeholder="e.g. Brown Sugar 1kg" value={line.np_name}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name (Required)</span>
+                        <input style={inp} placeholder="e.g., Memory Foam Mattress Queen Size" value={line.np_name}
                           onChange={e => setLine(i, 'np_name', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU</span>
-                        <input style={inp} placeholder="e.g. SGR-001" value={line.np_sku}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU Code</span>
+                        <input style={inp} placeholder="e.g., MAT-QN-001" value={line.np_sku}
                           onChange={e => setLine(i, 'np_sku', e.target.value)} />
                       </div>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Barcode</span>
-                        <input style={inp} placeholder="Scan or type" value={line.np_barcode}
+                        <input style={inp} placeholder="Scan barcode" value={line.np_barcode}
                           onChange={e => setLine(i, 'np_barcode', e.target.value)} />
                       </div>
                     </div>
@@ -5519,7 +5751,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 2: Unit + Category */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit of Measure</span>
                         <select style={inp} value={line.np_unit}
                           onChange={e => setLine(i, 'np_unit', e.target.value)}>
                           <option value="">— Select unit —</option>
@@ -5529,7 +5761,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                         </select>
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Category</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Category</span>
                         <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
                           {['existing', 'new'].map(m => (
                             <button
@@ -5557,7 +5789,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                             ))}
                           </select>
                         ) : (
-                          <input style={inp} placeholder="Type new category name"
+                          <input style={inp} placeholder="e.g., Orthopedic Mattresses"
                             value={line.np_new_category}
                             onChange={e => setLine(i, 'np_new_category', e.target.value)} />
                         )}
@@ -5567,22 +5799,22 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 3: Selling Price + Reorder + Qty + Cost Price */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Selling Price (UGX) *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Retail Price (UGX) (Required)</span>
                         <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.np_price}
                           onChange={e => setLine(i, 'np_price', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Reorder Level</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Low Stock Alert Level</span>
                         <input style={inp} type="number" min="0" placeholder="0" value={line.np_reorder}
                           onChange={e => setLine(i, 'np_reorder', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty Purchased *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Quantity (Required)</span>
                         <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
                           onChange={e => setLine(i, 'quantity', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
                         <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
@@ -5590,9 +5822,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
                     {/* Description */}
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Description (optional)</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Description (Optional)</span>
                       <textarea style={{ ...inp, minHeight: 56, resize: 'vertical' }}
-                        placeholder="Optional product description…"
+                        placeholder="e.g., 12-inch thick memory foam with cooling gel technology"
                         value={line.np_description}
                         onChange={e => setLine(i, 'np_description', e.target.value)} />
                     </div>
@@ -6137,6 +6369,87 @@ function ReportsTab({ data, loading, token }) {
 
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
+  // ── Export Functions ──────────────────────────────────────────────────────
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+    
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const value = row[header] || '';
+        // Escape commas and quotes
+        return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+          ? `"${value.replace(/"/g, '""')}"` 
+          : value;
+      }).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const exportOverviewToCSV = () => {
+    const overviewData = [
+      { metric: 'Total Revenue', value: `UGX ${data.stats.totalSales.toLocaleString()}` },
+      { metric: 'Total Costs', value: `UGX ${data.stats.totalPurchases.toLocaleString()}` },
+      { metric: 'Net Profit', value: `UGX ${totalRevenue.toLocaleString()}` },
+      { metric: 'Low Stock Items', value: data.stats.lowStockCount },
+      { metric: 'Total Products', value: data.stats.totalProducts },
+      { metric: 'Total Sales Count', value: data.sales.length },
+      { metric: 'Total Purchases Count', value: data.purchases.length },
+      { metric: 'Total Customers', value: data.customers.length },
+      { metric: 'Total Suppliers', value: data.suppliers.length },
+    ];
+    exportToCSV(overviewData, 'overview_report');
+  };
+
+  const exportSalesData = () => {
+    const salesData = data.sales.map(sale => ({
+      id: sale.id,
+      date: sale.sale_date || sale.created_at,
+      customer: sale.customer?.name || 'Walk-in',
+      payment_method: sale.payment_method,
+      total_amount: sale.total_amount,
+      discount: sale.discount_amount || 0,
+      tax: sale.tax_amount || 0,
+      items_count: (sale.sale_items || []).length
+    }));
+    exportToCSV(salesData, 'sales_report');
+  };
+
+  const exportPurchasesData = () => {
+    const purchasesData = data.purchases.map(purchase => ({
+      id: purchase.id,
+      date: purchase.purchase_date || purchase.created_at,
+      supplier: purchase.supplier?.name || 'Unknown',
+      total_amount: purchase.total_amount,
+      items_count: (purchase.purchase_items || []).length
+    }));
+    exportToCSV(purchasesData, 'purchases_report');
+  };
+
+  const exportProductsData = () => {
+    const productsData = data.products.map(product => ({
+      sku: product.sku || '',
+      name: product.name,
+      category: product.category?.name || '',
+      stock: product.stock,
+      unit: product.unit || '',
+      cost_price: product.cost_price || 0,
+      selling_price: product.price,
+      reorder_level: product.reorder_level || 0,
+      status: product.stock <= (product.reorder_level || 10) ? 'Low Stock' : 'In Stock'
+    }));
+    exportToCSV(productsData, 'products_inventory');
+  };
+
   // ── Derived analytics from existing data ──────────────────────────────────
 
   // Sales by payment method
@@ -6209,10 +6522,105 @@ function ReportsTab({ data, loading, token }) {
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
         borderRadius: 16, padding: '28px 32px', marginBottom: 28,
         boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
       }}>
-        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
-        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
+        </div>
+        
+        {/* Export Buttons */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={exportOverviewToCSV}
+            style={{
+              padding: '10px 16px',
+              background: '#16a34a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+            onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}
+          >
+            📊 Export Overview
+          </button>
+          <button
+            onClick={exportSalesData}
+            style={{
+              padding: '10px 16px',
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            💰 Export Sales
+          </button>
+          <button
+            onClick={exportPurchasesData}
+            style={{
+              padding: '10px 16px',
+              background: '#7c3aed',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          >
+            🛒 Export Purchases
+          </button>
+          <button
+            onClick={exportProductsData}
+            style={{
+              padding: '10px 16px',
+              background: '#d97706',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#c2410c'}
+            onMouseLeave={e => e.currentTarget.style.background = '#d97706'}
+          >
+            📦 Export Inventory
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -7923,21 +8331,21 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
             {/* Row 1: Name + Email */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Full Name *</label>
-                <input style={supS.input} placeholder="John Doe" value={form.name}
+                <label style={supS.label}>Staff Full Name (Required)</label>
+                <input style={supS.input} placeholder="e.g., John Mukasa" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Email *</label>
-                <input style={supS.input} type="email" placeholder="user@business.com" value={form.email}
+                <label style={supS.label}>Staff Email Address (Required)</label>
+                <input style={supS.input} type="email" placeholder="staff@zziwa.com" value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
               </div>
             </div>
 
             {/* Password */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>{editTarget ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
-              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Min 8 chars, upper, lower, number'}
+              <label style={supS.label}>{editTarget ? 'New Password (Leave blank to keep current)' : 'Create Password (Required)'}</label>
+              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Minimum 8 characters with uppercase, lowercase & number'}
                 value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required={!editTarget} minLength={editTarget ? 0 : 8} />
             </div>
@@ -7976,7 +8384,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
 
             {/* ── PREDEFINED ROLE PICKER ── */}
             {(!form.useCustomRole || editTarget) && !(editTarget && form.editCustomRoleId) && (<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <label style={supS.label}>Assign Roles *</label>
+              <label style={supS.label}>Assign User Roles (Required)</label>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {roles.map(r => {
@@ -9098,6 +9506,45 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
   const customerEmail   = invoice.customer_email || invoice.customer?.email || '';
   const customerAddress = invoice.customer_address || invoice.customer?.address || '';
 
+  // Export invoice to CSV
+  const handleExportInvoice = () => {
+    const invoiceData = items.map(item => ({
+      product: item.product?.name || item.name || `Item ${item.product_id}`,
+      quantity: item.quantity || 1,
+      unit_price: item.price || 0,
+      subtotal: item.subtotal || (item.price * item.quantity)
+    }));
+    
+    const csvHeader = ['Item', 'Quantity', 'Unit Price', 'Subtotal'].join(',');
+    const csvRows = invoiceData.map(row => 
+      `"${row.product}",${row.quantity},${row.unit_price},${row.subtotal}`
+    );
+    
+    // Add summary rows
+    csvRows.push('');
+    csvRows.push(`"Subtotal",,,"${subtotal}"`);
+    if (discount > 0) csvRows.push(`"Discount",,,"${discount}"`);
+    if (tax > 0) csvRows.push(`"Tax",,,"${tax}"`);
+    csvRows.push(`"Total",,,"${total}"`);
+    csvRows.push(`"Amount Paid",,,"${paid}"`);
+    csvRows.push(`"Balance",,,"${balance}"`);
+    
+    const csvContent = [
+      `Invoice: ${invoiceNumber}`,
+      `Customer: ${customerName}`,
+      `Date: ${invoiceDate}`,
+      '',
+      csvHeader,
+      ...csvRows
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `invoice_${invoiceNumber.replace(/\//g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
     <Modal isOpen={true} onClose={onClose} title="" size="xl" className="invoice-modal">
       {/* ── Action bar (screen only, hidden on print) ── */}
@@ -9110,6 +9557,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleExportInvoice} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(22,163,74,0.3)' }}>📥 Export CSV</button>
           <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
           <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
         </div>
@@ -9308,20 +9756,95 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
   const [amountDue, setAmountDue] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
 
+  // Products list for dropdown
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
   const [items, setItems] = useState([
-    { description: '', quantity: '1', price: '' }
+    { description: '', quantity: '1', price: '', mode: 'manual', product_id: '' }
   ]);
 
+  // Fetch products for dropdown
+  useState(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const res = await fetch(`${API}/products?tenant_id=${user.tenant_id}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setProducts(json.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch products:', err);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
   const handleAddItem = () => {
-    setItems(prev => [...prev, { description: '', quantity: '1', price: '' }]);
+    setItems(prev => [...prev, { description: '', quantity: '1', price: '', mode: 'manual', product_id: '' }]);
   };
 
   const handleRemoveItem = (idx) => {
     setItems(prev => prev.filter((_, i) => i !== idx));
+    // Clear item error when removed
+    if (fieldErrors[`item_${idx}`]) {
+      const newErrors = { ...fieldErrors };
+      delete newErrors[`item_${idx}`];
+      setFieldErrors(newErrors);
+    }
   };
 
   const handleItemChange = (idx, field, val) => {
     setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+    // Clear field error when user types
+    if (fieldErrors[`item_${idx}`]) {
+      setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
+    }
+  };
+
+  // Handle product selection from dropdown
+  const handleProductSelect = (idx, productId) => {
+    if (!productId) {
+      handleItemChange(idx, 'product_id', '');
+      handleItemChange(idx, 'mode', 'manual');
+      return;
+    }
+    
+    const product = products.find(p => String(p.id) === String(productId));
+    if (product) {
+      setItems(prev => prev.map((item, i) => i === idx ? {
+        ...item,
+        product_id: productId,
+        mode: 'product',
+        description: product.name,
+        price: String(product.price || 0)
+      } : item));
+      
+      // Clear error
+      if (fieldErrors[`item_${idx}`]) {
+        setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
+      }
+    }
+  };
+
+  // Toggle between product dropdown and manual entry
+  const toggleItemMode = (idx) => {
+    const currentMode = items[idx].mode;
+    const newMode = currentMode === 'manual' ? 'product' : 'manual';
+    
+    setItems(prev => prev.map((item, i) => i === idx ? {
+      ...item,
+      mode: newMode,
+      product_id: '',
+      description: '',
+      price: '',
+      quantity: '1'
+    } : item));
   };
 
   const calculateTotal = () => {
@@ -9340,6 +9863,10 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       setCustomerName(cust.name || '');
       setCustomerPhone(cust.phone || cust.contact || '');
       setCustomerEmail(cust.email || '');
+      // Clear customer errors
+      if (fieldErrors.customerName) {
+        setFieldErrors(prev => ({ ...prev, customerName: null }));
+      }
     }
   };
 
@@ -9358,6 +9885,8 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       setAmountPaid('');
       setAmountDue('');
     }
+    // Clear payment errors
+    setFieldErrors(prev => ({ ...prev, amountPaid: null, amountDue: null }));
   };
 
   // When partial amount paid changes, auto-calc amount due
@@ -9366,6 +9895,10 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
     const total = calculateTotal();
     const paid = parseFloat(val) || 0;
     setAmountDue(String(Math.max(0, total - paid)));
+    // Clear error
+    if (fieldErrors.amountPaid) {
+      setFieldErrors(prev => ({ ...prev, amountPaid: null }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -9373,32 +9906,132 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
     setSubmitError('');
     setFieldErrors({});
 
-    // Validate form
+    // ══════════════════════════════════════════════════════════════════════
+    // COMPREHENSIVE FORM VALIDATION
+    // ══════════════════════════════════════════════════════════════════════
     const errors = {};
     
+    // 1. Customer Name Validation
     if (!customerName.trim()) {
-      errors.customerName = 'Customer name is required';
+      errors.customerName = 'Customer name is required for invoice generation';
+    } else if (customerName.trim().length < 2) {
+      errors.customerName = 'Customer name must be at least 2 characters';
+    } else if (customerName.trim().length > 100) {
+      errors.customerName = 'Customer name must not exceed 100 characters';
     }
     
-    const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
-    if (validItems.length === 0) {
-      errors.items = 'Please add at least one valid item with a description and price';
+    // 2. Customer Phone Validation (optional but must be valid if provided)
+    if (customerPhone.trim() && !/^[\d\s\+\-\(\)]+$/.test(customerPhone)) {
+      errors.customerPhone = 'Phone number contains invalid characters';
     }
     
-    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-      errors.customerEmail = 'Please enter a valid email address';
+    // 3. Customer Email Validation (optional but must be valid if provided)
+    if (customerEmail.trim()) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+        errors.customerEmail = 'Please enter a valid email address (e.g., customer@example.com)';
+      }
+    }
+    
+    // 4. Invoice Date Validation
+    if (!invoiceDate) {
+      errors.invoiceDate = 'Invoice date is required';
+    }
+    
+    // 5. Due Date Validation
+    if (!dueDate) {
+      errors.dueDate = 'Due date is required';
+    } else if (invoiceDate && dueDate < invoiceDate) {
+      errors.dueDate = 'Due date cannot be earlier than invoice date';
+    }
+    
+    // 6. Items Validation - Comprehensive per-item validation
+    const validItems = [];
+    let hasItemErrors = false;
+    
+    items.forEach((item, idx) => {
+      const itemErrors = [];
+      
+      // Check description
+      if (!item.description.trim()) {
+        itemErrors.push('Description is required');
+        hasItemErrors = true;
+      }
+      
+      // Check quantity
+      const qty = parseFloat(item.quantity);
+      if (!item.quantity || isNaN(qty) || qty <= 0) {
+        itemErrors.push('Valid quantity required (must be greater than 0)');
+        hasItemErrors = true;
+      }
+      
+      // Check price
+      const price = parseFloat(item.price);
+      if (!item.price || isNaN(price) || price < 0) {
+        itemErrors.push('Valid price required (must be 0 or greater)');
+        hasItemErrors = true;
+      }
+      
+      // If this item has errors, record them
+      if (itemErrors.length > 0) {
+        errors[`item_${idx}`] = itemErrors.join(', ');
+      } else {
+        // Only add to valid items if no errors
+        validItems.push(item);
+      }
+    });
+    
+    // Overall items check
+    if (items.length === 0) {
+      errors.items = 'Please add at least one invoice line item';
+    } else if (validItems.length === 0) {
+      errors.items = 'Please provide valid details for at least one item (description, quantity, and price)';
+    }
+    
+    // 7. Payment Status Validation
+    const total = calculateTotal();
+    
+    if (paymentStatus === 'paid') {
+      const paid = parseFloat(amountPaid);
+      if (!amountPaid || isNaN(paid) || paid < 0) {
+        errors.amountPaid = 'Amount paid is required and must be 0 or greater';
+      } else if (paid > total) {
+        errors.amountPaid = `Amount paid (${paid.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
+      }
+    } else if (paymentStatus === 'partial') {
+      const paid = parseFloat(amountPaid);
+      if (!amountPaid || isNaN(paid) || paid <= 0) {
+        errors.amountPaid = 'For partial payment, amount paid must be greater than 0';
+      } else if (paid >= total) {
+        errors.amountPaid = 'For partial payment, amount paid must be less than total. Use "Paid" status instead.';
+      }
+    } else if (paymentStatus === 'due') {
+      const due = parseFloat(amountDue);
+      if (!amountDue || isNaN(due) || due <= 0) {
+        errors.amountDue = 'Amount due is required and must be greater than 0';
+      } else if (due > total) {
+        errors.amountDue = `Amount due (${due.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
+      }
     }
 
+    // 8. If there are validation errors, show them and stop submission
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setSubmitError('Please fix the errors below');
+      setSubmitError('Please fix all validation errors before submitting the invoice');
+      // Scroll to top to show error message
+      setTimeout(() => {
+        const modalContent = document.querySelector('[data-invoice-form]');
+        if (modalContent) modalContent.scrollTop = 0;
+      }, 100);
       return;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // PREPARE AND SUBMIT INVOICE DATA
+    // ══════════════════════════════════════════════════════════════════════
     const payload = {
       invoice_date: invoiceDate,
       due_date: dueDate,
-      source_ref: sourceRef,
+      source_ref: sourceRef.trim() || null,
       customer_name: customerName.trim(),
       customer_phone: customerPhone.trim() || null,
       customer_email: customerEmail.trim() || null,
@@ -9432,15 +10065,25 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       }
       onCreated(json.data);
     } catch (err) {
-      setSubmitError('Network error. Please check your connection and try again.');
+      setSubmitError('Network error. Unable to reach the server. Please check your internet connection and try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="720px">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="820px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }} data-invoice-form>
+        {submitError && (
+          <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fef2f2', border: '1.5px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Validation Error</div>
+              <div>{submitError}</div>
+            </div>
+          </div>
+        )}
+
         {customers && customers.length > 0 && (
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -9450,7 +10093,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
               onChange={handleSelectCustomer}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff' }}
             >
-              <option value="">— Select an existing customer —</option>
+              <option value="">— Select an existing customer to auto-fill details —</option>
               {customers.map(c => (
                 <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
               ))}
@@ -9460,31 +10103,38 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Customer Name *</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Customer Name (Required)
+            </label>
             <input
               type="text"
-              placeholder="e.g. Asher"
+              placeholder="e.g., Jane Nakato, Hotel Manager"
               value={customerName}
               onChange={e => { setCustomerName(e.target.value); if (fieldErrors.customerName) setFieldErrors(prev => ({ ...prev, customerName: null })); }}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerName ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
-            {fieldErrors.customerName && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
+            {fieldErrors.customerName && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Phone Number</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Phone Number (Optional)
+            </label>
             <input
               type="text"
-              placeholder="e.g. 0776 000000"
+              placeholder="+256 700 000 000"
               value={customerPhone}
-              onChange={e => setCustomerPhone(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setCustomerPhone(e.target.value); if (fieldErrors.customerPhone) setFieldErrors(prev => ({ ...prev, customerPhone: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerPhone ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.customerPhone && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerPhone}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Source / Ref</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Source / Reference
+            </label>
             <input
               type="text"
-              placeholder="e.g. S00124"
+              placeholder="e.g., ORDER-12345"
               value={sourceRef}
               onChange={e => setSourceRef(e.target.value)}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
@@ -9492,31 +10142,51 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Invoice Date</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Customer Email (Optional)
+            </label>
+            <input
+              type="email"
+              placeholder="customer@example.com"
+              value={customerEmail}
+              onChange={e => { setCustomerEmail(e.target.value); if (fieldErrors.customerEmail) setFieldErrors(prev => ({ ...prev, customerEmail: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerEmail ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+            {fieldErrors.customerEmail && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerEmail}</span>}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Invoice Date (Required)
+            </label>
             <input
               type="date"
               value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setInvoiceDate(e.target.value); if (fieldErrors.invoiceDate) setFieldErrors(prev => ({ ...prev, invoiceDate: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.invoiceDate ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.invoiceDate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.invoiceDate}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Due Date</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Due Date (Required)
+            </label>
             <input
               type="date"
               value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setDueDate(e.target.value); if (fieldErrors.dueDate) setFieldErrors(prev => ({ ...prev, dueDate: null })); }}
+              min={invoiceDate}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.dueDate ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.dueDate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.dueDate}</span>}
           </div>
         </div>
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 800, color: '#881337', textTransform: 'uppercase' }}>
-              Invoice Line Items
+              Invoice Line Items {fieldErrors.items && <span style={{ color: '#dc2626', fontSize: 11, marginLeft: 8 }}>⚠️ {fieldErrors.items}</span>}
             </label>
             <button
               type="button"
@@ -9529,40 +10199,136 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map((item, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 40px', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="text"
-                  placeholder="Description (e.g. Apple iPhone 17 Pro Max 512GB)"
-                  value={item.description}
-                  onChange={e => handleItemChange(idx, 'description', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
-                  required
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Qty"
-                  value={item.quantity}
-                  onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
-                  required
-                />
-                <input
-                  type="number"
-                  placeholder="Unit Price (UGX)"
-                  value={item.price}
-                  onChange={e => handleItemChange(idx, 'price', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
-                  required
-                />
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, height: 36, fontWeight: 800, cursor: 'pointer' }}
-                  >
-                    ✕
-                  </button>
+              <div key={idx} style={{ border: '1.5px solid', borderColor: fieldErrors[`item_${idx}`] ? '#dc2626' : '#e2e8f0', borderRadius: 10, padding: '12px', background: item.mode === 'product' ? '#fafbff' : '#fff' }}>
+                {/* Mode toggle */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleItemMode(idx)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700,
+                        border: '1.5px solid',
+                        borderColor: item.mode === 'manual' ? '#be123c' : '#3b82f6',
+                        background: item.mode === 'manual' ? '#be123c' : '#3b82f6',
+                        color: '#fff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {item.mode === 'manual' ? '✍️ Manual Entry' : '📦 From Products'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleItemMode(idx)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 16, fontSize: 11, fontWeight: 600,
+                        border: '1.5px solid #e2e8f0',
+                        background: '#f8fafc',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🔄 Switch Mode
+                    </button>
+                  </div>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontWeight: 800, cursor: 'pointer', fontSize: 12 }}
+                    >
+                      ✕ Remove
+                    </button>
+                  )}
+                </div>
+
+                {/* Product dropdown mode */}
+                {item.mode === 'product' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>SELECT PRODUCT</label>
+                      <select
+                        value={item.product_id}
+                        onChange={e => handleProductSelect(idx, e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff' }}
+                        disabled={loadingProducts}
+                      >
+                        <option value="">— Choose from inventory —</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} (UGX {parseFloat(p.price || 0).toLocaleString()})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>QUANTITY</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="1"
+                        value={item.quantity}
+                        onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>UNIT PRICE (UGX)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={item.price}
+                        onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right', background: '#f8fafc' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual entry mode */}
+                {item.mode === 'manual' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="Item description (e.g., Memory Foam Mattress Queen Size)"
+                      value={item.description}
+                      onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="Quantity"
+                      value={item.quantity}
+                      onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Unit Price (UGX)"
+                      value={item.price}
+                      onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
+                    />
+                  </div>
+                )}
+
+                {/* Subtotal display */}
+                {item.quantity && item.price && (
+                  <div style={{ marginTop: 8, textAlign: 'right', fontSize: 12, color: '#475569', fontWeight: 600 }}>
+                    Subtotal: <span style={{ color: '#881337', fontWeight: 800 }}>UGX {((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Item error */}
+                {fieldErrors[`item_${idx}`] && (
+                  <div style={{ marginTop: 8, padding: '6px 10px', background: '#fef2f2', borderRadius: 6, color: '#dc2626', fontSize: 11, fontWeight: 600 }}>
+                    ⚠️ {fieldErrors[`item_${idx}`]}
+                  </div>
                 )}
               </div>
             ))}
@@ -9578,16 +10344,16 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              Status
+              Payment Status (Required)
             </label>
             <select
               value={paymentStatus}
               onChange={e => handleStatusChange(e.target.value)}
               style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff', fontWeight: 600, cursor: 'pointer' }}
             >
-              <option value="paid">Paid</option>
-              <option value="partial">Partial</option>
-              <option value="due">Due</option>
+              <option value="paid">✅ Paid - Invoice has been fully paid</option>
+              <option value="partial">⏳ Partial - Invoice partially paid, balance due</option>
+              <option value="due">❌ Due - Invoice unpaid, full amount due</option>
             </select>
           </div>
 
@@ -9595,16 +10361,17 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           {paymentStatus === 'paid' && (
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                Amount Paid (UGX)
+                Amount Paid (UGX) (Required)
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={amountPaid}
-                onChange={e => setAmountPaid(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
+                onChange={e => { setAmountPaid(e.target.value); if (fieldErrors.amountPaid) setFieldErrors(prev => ({ ...prev, amountPaid: null })); }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
               />
+              {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
             </div>
           )}
 
@@ -9613,7 +10380,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  Amount Paid (UGX)
+                  Amount Paid (UGX) (Required)
                 </label>
                 <input
                   type="number"
@@ -9622,12 +10389,13 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                   placeholder="Enter partial amount paid"
                   value={amountPaid}
                   onChange={e => handlePartialPaidChange(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
                 />
+                {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                  Amount Due (UGX) — Auto
+                  Amount Due (UGX) — Auto-Calculated
                 </label>
                 <input
                   type="number"
@@ -9643,17 +10411,18 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           {paymentStatus === 'due' && (
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                Amount Due (UGX)
+                Amount Due (UGX) (Required)
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Enter amount due"
+                placeholder="Enter full amount due"
                 value={amountDue}
-                onChange={e => setAmountDue(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
+                onChange={e => { setAmountDue(e.target.value); if (fieldErrors.amountDue) setFieldErrors(prev => ({ ...prev, amountDue: null })); }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountDue ? '#dc2626' : '#fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
               />
+              {fieldErrors.amountDue && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountDue}</span>}
             </div>
           )}
         </div>
@@ -9661,13 +10430,13 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
         {/* ── PAYMENT TERMS & CONDITIONS ── */}
         <div>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-            Payment Terms &amp; Conditions
+            Payment Terms &amp; Conditions (Optional)
           </label>
           <textarea
             rows={3}
             value={paymentTerms}
             onChange={e => setPaymentTerms(e.target.value)}
-            placeholder="Explicit due date (e.g., Net 30, Due on Receipt), accepted payment methods, and penalties for late payment"
+            placeholder="e.g., Payment due within 30 days. Accepted methods: Bank transfer, Mobile Money. Late payment fee: 5% per month."
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -9683,12 +10452,6 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           />
         </div>
 
-        {submitError && (
-          <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
-            {submitError}
-          </div>
-        )}
-
         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
           <button
             type="button"
@@ -9703,7 +10466,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
             disabled={submitting}
             style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.75 : 1, boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
           >
-            {submitting ? 'Saving…' : 'Generate Invoice 📄'}
+            {submitting ? '⏳ Saving Invoice…' : '📄 Generate Invoice'}
           </button>
         </div>
       </form>
@@ -9952,22 +10715,193 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
       {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Invoices & Proforma Generator</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring Zziwa & Sons branding</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            padding: '10px 20px', borderRadius: 10, border: 'none',
-            background: '#881337', color: '#ffffff', fontWeight: 700,
-            fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-            boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
-          }}
-        >
-          <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {/* Refresh Button */}
+          <button
+            onClick={() => {
+              const fetchInvoices = async () => {
+                try {
+                  const res = await fetch(`${API}/invoices`, {
+                    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+                  });
+                  const json = await res.json();
+                  if (json.success) {
+                    setCustomInvoices(json.data || []);
+                    toast && toast.success('Refreshed', 'Invoice list updated successfully.');
+                  }
+                } catch (err) {
+                  toast && toast.error('Refresh failed', 'Could not reload invoices.');
+                }
+              };
+              fetchInvoices();
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: '1px solid #cbd5e1',
+              background: '#fff', color: '#475569', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+          >
+            🔄 Refresh
+          </button>
+          
+          {/* Export Button */}
+          <button
+            onClick={() => {
+              const exportData = invoicesList.map(inv => ({
+                invoice_number: inv.invoice_number,
+                customer: inv.customer_name,
+                invoice_date: inv.invoice_date,
+                due_date: inv.due_date,
+                total_amount: inv.total_amount,
+                amount_paid: inv.amount_paid,
+                balance: inv.total_amount - inv.amount_paid,
+                status: inv.payment_status,
+                type: inv._type === 'custom' ? 'Custom' : 'Sale'
+              }));
+              
+              const headers = Object.keys(exportData[0] || {});
+              const csvContent = [
+                headers.join(','),
+                ...exportData.map(row => headers.map(h => {
+                  const value = row[h] || '';
+                  return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+                    ? `"${value.replace(/"/g, '""')}"` 
+                    : value;
+                }).join(','))
+              ].join('\n');
+              
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = `invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              
+              toast && toast.success('Exported', `${exportData.length} invoices exported to CSV.`);
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: 'none',
+              background: '#2563eb', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            📥 Export CSV
+          </button>
+          
+          {/* Print Button */}
+          <button
+            onClick={() => {
+              const printContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8"/>
+                  <title>Invoices List - ${new Date().toLocaleDateString()}</title>
+                  <style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: 'Arial', sans-serif; padding: 40px; }
+                    h1 { margin-bottom: 10px; color: #881337; }
+                    .meta { margin-bottom: 30px; color: #64748b; font-size: 14px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+                    th { background: #f8fafc; font-weight: 700; font-size: 12px; text-transform: uppercase; color: #475569; }
+                    td { font-size: 14px; }
+                    .total-row { font-weight: 700; background: #f8fafc; }
+                    @media print {
+                      body { padding: 20px; }
+                      @page { margin: 0.5in; }
+                    }
+                  </style>
+                </head>
+                <body>
+                  <h1>Invoices List</h1>
+                  <div class="meta">
+                    Generated: ${new Date().toLocaleString()}<br/>
+                    Total Invoices: ${invoicesList.length}<br/>
+                    Total Value: UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Invoice #</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${invoicesList.map(inv => `
+                        <tr>
+                          <td>${inv.invoice_number}</td>
+                          <td>${inv.customer_name}</td>
+                          <td>${inv.invoice_date}</td>
+                          <td>UGX ${inv.total_amount.toLocaleString()}</td>
+                          <td>${(inv.payment_status || 'paid').toUpperCase()}</td>
+                          <td>${inv._type === 'custom' ? 'Custom' : 'Sale'}</td>
+                        </tr>
+                      `).join('')}
+                      <tr class="total-row">
+                        <td colspan="3">TOTAL</td>
+                        <td>UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}</td>
+                        <td colspan="2">${invoicesList.length} invoices</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </body>
+                </html>
+              `;
+              
+              const win = window.open('', '_blank');
+              if (!win) {
+                alert('Pop-up blocked. Please allow pop-ups for this site.');
+                return;
+              }
+              win.document.write(printContent);
+              win.document.close();
+              win.addEventListener('load', () => {
+                setTimeout(() => {
+                  win.focus();
+                  win.print();
+                }, 300);
+              });
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: 'none',
+              background: '#7c3aed', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          >
+            🖨️ Print List
+          </button>
+          
+          {/* Create Invoice Button */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '10px 20px', borderRadius: 10, border: 'none',
+              background: '#881337', color: '#ffffff', fontWeight: 700,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
+            }}
+          >
+            <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
