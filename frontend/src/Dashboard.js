@@ -10,10 +10,12 @@ import QuickActions from './components/ui/QuickActions';
 import AddProductForm from './components/AddProductForm';
 import EditProductForm from './components/EditProductForm';
 import { ToastContainer, useToast } from './components/ui/Toast';
+import Settings from './pages/Settings';
+import SaleReceipt from './components/SaleReceipt';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-export default function Dashboard({ user, token, onLogout }) {
+export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
@@ -632,6 +634,19 @@ export default function Dashboard({ user, token, onLogout }) {
                   <span style={styles.menuLabel}>Users</span>
                   {activeTab === 'users' && <div style={styles.activeIndicator} />}
                 </button>
+                <button
+                  style={{
+                    ...styles.menuItem,
+                    ...(activeTab === 'settings' ? styles.menuItemActive : {})
+                  }}
+                  onClick={() => { setActiveTab('settings'); setMobileNavOpen(false); }}
+                  onMouseEnter={e => { if (activeTab !== 'settings') e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}
+                  onMouseLeave={e => { if (activeTab !== 'settings') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                >
+                  <span style={styles.menuIcon}>⚙️</span>
+                  <span style={styles.menuLabel}>Settings</span>
+                  {activeTab === 'settings' && <div style={styles.activeIndicator} />}
+                </button>
                 <div style={{ height: 20 }} />
               </div>
             )}
@@ -840,6 +855,9 @@ export default function Dashboard({ user, token, onLogout }) {
               canEdit={isOwnerOrAdmin || hasPermission('users.edit')}
               canDelete={isOwnerOrAdmin || hasPermission('users.delete')}
               canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
+          )}
+          {activeTab === 'settings' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
+            <Settings user={user} token={token} toast={toast} onBusinessInfoUpdate={onUserUpdate} />
           )}
         </main>
       </div>
@@ -3377,127 +3395,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
             </div>
           }
         >
-          {(() => {
-            const items = viewingSale.sale_items || viewingSale.saleItems || [];
-            const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
-            const discount = parseFloat(viewingSale.discount_amount) || 0;
-            const tax = parseFloat(viewingSale.tax_amount) || 0;
-            const total = parseFloat(viewingSale.total_amount) || 0;
-            const businessPhone = '0705364749 / 0788111823';
-            const businessEmail = 'zziwa.biz@gmail.com';
-            const businessAddress = 'Mukwano arcade shop AG 84';
-            const tenant = user?.tenant || {};
-            const tenantName = tenant.name || 'InventoryPro';
-            const receiptPhone = '0705364749 / 0788111823';
-            const receiptEmail = 'zziwa.biz@gmail.com';
-            const receiptAddress = 'Mukwano arcade shop AG 84';
-            const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
-            const datePart = saleDate.replace(/-/g, '').slice(0, 8);
-            const saleId = String(viewingSale.id).padStart(4, '0');
-            const receiptRef = `SAL-${datePart}-${saleId}`;
-
-            return (
-              <div id="pos-receipt-content" style={{ fontFamily: 'inherit', position: 'relative' }}>
-                <div style={{
-                  position: 'absolute', top: -60, right: -60,
-                  width: 200, height: 200, borderRadius: '50%',
-                  background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
-                }} />
-
-                <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
-                  <img
-                    src="/zziwa logo.png"
-                    alt={tenantName}
-                    style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
-                  />
-                  <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
-                  <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
-                    {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
-                  </div>
-                  {receiptAddress && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{receiptAddress}</div>}
-                  <div style={{
-                    marginTop: 10,
-                    display: 'inline-block',
-                    padding: '4px 12px',
-                    background: '#be123c',
-                    color: '#fff',
-                    borderRadius: 20,
-                    fontSize: 11,
-                    fontWeight: 800,
-                    letterSpacing: '0.5px'
-                  }}>RECEIPT</div>
-                </div>
-
-                <div style={{ padding: '16px 0', borderBottom: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-                    <span style={{ color: '#64748b' }}>Receipt Ref:</span>
-                    <span style={{ fontWeight: 700, color: '#be123c' }}>{receiptRef}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ color: '#64748b' }}>Date & Time:</span>
-                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{new Date(saleDate).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <table style={{ width: '100%', marginTop: 16, marginBottom: 16 }}>
-                  <thead>
-                    <tr style={{ background: '#881337', color: '#fff' }}>
-                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: 12, fontWeight: 700 }}>Item</th>
-                      <th style={{ padding: '10px 8px', textAlign: 'center', fontSize: 12, fontWeight: 700 }}>Qty</th>
-                      <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, fontWeight: 700 }}>Price</th>
-                      <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 12, fontWeight: 700 }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px 8px', fontSize: 13, color: '#0f172a' }}>{item.product?.name || 'Item'}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center', fontSize: 13, color: '#64748b' }}>{item.quantity}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', fontSize: 13, color: '#64748b' }}>UGX {parseFloat(item.price).toLocaleString()}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>UGX {parseFloat(item.subtotal).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div style={{ borderTop: '2px solid #be123c', paddingTop: 12 }}>
-                  {discount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
-                      <span style={{ color: '#64748b' }}>Subtotal:</span>
-                      <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {discount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14, color: '#dc2626' }}>
-                      <span>Discount:</span>
-                      <span style={{ fontWeight: 600 }}>− UGX {discount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {tax > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14, color: '#881337' }}>
-                      <span>Tax:</span>
-                      <span style={{ fontWeight: 600 }}>+ UGX {tax.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 18 }}>
-                    <span style={{ fontWeight: 700, color: '#0f172a' }}>TOTAL:</span>
-                    <span style={{ fontWeight: 800, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 14 }}>
-                    <span style={{ color: '#64748b' }}>Payment:</span>
-                    <span style={{ fontWeight: 600, color: '#0f172a', textTransform: 'capitalize' }}>
-                      {viewingSale.payment_method?.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px dashed #e2e8f0' }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#be123c', marginBottom: 4 }}>Thank you for your business!</p>
-                  <p style={{ fontSize: 12, color: '#94a3b8' }}>For support, contact us at {receiptPhone}</p>
-                </div>
-              </div>
-            );
-          })()}
+          <SaleReceipt sale={viewingSale} user={user} elementId="pos-receipt-content" />
         </Modal>
       )}
     </div>
@@ -4478,214 +4376,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           </div>
         }
       >
-        {viewingSale && (() => {
-          const items = viewingSale.sale_items || viewingSale.saleItems || [];
-          const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
-          const discount = parseFloat(viewingSale.discount_amount) || 0;
-          const tax = parseFloat(viewingSale.tax_amount) || 0;
-          const total = parseFloat(viewingSale.total_amount) || 0;
-          const { date, time } = formatSaleDateTime(viewingSale.sale_date, viewingSale.created_at);
-          const tenant = user?.tenant || {};
-          const tenantName = tenant.name || 'InventoryPro';
-          const receiptPhone = '0705364749 / 0788111823';
-          const receiptEmail = 'zziwa.biz@gmail.com';
-          const receiptAddress = 'Mukwano arcade shop AG 84';
-          // Build a SAL-YYYYMMDD-NNNN style ref using the sale date
-          const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
-          const datePart = saleDate.replace(/-/g, '').slice(0, 8);
-          const saleId = String(viewingSale.id).padStart(4, '0');
-          const receiptRef = `SAL-${datePart}-${saleId}`;
-
-          const rRow = (label, value, bold = false, color = '#0f172a') => (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
-              <span style={{ color: '#64748b' }}>{label}</span>
-              <span style={{ fontWeight: bold ? 700 : 500, color }}>{value}</span>
-            </div>
-          );
-
-          return (
-            <div id="receipt-content" style={{ fontFamily: 'inherit', position: 'relative' }}>
-
-              {/* Decorative circle — top right, matches invoice */}
-              <div style={{
-                position: 'absolute', top: -60, right: -60,
-                width: 200, height: 200, borderRadius: '50%',
-                background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
-              }} />
-
-              {/* ── Business Header ── */}
-              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
-                {/* Logo */}
-                <img
-                  src="/zziwa logo.png"
-                  alt={tenantName}
-                  style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
-                />
-                <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
-                <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
-                  {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
-                </div>
-                {receiptAddress && <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>{receiptAddress}</div>}
-                {/* Receipt Badge */}
-                <div style={{
-                  marginTop: 10,
-                  display: 'inline-block',
-                  padding: '6px 16px',
-                  background: '#fff1f2',
-                  border: '1.5px solid #fda4af',
-                  borderRadius: 20,
-                  color: '#881337',
-                  fontSize: 12,
-                  fontWeight: 800,
-                  letterSpacing: '0.05em',
-                  textTransform: 'uppercase'
-                }}>
-                  Receipt
-                </div>
-              </div>
-
-              {/* ── Receipt Details + Customer ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1.5px solid #cbd5e1', position: 'relative' }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
-                  <div style={{ color: '#be123c', fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{receiptRef}</div>
-                  <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                    <span>📅</span> {date}
-                  </div>
-                  {time && (
-                    <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                      <span>🕐</span> {time}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span>👤</span> Served by: {viewingSale.user?.name || 'Deleted user'}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
-                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>
-                    {viewingSale.customer?.name || 'Walk-in Customer'}
-                  </div>
-                  {viewingSale.customer?.phone && (
-                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>📞 {viewingSale.customer.phone}</div>
-                  )}
-                  {viewingSale.customer?.email && (
-                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>✉️ {viewingSale.customer.email}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Items Table ── */}
-              <div style={{ paddingTop: 18, position: 'relative' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
-                <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#881337' }}>
-                        {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
-                          <th key={h} style={{
-                            padding: '10px', fontSize: 11, fontWeight: 800, color: '#ffffff',
-                            letterSpacing: '0.07em', textTransform: 'uppercase',
-                            textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
-                          }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.length === 0 ? (
-                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
-                      ) : items.map((item, idx) => (
-                        <tr key={idx} style={{ borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '12px 10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
-                          <td style={{ padding: '12px 10px' }}>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
-                            {item.product?.sku && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>SKU: {item.product.sku}</div>}
-                          </td>
-                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                            {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
-                          </td>
-                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                            UGX {parseFloat(item.price).toLocaleString()}
-                          </td>
-                          <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                            UGX {parseFloat(item.subtotal).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* ── Totals ── */}
-              <div style={{ marginTop: 16, borderTop: '1.5px solid #cbd5e1', paddingTop: 16, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ maxWidth: 520, width: '100%', border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
-                  <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                    <span style={{ color: '#64748b' }}>Subtotal:</span>
-                    <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
-                  </div>
-                  {discount > 0 && (
-                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                      <span style={{ color: '#64748b' }}>Discount:</span>
-                      <span style={{ fontWeight: 600, color: '#dc2626' }}>− UGX {discount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {tax > 0 && (
-                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                      <span style={{ color: '#64748b' }}>Tax:</span>
-                      <span style={{ fontWeight: 600, color: '#16a34a' }}>+ UGX {tax.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div style={{
-                    padding: '12px 16px',
-                    background: '#fff1f2',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ fontWeight: 800, fontSize: 16, color: '#881337' }}>TOTAL:</span>
-                    <span style={{ fontWeight: 800, fontSize: 18, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
-                  </div>
-                </div>
-                
-                <div style={{ maxWidth: 520, width: '100%', marginTop: 12, padding: '10px 16px', border: '1.5px solid #cbd5e1', borderRadius: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ color: '#64748b', fontSize: 14 }}>Payment Method:</span>
-                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b', fontSize: 14 }}>Payment Status:</span>
-                    <span style={{
-                      background: '#dcfce7',
-                      color: '#16a34a',
-                      fontWeight: 800,
-                      fontSize: 11,
-                      padding: '4px 12px',
-                      borderRadius: 20,
-                      letterSpacing: '0.03em',
-                      textTransform: 'uppercase'
-                    }}>
-                      Paid
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {viewingSale.notes && (
-                <div style={{ marginTop: 16, padding: '12px 16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, fontSize: 13, color: '#475569', borderLeft: '4px solid #be123c' }}>
-                  📝 {viewingSale.notes}
-                </div>
-              )}
-
-              {/* ── Thank you footer ── */}
-              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '2px solid #be123c', textAlign: 'center', position: 'relative' }}>
-                <div style={{ fontWeight: 800, fontSize: 17, color: '#881337', marginBottom: 6 }}>Thank you for your business!</div>
-                <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>We appreciate your patronage. Visit us again!</div>
-              </div>
-            </div>
-          );
-        })()}
+        <SaleReceipt sale={viewingSale} user={user} elementId="receipt-content" />
       </Modal>
 
       {/* ── Edit Modal ── */}

@@ -244,7 +244,7 @@ export default function AuthPage() {
     }
   }, []);
 
-  if (user && token) return <Dashboard user={user} token={token} onLogout={logout} />;
+  if (user && token) return <Dashboard user={user} token={token} onLogout={logout} onUserUpdate={setUser} />;
 
   const isLogin = mode === 'login';
 

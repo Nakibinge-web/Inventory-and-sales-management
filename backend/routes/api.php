@@ -15,6 +15,7 @@ use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\SettingsController;
 
 // Public auth routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
@@ -187,6 +188,12 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // AI Assistant
     Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'chat']);
+
+    // Settings (Business Information)
+    Route::prefix('settings')->group(function () {
+        Route::get('/business', [SettingsController::class, 'getBusinessInfo']);
+        Route::put('/business', [SettingsController::class, 'updateBusinessInfo']);
+    });
 
     // Stock Movements
     Route::prefix('stock-movements')->group(function () {
