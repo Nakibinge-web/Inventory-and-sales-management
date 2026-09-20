@@ -24,7 +24,7 @@ class Sale extends Model
     ];
 
     protected $casts = [
-        'sale_date' => 'date',
+        'sale_date' => 'datetime',
     ];
 
     // Relationships

@@ -16,7 +16,7 @@ export default function Modal({
     sm: { maxWidth: '400px' },
     md: { maxWidth: '600px' },
     lg: { maxWidth: '800px' },
-    xl: { maxWidth: '1000px' }
+    xl: { maxWidth: '1100px' }
   };
 
   const overlayStyles = {

@@ -10,10 +10,12 @@ import QuickActions from './components/ui/QuickActions';
 import AddProductForm from './components/AddProductForm';
 import EditProductForm from './components/EditProductForm';
 import { ToastContainer, useToast } from './components/ui/Toast';
+import Settings from './pages/Settings';
+import SaleReceipt from './components/SaleReceipt';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-export default function Dashboard({ user, token, onLogout }) {
+export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
@@ -49,6 +51,7 @@ export default function Dashboard({ user, token, onLogout }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -102,7 +105,7 @@ export default function Dashboard({ user, token, onLogout }) {
           totalProducts: (products.data || []).length,
           totalSales: (sales.data || []).reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0),
           totalPurchases: (purchases.data || []).reduce((sum, purchase) => sum + parseFloat(purchase.total_amount || 0), 0),
-          lowStockCount: (lowStock.data || []).length
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
         }
       });
       setError(null);
@@ -111,6 +114,50 @@ export default function Dashboard({ user, token, onLogout }) {
       console.error('Dashboard error:', err);
     } finally {
       setLoading(false);
+    }
+  }, [user.tenant_id, token]);
+
+  // Lightweight refresh for notifications only (doesn't show loading spinner)
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      const safeJson = async (res) => {
+        if (!res.ok) return { data: [] };
+        try { return await res.json(); } catch { return { data: [] }; }
+      };
+
+      // Only fetch data needed for notifications: products (for stock), latest sales, latest purchases
+      const [productsRes, salesRes, purchasesRes] = await Promise.all([
+        fetch(`${API}/products?tenant_id=${user.tenant_id}`, { headers }),
+        fetch(`${API}/sales?tenant_id=${user.tenant_id}&limit=10`, { headers }), // Only get latest 10
+        fetch(`${API}/purchases?tenant_id=${user.tenant_id}&limit=10`, { headers }), // Only get latest 10
+      ]);
+
+      const [products, sales, purchases] = await Promise.all([
+        safeJson(productsRes),
+        safeJson(salesRes),
+        safeJson(purchasesRes),
+      ]);
+
+      // Update only the notification-relevant data without disrupting other state
+      setData(prev => ({
+        ...prev,
+        products: products.data || prev.products,
+        sales: sales.data || prev.sales,
+        purchases: purchases.data || prev.purchases,
+        stats: {
+          ...prev.stats,
+          lowStockCount: (products.data || []).filter(p => p.stock <= (p.reorder_level || 10)).length
+        }
+      }));
+    } catch (err) {
+      console.error('Failed to refresh notifications:', err);
+      // Silent fail - don't disrupt user experience
     }
   }, [user.tenant_id, token]);
 
@@ -128,7 +175,15 @@ export default function Dashboard({ user, token, onLogout }) {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    
+    // Lightweight auto-refresh for notifications every 30 seconds
+    // Only updates stock levels, recent sales, and recent purchases
+    const notificationRefreshInterval = setInterval(() => {
+      refreshNotifications();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(notificationRefreshInterval);
+  }, [fetchData, refreshNotifications]);
 
   // ── Global search ──────────────────────────────────────────────────────────
   const handleSearch = (q) => {
@@ -362,11 +417,215 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
 
         <div style={styles.headerRight}>
-          <div className="resp-hide" style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px' }}>
+          <div 
+            className="resp-hide"
+            style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
+            {data.stats.lowStockCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: '#dc2626',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700
+              }}>
+                {data.stats.lowStockCount}
+              </span>
+            )}
+            
+            {showNotifications && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 8,
+                width: 360,
+                maxHeight: 450,
+                overflowY: 'auto',
+                background: '#fff',
+                border: '1.5px solid #e2e8f0',
+                borderRadius: 12,
+                boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                zIndex: 1000
+              }}
+              onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Notifications</h3>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button 
+                      onClick={() => refreshNotifications()} 
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        fontSize: 16, 
+                        color: '#4f46e5',
+                        padding: '4px',
+                        borderRadius: 4,
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f0f0ff'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      title="Refresh notifications"
+                    >
+                      🔄
+                    </button>
+                    <button onClick={() => setShowNotifications(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>×</button>
+                  </div>
+                </div>
+                
+                {/* Low/Out of Stock Section */}
+                {data.stats.lowStockCount > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#fef2f2', borderBottom: '1px solid #fecaca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>⚠️ Stock Alert ({data.stats.lowStockCount})</p>
+                      <button 
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        style={{ fontSize: 10, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                        VIEW ALL →
+                      </button>
+                    </div>
+                    {data.products
+                      .filter(p => p.stock <= (p.reorder_level || 10))
+                      .sort((a, b) => a.stock - b.stock)
+                      .slice(0, 3)
+                      .map(product => (
+                      <div key={product.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        background: product.stock === 0 ? '#fef2f2' : 'transparent',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('products'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = product.stock === 0 ? '#fee2e2' : '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = product.stock === 0 ? '#fef2f2' : 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{product.name}</p>
+                          {product.stock === 0 && (
+                            <span style={{ 
+                              fontSize: 9, 
+                              fontWeight: 700, 
+                              color: '#dc2626', 
+                              background: '#fee2e2', 
+                              padding: '2px 6px', 
+                              borderRadius: 4 
+                            }}>OUT OF STOCK</span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: product.stock === 0 ? '#dc2626' : '#64748b' }}>
+                          Stock: <strong>{product.stock}</strong> {product.unit || 'units'} • Reorder at {product.reorder_level || 10}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Sales Section */}
+                {data.sales.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#16a34a' }}>💰 Recent Sales</p>
+                    </div>
+                    {data.sales.slice(0, 2).map(sale => (
+                      <div key={sale.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('sales'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {sale.customer?.name || 'Walk-in Customer'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
+                            UGX {parseFloat(sale.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(sale.sale_date || sale.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Recent Purchases Section */}
+                {data.purchases.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 16px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#2563eb' }}>🛒 Recent Purchases</p>
+                    </div>
+                    {data.purchases.slice(0, 2).map(purchase => (
+                      <div key={purchase.id} style={{ 
+                        padding: '10px 16px', 
+                        borderBottom: '1px solid #f8fafc', 
+                        cursor: 'pointer',
+                        transition: 'background 0.15s'
+                      }}
+                        onClick={() => { setActiveTab('purchases'); setShowNotifications(false); }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                            {purchase.supplier?.name || 'Supplier'}
+                          </p>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>
+                            UGX {parseFloat(purchase.total_amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                          {new Date(purchase.purchase_date || purchase.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* No notifications */}
+                {data.stats.lowStockCount === 0 && data.sales.length === 0 && data.purchases.length === 0 && (
+                  <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+                    <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>All caught up! No new notifications</p>
+                  </div>
+                )}
+                
+                {/* View All Link */}
+                {(data.stats.lowStockCount > 3 || data.sales.length > 2 || data.purchases.length > 2) && (
+                  <div style={{ padding: '10px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      style={{ 
+                        fontSize: 12, 
+                        color: '#64748b', 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}>
+                      Close Notifications
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
@@ -472,8 +731,30 @@ export default function Dashboard({ user, token, onLogout }) {
                   <span style={styles.menuIcon}>🔑</span>
                   <span style={styles.menuLabel}>Users</span>
                   {activeTab === 'users' && <div style={styles.activeIndicator} />}
+                <button
+                  style={{
+                    ...styles.menuItem,
+                    ...(activeTab === 'settings' ? styles.menuItemActive : {})
+                  }}
+                  onClick={() => { setActiveTab('settings'); setMobileNavOpen(false); }}
+                  onMouseEnter={e => {
+                    if (activeTab !== 'settings') {
+                      e.currentTarget.style.background = '#f8fafc';
+                      e.currentTarget.style.color = '#0f172a';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (activeTab !== 'settings') {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#475569';
+                    }
+                  }}
+                >
+                  <span style={styles.menuIcon}>⚙️</span>
+                  <span style={styles.menuLabel}>Settings</span>
+                  {activeTab === 'settings' && <div style={styles.activeIndicator} />}
                 </button>
-                <div style={{ height: 12 }} />
+                <div style={{ height: 16 }} />
               </div>
             )}
           </div>
@@ -514,21 +795,32 @@ export default function Dashboard({ user, token, onLogout }) {
                   const customerAlreadyExists = newCustomerEntry
                     ? prev.customers.some(c => c.id === newCustomerEntry.id)
                     : true;
+                  
+                  // Calculate new low stock count after sale
+                  const updatedProducts = prev.products.map(p => {
+                    const item = sale.sale_items?.find(i => i.product_id === p.id)
+                      || sale.saleItems?.find(i => i.product_id === p.id);
+                    return item ? { ...p, stock: p.stock - item.quantity } : p;
+                  });
+                  
                   return {
                     ...prev,
                     sales: [sale, ...prev.sales],
-                    stats: { ...prev.stats, totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0) },
-                    products: prev.products.map(p => {
-                      const item = sale.sale_items?.find(i => i.product_id === p.id)
-                        || sale.saleItems?.find(i => i.product_id === p.id);
-                      return item ? { ...p, stock: p.stock - item.quantity } : p;
-                    }),
+                    stats: { 
+                      ...prev.stats, 
+                      totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0),
+                      lowStockCount: updatedProducts.filter(p => p.stock <= (p.reorder_level || 10)).length
+                    },
+                    products: updatedProducts,
                     customers: (!customerAlreadyExists && newCustomerEntry)
                       ? [...prev.customers, newCustomerEntry]
                       : prev.customers,
                   };
                 });
                 toast.success('Sale completed!', `UGX ${parseFloat(sale.total_amount || 0).toLocaleString()} recorded.`);
+                
+                // Refresh notifications to show updated stock levels
+                setTimeout(() => refreshNotifications(), 1000);
               }}
             />
           )}
@@ -671,6 +963,9 @@ export default function Dashboard({ user, token, onLogout }) {
               canEdit={isOwnerOrAdmin || hasPermission('users.edit')}
               canDelete={isOwnerOrAdmin || hasPermission('users.delete')}
               canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
+          )}
+          {activeTab === 'settings' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
+            <Settings user={user} token={token} toast={toast} onBusinessInfoUpdate={onUserUpdate} />
           )}
         </main>
       </div>
@@ -1500,15 +1795,38 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
   const [saving, setSaving] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deleteError, setDeleteError] = useState(null);
 
-  const openAdd = () => { setForm({ name: '', description: '' }); setFormError(null); setShowAddModal(true); };
-  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setEditingCat(cat); };
+  const openAdd = () => { setForm({ name: '', description: '' }); setFormError(null); setFieldErrors({}); setShowAddModal(true); };
+  const openEdit = (cat) => { setForm({ name: cat.name, description: cat.description || '' }); setFormError(null); setFieldErrors({}); setEditingCat(cat); };
 
   const handleSubmit = async e => {
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Category name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Category name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Category name must not exceed 100 characters';
+    }
+    
+    if (form.description && form.description.length > 500) {
+      errors.description = 'Description must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     const isEdit = !!editingCat;
     try {
       const res = await fetch(
@@ -1516,7 +1834,7 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
         {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ name: form.name.trim(), description: form.description.trim() }),
         }
       );
       const data = await res.json();
@@ -1559,24 +1877,25 @@ function CategoriesTab({ categories, loading, token, canCreate = true, canEdit =
   const categoryFormJsx = (onCancel) => (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={catS.label}>Category Name *</label>
+        <label style={catS.label}>Category Name (Required)</label>
         <input
-          style={catS.input}
-          placeholder="e.g. Electronics"
+          style={{ ...catS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }}
+          placeholder="e.g., Spring Mattresses, Memory Foam, Bedding Sheets, Pillows"
           value={form.name}
-          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          required
+          onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
           autoFocus
         />
+        {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.name}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={catS.label}>Description (optional)</label>
+        <label style={catS.label}>Category Description (Optional)</label>
         <textarea
-          style={{ ...catS.input, minHeight: 80, resize: 'vertical' }}
-          placeholder="Brief description of this category…"
+          style={{ ...catS.input, minHeight: 80, resize: 'vertical', borderColor: fieldErrors.description ? '#dc2626' : '#e2e8f0' }}
+          placeholder="e.g., High-quality memory foam mattresses in various sizes"
           value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          onChange={e => { setForm(f => ({ ...f, description: e.target.value })); if (fieldErrors.description) setFieldErrors(prev => ({ ...prev, description: null })); }}
         />
+        {fieldErrors.description && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 2 }}>{fieldErrors.description}</span>}
       </div>
       {formError && <div style={catS.error}>{formError}</div>}
       <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
@@ -1810,6 +2129,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [search, setSearch] = useState('');
 
@@ -1817,6 +2137,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1824,6 +2145,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     setEditTarget(supplier);
     setForm({ name: supplier.name, contact: supplier.contact || '', email: supplier.email || '', address: supplier.address || '' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -1849,13 +2171,49 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Supplier name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Supplier name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Supplier name must not exceed 100 characters';
+    }
+    
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (form.contact && form.contact.trim() && !/^[\d\s\+\-\(\)]+$/.test(form.contact)) {
+      errors.contact = 'Invalid phone number format';
+    }
+    
+    if (form.address && form.address.length > 500) {
+      errors.address = 'Address must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     try {
       const isEdit = !!editTarget;
       const url = isEdit ? `${API_URL}/suppliers/${editTarget.id}` : `${API_URL}/suppliers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body: JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+        body: JSON.stringify({ 
+          name: form.name.trim(), 
+          contact: form.contact.trim(), 
+          email: form.email.trim(), 
+          address: form.address.trim(), 
+          tenant_id: user.tenant_id 
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Something went wrong.'); return; }
@@ -1979,28 +2337,32 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           {/* Row 1: Name (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier Name *</label>
-            <input style={supS.input} placeholder="e.g. Kampala Distributors" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            <label style={supS.label}>Supplier Company Name (Required)</label>
+            <input style={{ ...supS.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} placeholder="e.g., Foam Factory Ltd, Textile Suppliers Uganda" value={form.name}
+              onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }} />
+            {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.name}</span>}
           </div>
           {/* Row 2: Contact + Email side by side */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Contact / Phone</label>
-              <input style={supS.input} placeholder="+256 700 000 000" value={form.contact}
-                onChange={e => setForm(f => ({ ...f, contact: e.target.value }))} />
+              <label style={supS.label}>Supplier Phone Number</label>
+              <input style={{ ...supS.input, borderColor: fieldErrors.contact ? '#dc2626' : '#e2e8f0' }} placeholder="+256 700 000 000" value={form.contact}
+                onChange={e => { setForm(f => ({ ...f, contact: e.target.value })); if (fieldErrors.contact) setFieldErrors(prev => ({ ...prev, contact: null })); }} />
+              {fieldErrors.contact && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.contact}</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>Email</label>
-              <input style={supS.input} type="email" placeholder="supplier@example.com" value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <label style={supS.label}>Supplier Email Address</label>
+              <input style={{ ...supS.input, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} type="email" placeholder="contact@supplier.com" value={form.email}
+                onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }} />
+              {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.email}</span>}
             </div>
           </div>
           {/* Row 3: Address (full width) */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Address</label>
-            <input style={supS.input} placeholder="Street, City, Country" value={form.address}
-              onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+            <label style={supS.label}>Supplier Physical Address</label>
+            <input style={{ ...supS.input, borderColor: fieldErrors.address ? '#dc2626' : '#e2e8f0' }} placeholder="e.g., Plot 123, Industrial Area, Kampala" value={form.address}
+              onChange={e => { setForm(f => ({ ...f, address: e.target.value })); if (fieldErrors.address) setFieldErrors(prev => ({ ...prev, address: null })); }} />
+            {fieldErrors.address && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.address}</span>}
           </div>
 
           {formError && (
@@ -2032,6 +2394,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
   const [form, setForm] = useState({ name: '', phone: '', email: '', status: 'active' });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // customer pending deletion
   const [search, setSearch] = useState('');
@@ -2040,6 +2403,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     setEditTarget(null);
     setForm({ name: '', phone: '', email: '', status: 'active' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -2047,6 +2411,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     setEditTarget(customer);
     setForm({ name: customer.name, phone: customer.phone || '', email: customer.email || '', status: customer.status || 'active' });
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
@@ -2068,13 +2433,50 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
     e.preventDefault();
     setSaving(true);
     setFormError(null);
+
+    // Custom validation
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Customer name is required';
+    } else if (form.name.trim().length < 2) {
+      errors.name = 'Customer name must be at least 2 characters';
+    } else if (form.name.trim().length > 100) {
+      errors.name = 'Customer name must not exceed 100 characters';
+    }
+    
+    if (form.phone && form.phone.trim() && !/^[\d\s\+\-\(\)]+$/.test(form.phone)) {
+      errors.phone = 'Invalid phone number format';
+    }
+    
+    if (form.email && form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (form.address && form.address.length > 500) {
+      errors.address = 'Address must not exceed 500 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please fix the errors below');
+      setSaving(false);
+      return;
+    }
+
     try {
       const isEdit = !!editTarget;
       const url = isEdit ? `${API}/customers/${editTarget.id}` : `${API}/customers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body: JSON.stringify({ ...form, tenant_id: user.tenant_id }),
+        body: JSON.stringify({ 
+          name: form.name.trim(), 
+          phone: form.phone.trim(), 
+          email: form.email.trim(), 
+          address: form.address?.trim() || '',
+          status: form.status,
+          tenant_id: user.tenant_id 
+        }),
       });
       const json = await res.json();
       if (!res.ok) { setFormError(json?.message || 'Failed to save customer.'); return; }
@@ -2185,54 +2587,59 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
 
             <div style={custS.field}>
               <label style={custS.label}>
-                Full Name<span style={custS.required}>*</span>
+                Customer Full Name (Required)<span style={custS.required}>*</span>
               </label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>👤</span>
                 <input
                   style={custS.input}
-                  placeholder="e.g. Jane Nakato"
+                  placeholder="e.g., Jane Nakato, Hotel Manager"
                   value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
-                  required
                   autoFocus
                 />
               </div>
+              {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.name}</span>}
             </div>
 
             <div style={custS.field}>
-              <label style={custS.label}>Phone Number</label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <label style={custS.label}>Customer Phone Number</label>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.phone ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>📞</span>
                 <input
                   style={custS.input}
                   type="tel"
                   placeholder="+256 700 000 000"
                   value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, phone: e.target.value })); if (fieldErrors.phone) setFieldErrors(prev => ({ ...prev, phone: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
                 />
               </div>
-              <p style={custS.hint}>Optional — used for receipts and follow-ups</p>
+              {fieldErrors.phone ? (
+                <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.phone}</span>
+              ) : (
+                <p style={custS.hint}>For order confirmations and delivery coordination</p>
+              )}
             </div>
 
             <div style={custS.field}>
-              <label style={custS.label}>Email Address</label>
-              <div style={custS.inputWrap} data-input-wrap>
+              <label style={custS.label}>Customer Email Address</label>
+              <div style={{ ...custS.inputWrap, borderColor: fieldErrors.email ? '#dc2626' : '#e2e8f0' }} data-input-wrap>
                 <span style={custS.inputIcon}>✉️</span>
                 <input
                   style={custS.input}
                   type="email"
                   placeholder="customer@example.com"
                   value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, email: e.target.value })); if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: null })); }}
                   onFocus={e => focusInputWrap(e, true)}
                   onBlur={e => focusInputWrap(e, false)}
                 />
               </div>
+              {fieldErrors.email && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4, display: 'block' }}>{fieldErrors.email}</span>}
             </div>
           </div>
 
@@ -2443,7 +2850,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState(null);
-  const [lastReceipt, setLastReceipt] = useState(null);
+  const [viewingSale, setViewingSale] = useState(null);
 
   // Customer selection state
   const [customerType, setCustomerType] = useState('walk_in');
@@ -2615,8 +3022,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
       });
       const data = await res.json();
       if (!res.ok) { setSaleError(data?.message || 'Checkout failed.'); return; }
-      setLastReceipt({ ...data.data, cartSnapshot: cart, paymentMethod, taxAmount, discountAmount, amountPaid: parseFloat(amountPaid) || cartTotal, changeAmount });
-      onSaleCompleted(data.data);
+      const saleWithDetails = data.data;
+      
+      // Auto-show receipt modal for printing with complete sale data
+      setViewingSale(saleWithDetails);
+      onSaleCompleted(saleWithDetails);
+      
       setCart([]);
       setSearch('');
       setCustomerType('walk_in');
@@ -2634,78 +3045,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     }
   };
 
-  if (lastReceipt) {
-    return (
-      <div style={styles.pageContainer}>
-        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Success banner */}
-          <div style={{ background: 'linear-gradient(135deg, #065f46, #16a34a)', borderRadius: 16, padding: '28px 32px', textAlign: 'center' }}>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <h2 style={{ margin: '0 0 6px', color: '#fff', fontSize: 22, fontWeight: 700 }}>Sale Complete</h2>
-            <p style={{ margin: 0, color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Transaction recorded successfully</p>
-          </div>
-
-          {/* Receipt */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24 }}>
-            <div style={{ textAlign: 'center', borderBottom: '1px dashed #e2e8f0', paddingBottom: 14, marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{user.tenant?.name || 'InventoryPro'}</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{new Date().toLocaleString()}</div>
-            </div>
-            {lastReceipt.cartSnapshot.map(item => (
-              <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '5px 0', color: '#475569' }}>
-                <span>{item.name} × {item.quantity}</span>
-                <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {item.subtotal.toLocaleString()}</span>
-              </div>
-            ))}
-            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 12, paddingTop: 12 }}>
-              {lastReceipt.discountAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#dc2626', marginBottom: 4 }}>
-                  <span>Discount</span>
-                  <span>− UGX {lastReceipt.discountAmount.toLocaleString()}</span>
-                </div>
-              )}
-              {lastReceipt.taxAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#16a34a', marginBottom: 4 }}>
-                  <span>Tax</span>
-                  <span>+ UGX {lastReceipt.taxAmount.toLocaleString()}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, marginTop: 4 }}>
-                <span>Total</span>
-                <span>UGX {parseFloat(lastReceipt.total_amount).toLocaleString()}</span>
-              </div>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', textAlign: 'right', textTransform: 'capitalize' }}>
-              Payment: <strong>{lastReceipt.paymentMethod?.replace(/_/g, ' ')}</strong>
-            </div>
-            {lastReceipt.paymentMethod === 'cash' && (
-              <div style={{ marginTop: 8, borderTop: '1px dashed #e2e8f0', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-                  <span>Amount Paid</span>
-                  <span style={{ fontWeight: 600, color: '#0f172a' }}>UGX {(lastReceipt.amountPaid || 0).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b' }}>
-                  <span>Change</span>
-                  <span style={{ fontWeight: 700, color: '#16a34a' }}>UGX {(lastReceipt.changeAmount || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button onClick={() => setLastReceipt(null)} style={{
-            padding: '12px', borderRadius: 10, border: '1.5px solid #e2e8f0',
-            background: '#fff', color: '#0f172a', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-          }}>
-            New Sale
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // No longer need the lastReceipt view - receipt shows in modal instead
 
   return (
     <div style={styles.pageContainer}>
@@ -3086,13 +3426,13 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 disabled={cart.length === 0 || submitting || !canSell}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#16a34a',
+                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#be123c',
                   color: (cart.length === 0 || !canSell) ? '#94a3b8' : '#fff',
                   fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell) ? 'not-allowed' : 'pointer',
                   transition: 'background 0.15s', letterSpacing: '0.02em',
                 }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#15803d'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#16a34a'; }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#881337'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#be123c'; }}
               >
                 {!canSell ? 'No permission to sell' : submitting ? 'Processing…' : 'Complete Sale'}
               </button>
@@ -3100,6 +3440,99 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           </div>
         </div>
       </div>
+      
+      {/* Receipt Modal - Auto-shown after sale completion */}
+      {viewingSale && (
+        <Modal
+          isOpen={true}
+          onClose={() => setViewingSale(null)}
+          title=""
+          size="md"
+          footer={
+            <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 22 }}>✓</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>Sale Completed Successfully!</span>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Button variant="secondary" onClick={() => setViewingSale(null)}>Close &amp; New Sale</Button>
+                <Button
+                  variant="success"
+                  style={{ background: '#be123c', borderColor: '#be123c' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#881337'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
+                  onClick={() => {
+                  const src = document.getElementById('pos-receipt-content');
+                  if (!src) {
+                    alert('Receipt content not found. Please try again.');
+                    return;
+                  }
+                  
+                  const win = window.open('', '_blank', 'width=800,height=900');
+                  if (!win) {
+                    alert('Pop-up blocked. Please allow pop-ups for this site.');
+                    return;
+                  }
+                  
+                  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
+    @media print {
+      body { padding: 20px; }
+      button { display: none !important; }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+    
+    @media screen {
+      body {
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        margin: 20px auto;
+      }
+    }
+  </style>
+</head>
+<body>${src.innerHTML}</body>
+</html>`);
+                  win.document.close();
+                  
+                  // Wait for images to load
+                  win.addEventListener('load', () => {
+                    setTimeout(() => {
+                      win.focus();
+                      win.print();
+                    }, 500);
+                  });
+                }}
+              >
+                🖨️ Print / Save PDF
+              </Button>
+              </div>
+            </div>
+          }
+        >
+          <SaleReceipt sale={viewingSale} user={user} elementId="pos-receipt-content" />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -4262,29 +4695,67 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               variant="success"
               onClick={() => {
                 const src = document.getElementById('receipt-content');
-                if (!src) return;
+                if (!src) {
+                  alert('Receipt content not found. Please try again.');
+                  return;
+                }
+                
                 const win = window.open('', '_blank', 'width=800,height=900');
+                if (!win) {
+                  alert('Pop-up blocked. Please allow pop-ups for this site.');
+                  return;
+                }
+                
                 win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Receipt</title>
+  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #fff; color: #000; padding: 32px; font-size: 14px; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
     @media print {
       body { padding: 20px; }
       button { display: none !important; }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+    
+    @media screen {
+      body {
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        margin: 20px auto;
+      }
     }
   </style>
 </head>
 <body>${src.innerHTML}</body>
 </html>`);
                 win.document.close();
-                win.focus();
-                setTimeout(() => { win.print(); win.close(); }, 400);
+                
+                // Wait for images to load
+                win.addEventListener('load', () => {
+                  setTimeout(() => {
+                    win.focus();
+                    win.print();
+                    // Don't auto-close to allow user to save as PDF
+                    // win.close();
+                  }, 500);
+                });
               }}
             >
               🖨️ Print / Save PDF
@@ -4292,153 +4763,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
           </div>
         }
       >
-        {viewingSale && (() => {
-          const items = viewingSale.sale_items || viewingSale.saleItems || [];
-          const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
-          const discount = parseFloat(viewingSale.discount_amount) || 0;
-          const tax = parseFloat(viewingSale.tax_amount) || 0;
-          const total = parseFloat(viewingSale.total_amount) || 0;
-          const { date, time } = formatSaleDateTime(viewingSale.sale_date, viewingSale.created_at);
-          const tenant = user?.tenant || {};
-          const tenantName = tenant.name || 'InventoryPro';
-          // Build a SAL-YYYYMMDD-NNNN style ref using the sale date
-          const saleDate = viewingSale.sale_date || viewingSale.created_at || '';
-          const datePart = saleDate.replace(/-/g, '').slice(0, 8);
-          const saleId = String(viewingSale.id).padStart(4, '0');
-          const receiptRef = `SAL-${datePart}-${saleId}`;
-
-          const rRow = (label, value, bold = false, color = '#0f172a') => (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
-              <span style={{ color: '#64748b' }}>{label}</span>
-              <span style={{ fontWeight: bold ? 700 : 500, color }}>{value}</span>
-            </div>
-          );
-
-          return (
-            <div id="receipt-content" style={{ fontFamily: 'inherit' }}>
-
-              {/* ── Business Header ── */}
-              <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '1px solid #e2e8f0' }}>
-                {/* Avatar */}
-                <div style={{
-                  width: 64, height: 64, borderRadius: '50%', background: '#4f46e5',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 28, fontWeight: 700, color: '#fff', marginBottom: 10,
-                }}>
-                  {tenantName.charAt(0).toLowerCase()}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 20, color: '#0f172a' }}>{tenantName}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                  {[tenant.phone && `Tel: ${tenant.phone}`, tenant.email && `Email: ${tenant.email}`].filter(Boolean).join(' | ')}
-                </div>
-                {tenant.address && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{tenant.address}</div>}
-              </div>
-
-              {/* ── Receipt Details + Customer ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
-                  <div style={{ color: '#4f46e5', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{receiptRef}</div>
-                  <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                    <span>📅</span> {date}
-                  </div>
-                  {time && (
-                    <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                      <span>🕐</span> {time}
-                    </div>
-                  )}
-                  <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span>👤</span> Served by: {viewingSale.user?.name || 'Deleted user'}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
-                  <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>
-                    {viewingSale.customer?.name || 'Walk-in Customer'}
-                  </div>
-                  {viewingSale.customer?.phone && (
-                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>📞 {viewingSale.customer.phone}</div>
-                  )}
-                  {viewingSale.customer?.email && (
-                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>✉️ {viewingSale.customer.email}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Items Table ── */}
-              <div style={{ paddingTop: 18 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
-                        <th key={h} style={{
-                          padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#94a3b8',
-                          letterSpacing: '0.06em', textTransform: 'uppercase',
-                          textAlign: i === 0 ? 'center' : i >= 2 ? 'right' : 'left',
-                          borderBottom: '1px solid #e2e8f0',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 ? (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20, color: '#94a3b8', fontSize: 13 }}>No items recorded.</td></tr>
-                    ) : items.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px', textAlign: 'center', fontSize: 14, color: '#64748b' }}>{idx + 1}</td>
-                        <td style={{ padding: '10px' }}>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{item.product?.name || `Product #${item.product_id}`}</div>
-                          {item.product?.sku && <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.product.sku}</div>}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                          {parseFloat(item.quantity).toFixed(2)} {item.product?.unit || 'pcs'}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, color: '#475569' }}>
-                          UGX {parseFloat(item.price).toLocaleString()}
-                        </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                          UGX {parseFloat(item.subtotal).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* ── Totals ── */}
-              <div style={{ marginTop: 10, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                <div style={{ maxWidth: 280, marginLeft: 'auto' }}>
-                  {rRow('Subtotal:', `UGX ${subtotal.toLocaleString()}`)}
-                  {discount > 0 && rRow('Discount:', `− UGX ${discount.toLocaleString()}`, false, '#dc2626')}
-                  {tax > 0 && rRow('Tax:', `+ UGX ${tax.toLocaleString()}`, false, '#16a34a')}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16 }}>TOTAL:</span>
-                    <span style={{ fontWeight: 700, fontSize: 18, color: '#0f172a' }}>UGX {total.toLocaleString()}</span>
-                  </div>
-                  {rRow('Payment Method:', viewingSale.payment_method?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 14 }}>
-                    <span style={{ color: '#64748b' }}>Payment Status:</span>
-                    <span style={{ background: '#dcfce7', color: '#16a34a', fontWeight: 700, fontSize: 12, padding: '2px 10px', borderRadius: 20 }}>Paid</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {viewingSale.notes && (
-                <div style={{ marginTop: 14, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#475569', borderLeft: '3px solid #e2e8f0' }}>
-                  📝 {viewingSale.notes}
-                </div>
-              )}
-
-              {/* ── Thank you footer ── */}
-              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#1e293b', marginBottom: 4 }}>Thank you!</div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>We appreciate your business. Visit us again!</div>
-              </div>
-            </div>
-          );
-        })()}
+        <SaleReceipt sale={viewingSale} user={user} elementId="receipt-content" />
       </Modal>
 
       {/* ── Edit Modal ── */}
@@ -4678,6 +5003,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState('');
 
@@ -4715,11 +5041,17 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
     setSupplierId('');
     setLines([{ ...EMPTY_LINE }]);
     setFormError(null);
+    setFieldErrors({});
     setShowModal(true);
   };
 
-  const setLine = (i, key, val) =>
+  const setLine = (i, key, val) => {
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+    // Clear line-specific errors
+    if (fieldErrors[`line_${i}_${key}`]) {
+      setFieldErrors(prev => ({ ...prev, [`line_${i}_${key}`]: null }));
+    }
+  };
 
   const toggleMode = (i) =>
     setLines(prev => prev.map((l, idx) =>
@@ -4734,17 +5066,73 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!supplierId) { setFormError('Please select a supplier.'); return; }
+    
+    // Validate form
+    const errors = {};
+    
+    if (!supplierId) {
+      errors.supplier = 'Please select a supplier';
+      setFormError('Please select a supplier');
+      setFieldErrors(errors);
+      return;
+    }
+
+    // Validate lines
+    let hasValidLine = false;
+    lines.forEach((l, i) => {
+      if (l.mode === 'existing') {
+        if (!l.product_id) {
+          errors[`line_${i}_product`] = 'Select a product';
+        }
+        if (!l.quantity || l.quantity <= 0) {
+          errors[`line_${i}_quantity`] = 'Quantity required';
+        }
+        if (!l.cost_price || l.cost_price <= 0) {
+          errors[`line_${i}_cost`] = 'Cost price required';
+        }
+        if (l.product_id && l.quantity && l.cost_price) {
+          hasValidLine = true;
+        }
+      } else {
+        // new product
+        if (!l.np_name || !l.np_name.trim()) {
+          errors[`line_${i}_name`] = 'Product name required';
+        }
+        if (!l.np_price || l.np_price <= 0) {
+          errors[`line_${i}_price`] = 'Selling price required';
+        }
+        if (!l.quantity || l.quantity <= 0) {
+          errors[`line_${i}_quantity`] = 'Quantity required';
+        }
+        if (!l.cost_price || l.cost_price <= 0) {
+          errors[`line_${i}_cost`] = 'Cost price required';
+        }
+        if (l.np_track_expiry && !l.np_expiry_date) {
+          errors[`line_${i}_expiry`] = 'Expiry date required';
+        }
+        if (l.np_name && l.np_price && l.quantity && l.cost_price) {
+          hasValidLine = true;
+        }
+      }
+    });
+
+    if (!hasValidLine) {
+      setFormError('Add at least one complete product line with all required fields');
+      setFieldErrors(errors);
+      return;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormError('Please fix the errors in the form');
+      setFieldErrors(errors);
+      return;
+    }
 
     // Validate lines
     const validLines = lines.filter(l => {
       if (l.mode === 'existing') return l.product_id && l.quantity && l.cost_price;
       return l.np_name && l.np_price && l.quantity && l.cost_price;
     });
-    if (validLines.length === 0) {
-      setFormError('Add at least one complete product line.');
-      return;
-    }
 
     const items = validLines.map(l => {
       if (l.mode === 'existing') {
@@ -5591,17 +5979,18 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
           {/* Supplier */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={supS.label}>Supplier *</label>
-            <select style={supS.input} value={supplierId} onChange={e => setSupplierId(e.target.value)} required>
-              <option value="">— Select supplier —</option>
+            <label style={supS.label}>Select Supplier (Required)</label>
+            <select style={{ ...supS.input, borderColor: fieldErrors.supplier ? '#dc2626' : '#e2e8f0' }} value={supplierId} onChange={e => { setSupplierId(e.target.value); if (fieldErrors.supplier) setFieldErrors(prev => ({ ...prev, supplier: null })); }}>
+              <option value="">— Choose supplier for this purchase —</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {fieldErrors.supplier && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.supplier}</span>}
           </div>
 
           {/* Product Lines */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={supS.label}>Products *</label>
+              <label style={supS.label}>Purchase Items (Required)</label>
               <button type="button" onClick={addLine} style={{ fontSize: 13, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                 + Add Line
               </button>
@@ -5645,19 +6034,19 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                 {line.mode === 'existing' && (
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product (Required)</span>
                       <select style={inp} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
-                        <option value="">— Select product —</option>
+                        <option value="">— Choose inventory product —</option>
                         {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>)}
                       </select>
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Quantity (Required)</span>
                       <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
                         onChange={e => setLine(i, 'quantity', e.target.value)} />
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
                       <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
                         onChange={e => setLine(i, 'cost_price', e.target.value)} />
                     </div>
@@ -5671,18 +6060,18 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 1: Name + SKU + Barcode */}
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name *</span>
-                        <input style={inp} placeholder="e.g. Brown Sugar 1kg" value={line.np_name}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name (Required)</span>
+                        <input style={inp} placeholder="e.g., Memory Foam Mattress Queen Size" value={line.np_name}
                           onChange={e => setLine(i, 'np_name', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU</span>
-                        <input style={inp} placeholder="e.g. SGR-001" value={line.np_sku}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>SKU Code</span>
+                        <input style={inp} placeholder="e.g., MAT-QN-001" value={line.np_sku}
                           onChange={e => setLine(i, 'np_sku', e.target.value)} />
                       </div>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Barcode</span>
-                        <input style={inp} placeholder="Scan or type" value={line.np_barcode}
+                        <input style={inp} placeholder="Scan barcode" value={line.np_barcode}
                           onChange={e => setLine(i, 'np_barcode', e.target.value)} />
                       </div>
                     </div>
@@ -5690,7 +6079,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 2: Unit + Category */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit of Measure</span>
                         <select style={inp} value={line.np_unit}
                           onChange={e => setLine(i, 'np_unit', e.target.value)}>
                           <option value="">— Select unit —</option>
@@ -5700,7 +6089,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                         </select>
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Category</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Category</span>
                         <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
                           {['existing', 'new'].map(m => (
                             <button
@@ -5728,7 +6117,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                             ))}
                           </select>
                         ) : (
-                          <input style={inp} placeholder="Type new category name"
+                          <input style={inp} placeholder="e.g., Orthopedic Mattresses"
                             value={line.np_new_category}
                             onChange={e => setLine(i, 'np_new_category', e.target.value)} />
                         )}
@@ -5738,22 +6127,22 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     {/* Row 3: Selling Price + Reorder + Qty + Cost Price */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Selling Price (UGX) *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Retail Price (UGX) (Required)</span>
                         <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.np_price}
                           onChange={e => setLine(i, 'np_price', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Reorder Level</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Low Stock Alert Level</span>
                         <input style={inp} type="number" min="0" placeholder="0" value={line.np_reorder}
                           onChange={e => setLine(i, 'np_reorder', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Qty Purchased *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Quantity (Required)</span>
                         <input style={inp} type="number" min="1" placeholder="0" value={line.quantity}
                           onChange={e => setLine(i, 'quantity', e.target.value)} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
                         <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
@@ -5761,9 +6150,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
                     {/* Description */}
                     <div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Description (optional)</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Description (Optional)</span>
                       <textarea style={{ ...inp, minHeight: 56, resize: 'vertical' }}
-                        placeholder="Optional product description…"
+                        placeholder="e.g., 12-inch thick memory foam with cooling gel technology"
                         value={line.np_description}
                         onChange={e => setLine(i, 'np_description', e.target.value)} />
                     </div>
@@ -6308,6 +6697,87 @@ function ReportsTab({ data, loading, token }) {
 
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
+  // ── Export Functions ──────────────────────────────────────────────────────
+  const exportToCSV = (data, filename) => {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+    
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const value = row[header] || '';
+        // Escape commas and quotes
+        return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+          ? `"${value.replace(/"/g, '""')}"` 
+          : value;
+      }).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const exportOverviewToCSV = () => {
+    const overviewData = [
+      { metric: 'Total Revenue', value: `UGX ${data.stats.totalSales.toLocaleString()}` },
+      { metric: 'Total Costs', value: `UGX ${data.stats.totalPurchases.toLocaleString()}` },
+      { metric: 'Net Profit', value: `UGX ${totalRevenue.toLocaleString()}` },
+      { metric: 'Low Stock Items', value: data.stats.lowStockCount },
+      { metric: 'Total Products', value: data.stats.totalProducts },
+      { metric: 'Total Sales Count', value: data.sales.length },
+      { metric: 'Total Purchases Count', value: data.purchases.length },
+      { metric: 'Total Customers', value: data.customers.length },
+      { metric: 'Total Suppliers', value: data.suppliers.length },
+    ];
+    exportToCSV(overviewData, 'overview_report');
+  };
+
+  const exportSalesData = () => {
+    const salesData = data.sales.map(sale => ({
+      id: sale.id,
+      date: sale.sale_date || sale.created_at,
+      customer: sale.customer?.name || 'Walk-in',
+      payment_method: sale.payment_method,
+      total_amount: sale.total_amount,
+      discount: sale.discount_amount || 0,
+      tax: sale.tax_amount || 0,
+      items_count: (sale.sale_items || []).length
+    }));
+    exportToCSV(salesData, 'sales_report');
+  };
+
+  const exportPurchasesData = () => {
+    const purchasesData = data.purchases.map(purchase => ({
+      id: purchase.id,
+      date: purchase.purchase_date || purchase.created_at,
+      supplier: purchase.supplier?.name || 'Unknown',
+      total_amount: purchase.total_amount,
+      items_count: (purchase.purchase_items || []).length
+    }));
+    exportToCSV(purchasesData, 'purchases_report');
+  };
+
+  const exportProductsData = () => {
+    const productsData = data.products.map(product => ({
+      sku: product.sku || '',
+      name: product.name,
+      category: product.category?.name || '',
+      stock: product.stock,
+      unit: product.unit || '',
+      cost_price: product.cost_price || 0,
+      selling_price: product.price,
+      reorder_level: product.reorder_level || 0,
+      status: product.stock <= (product.reorder_level || 10) ? 'Low Stock' : 'In Stock'
+    }));
+    exportToCSV(productsData, 'products_inventory');
+  };
+
   // ── Derived analytics from existing data ──────────────────────────────────
 
   // Sales by payment method
@@ -6380,10 +6850,105 @@ function ReportsTab({ data, loading, token }) {
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
         borderRadius: 16, padding: '28px 32px', marginBottom: 28,
         boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
       }}>
-        <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
-        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Business Intelligence</p>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Reports & Analytics</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your business performance and trends</p>
+        </div>
+        
+        {/* Export Buttons */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={exportOverviewToCSV}
+            style={{
+              padding: '10px 16px',
+              background: '#16a34a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+            onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}
+          >
+            📊 Export Overview
+          </button>
+          <button
+            onClick={exportSalesData}
+            style={{
+              padding: '10px 16px',
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            💰 Export Sales
+          </button>
+          <button
+            onClick={exportPurchasesData}
+            style={{
+              padding: '10px 16px',
+              background: '#7c3aed',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          >
+            🛒 Export Purchases
+          </button>
+          <button
+            onClick={exportProductsData}
+            style={{
+              padding: '10px 16px',
+              background: '#d97706',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#c2410c'}
+            onMouseLeave={e => e.currentTarget.style.background = '#d97706'}
+          >
+            📦 Export Inventory
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -7653,6 +8218,32 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Custom validation
+    if (!form.name.trim()) {
+      setFormError('User name is required');
+      return;
+    }
+    if (form.name.trim().length < 2) {
+      setFormError('User name must be at least 2 characters');
+      return;
+    }
+    if (!form.email.trim()) {
+      setFormError('Email is required');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setFormError('Please enter a valid email address');
+      return;
+    }
+    if (!editTarget && !form.password) {
+      setFormError('Password is required for new users');
+      return;
+    }
+    if (!editTarget && form.password && form.password.length < 8) {
+      setFormError('Password must be at least 8 characters');
+      return;
+    }
+
     // ── ADD USER: Custom role path (atomic endpoint) ──────────────────────────
     if (!editTarget && form.useCustomRole) {
       if (!form.customRoleName.trim()) { setFormError('Please enter a name for the custom role.'); return; }
@@ -7663,8 +8254,8 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
         const res = await fetch(`${API_URL}/users/with-custom-role`, {
           method: 'POST', headers,
           body: JSON.stringify({
-            name: form.name,
-            email: form.email,
+            name: form.name.trim(),
+            email: form.email.trim(),
             password: form.password,
             role_name: form.customRoleName.trim(),
             role_description: form.customRoleDesc.trim() || null,
@@ -8068,21 +8659,21 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
             {/* Row 1: Name + Email */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Full Name *</label>
-                <input style={supS.input} placeholder="John Doe" value={form.name}
+                <label style={supS.label}>Staff Full Name (Required)</label>
+                <input style={supS.input} placeholder="e.g., John Mukasa" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Email *</label>
-                <input style={supS.input} type="email" placeholder="user@business.com" value={form.email}
+                <label style={supS.label}>Staff Email Address (Required)</label>
+                <input style={supS.input} type="email" placeholder="staff@zziwa.com" value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
               </div>
             </div>
 
             {/* Password */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>{editTarget ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
-              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Min 8 chars, upper, lower, number'}
+              <label style={supS.label}>{editTarget ? 'New Password (Leave blank to keep current)' : 'Create Password (Required)'}</label>
+              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Minimum 8 characters with uppercase, lowercase & number'}
                 value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required={!editTarget} minLength={editTarget ? 0 : 8} />
             </div>
@@ -8121,7 +8712,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
 
             {/* ── PREDEFINED ROLE PICKER ── */}
             {(!form.useCustomRole || editTarget) && !(editTarget && form.editCustomRoleId) && (<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <label style={supS.label}>Assign Roles *</label>
+              <label style={supS.label}>Assign User Roles (Required)</label>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {roles.map(r => {
@@ -9211,234 +9802,221 @@ if (!document.head.querySelector('style[data-component="Dashboard"]')) {
 function PrintableInvoiceModal({ invoice, user, onClose }) {
   if (!invoice) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = () => { window.print(); };
+
+  const tenant = user?.tenant || {};
+  const businessName    = tenant.name    || user?.name  || 'Smart Trendz';
+  const businessPhone   = tenant.phone   || user?.phone || '0776 293691';
+  const businessEmail   = tenant.email   || user?.email || '';
+  const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
+  const businessTagline = tenant.tagline || 'Best Unboxing Xperience';
+
+  const items    = invoice.items || invoice.sale_items || invoice.saleItems || [];
+  const subtotal = invoice.subtotal != null
+    ? parseFloat(invoice.subtotal)
+    : items.reduce((s, i) => s + (parseFloat(i.subtotal) || (parseFloat(i.price || 0) * parseFloat(i.quantity || 1))), 0);
+  const discount = parseFloat(invoice.discount_amount || 0);
+  const tax      = parseFloat(invoice.tax_amount || 0);
+  const total    = parseFloat(invoice.total_amount || (subtotal - discount + tax));
+  const paid     = parseFloat(invoice.amount_paid ?? total);
+  const balance  = Math.max(0, total - paid);
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const date = new Date(d);
+    // Avoid timezone offset shifting the date
+    const utc = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    return utc.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
   };
 
-  // Dynamic Contact & Account Information (from user & user.tenant)
-  const tenant = user?.tenant || {};
-  const businessName = tenant.name || user?.name || 'Zziwa & Sons';
-  const businessPhone = tenant.phone || user?.phone || '0776 293691';
-  const businessEmail = tenant.email || user?.email || 'contact@zziwaandsons.com';
-  const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square, Kampala Uganda';
-
-  const items = invoice.items || invoice.sale_items || invoice.saleItems || [];
-  const subtotal = invoice.subtotal || items.reduce((s, i) => s + (parseFloat(i.subtotal) || (parseFloat(i.price || i.cost_price || 0) * parseFloat(i.quantity || 1))), 0);
-  const discount = parseFloat(invoice.discount_amount || invoice.discount || 0);
-  const tax = parseFloat(invoice.tax_amount || invoice.tax || 0);
-  const total = parseFloat(invoice.total_amount || invoice.total || (subtotal - discount + tax));
-  const paid = parseFloat(invoice.amount_paid !== undefined ? invoice.amount_paid : (invoice.payment_status === 'paid' ? total : total));
-  const balance = Math.max(0, total - paid);
-
-  const status = balance === 0 ? 'PAID' : paid > 0 ? 'PARTIAL' : 'DUE';
-  const statusBg = status === 'PAID' ? '#dcfce7' : status === 'PARTIAL' ? '#fef3c7' : '#fee2e2';
-  const statusColor = status === 'PAID' ? '#15803d' : status === 'PARTIAL' ? '#b45309' : '#b91c1c';
-
-  const invoiceNumber = invoice.invoice_number || invoice.reference || `INV/25-26/${String(invoice.id || '0125').padStart(4, '0')}`;
-  const invoiceDate = invoice.invoice_date || invoice.sale_date || invoice.created_at 
-    ? new Date(invoice.invoice_date || invoice.sale_date || invoice.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) 
-    : new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-  
-  const dueDate = invoice.due_date 
-    ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) 
-    : invoiceDate;
-    
-  const sourceRef = invoice.source_ref || `S${String(invoice.id || '00124').padStart(5, '0')}`;
-
-  const customerName = invoice.customer_name || invoice.customer?.name || 'Valued Customer';
-  const customerEmail = invoice.customer_email || invoice.customer?.email || '';
-  const customerPhone = invoice.customer_phone || invoice.customer?.phone || invoice.customer?.contact || '';
+  const invoiceNumber = invoice.invoice_number || `INV/25-26/${String(invoice.id || '0125').padStart(4, '0')}`;
+  const invoiceDate   = fmtDate(invoice.invoice_date || invoice.sale_date || invoice.created_at);
+  const dueDate       = fmtDate(invoice.due_date || invoice.invoice_date || invoice.sale_date);
+  const sourceRef     = invoice.source_ref || `S${String(invoice.id || '00124').padStart(5, '0')}`;
+  const customerName    = invoice.customer_name || invoice.customer?.name || 'Valued Customer';
+  const customerPhone   = invoice.customer_phone || invoice.customer?.phone || invoice.customer?.contact || '';
+  const customerEmail   = invoice.customer_email || invoice.customer?.email || '';
   const customerAddress = invoice.customer_address || invoice.customer?.address || '';
 
+  // Export invoice to CSV
+  const handleExportInvoice = () => {
+    const invoiceData = items.map(item => ({
+      product: item.product?.name || item.name || `Item ${item.product_id}`,
+      quantity: item.quantity || 1,
+      unit_price: item.price || 0,
+      subtotal: item.subtotal || (item.price * item.quantity)
+    }));
+    
+    const csvHeader = ['Item', 'Quantity', 'Unit Price', 'Subtotal'].join(',');
+    const csvRows = invoiceData.map(row => 
+      `"${row.product}",${row.quantity},${row.unit_price},${row.subtotal}`
+    );
+    
+    // Add summary rows
+    csvRows.push('');
+    csvRows.push(`"Subtotal",,,"${subtotal}"`);
+    if (discount > 0) csvRows.push(`"Discount",,,"${discount}"`);
+    if (tax > 0) csvRows.push(`"Tax",,,"${tax}"`);
+    csvRows.push(`"Total",,,"${total}"`);
+    csvRows.push(`"Amount Paid",,,"${paid}"`);
+    csvRows.push(`"Balance",,,"${balance}"`);
+    
+    const csvContent = [
+      `Invoice: ${invoiceNumber}`,
+      `Customer: ${customerName}`,
+      `Date: ${invoiceDate}`,
+      '',
+      csvHeader,
+      ...csvRows
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `invoice_${invoiceNumber.replace(/\//g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
   return (
-    <Modal isOpen={true} onClose={onClose} title="" maxWidth="920px">
-      {/* Top Action Bar (hidden when printing) */}
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#881337', fontSize: 20 }}>
-            📄
-          </div>
+    <Modal isOpen={true} onClose={onClose} title="" size="xl" className="invoice-modal">
+      {/* ── Action bar (screen only, hidden on print) ── */}
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
           <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Invoice #{invoiceNumber}</h3>
-            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Ready for printing or downloading as PDF</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoiceNumber}</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>{customerName}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={handlePrint}
-            style={{
-              padding: '10px 22px', borderRadius: 8, border: 'none',
-              background: '#881337', color: '#ffffff', fontWeight: 700,
-              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              boxShadow: '0 4px 14px rgba(136,19,55,0.3)', transition: 'all 0.15s'
-            }}
-          >
-            <span>🖨️</span> Print / Save as PDF
-          </button>
-          <button
-            onClick={onClose}
-            style={{
-              padding: '10px 18px', borderRadius: 8, border: '1px solid #cbd5e1',
-              background: '#ffffff', color: '#475569', fontWeight: 600,
-              fontSize: 13, cursor: 'pointer'
-            }}
-          >
-            Close
-          </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleExportInvoice} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(22,163,74,0.3)' }}>📥 Export CSV</button>
+          <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
+          <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
         </div>
       </div>
 
-      {/* Printable Invoice Container */}
-      <div
-        id="printable-invoice"
-        style={{
-          background: '#ffffff',
-          borderRadius: 16,
-          padding: '44px 48px',
-          color: '#0f172a',
-          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-          boxShadow: '0 8px 30px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-          position: 'relative',
-          boxSizing: 'border-box'
-        }}
-      >
-        {/* Top Header Row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '2px dashed #f1f5f9' }}>
-          {/* Logo & Company Branding */}
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            <img
-              src="/zziwa logo.png"
-              alt={businessName}
-              style={{
-                width: 76,
-                height: 76,
-                objectFit: 'contain',
-                background: '#ffffff',
-                padding: '6px',
-                borderRadius: 16,
-                border: '1.5px solid #e2e8f0',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-              }}
-            />
-            <div>
-              <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 900, color: '#881337', letterSpacing: '-0.5px' }}>
-                {businessName}
-              </h1>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#be123c', letterSpacing: '0.02em' }}>
-                Quality & Reliability | Inventory Management
-              </p>
+      {/* ══════════════════════════════════════════════
+          PRINTABLE INVOICE BODY
+          Matches the Smart Trendz proforma layout
+      ══════════════════════════════════════════════ */}
+      <div id="printable-invoice" style={{
+        background: '#ffffff',
+        padding: '36px 44px 32px',
+        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+        color: '#0f172a',
+        boxSizing: 'border-box',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+
+        {/* Decorative circle — top right, matches screenshot */}
+        <div style={{
+          position: 'absolute', top: -80, right: -80,
+          width: 260, height: 260, borderRadius: '50%',
+          background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+        }} />
+
+        {/* ── HEADER: logo/name + customer left · address right ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+
+          {/* Left: logo + business name, then customer details below */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <img
+                src="/zziwa logo.png"
+                alt={businessName}
+                style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
+              />
+              <div style={{ paddingTop: 2 }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#be123c', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                  {businessName}
+                </div>
+              </div>
+            </div>
+            {/* Customer details — sits directly below the logo */}
+            <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8, paddingLeft: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>To:</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{customerName}</div>
+              {customerPhone   && <div>{customerPhone}</div>}
+              {customerEmail   && <div>{customerEmail}</div>}
+              {customerAddress && <div>{customerAddress}</div>}
             </div>
           </div>
 
-          {/* Document Title & Reference */}
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 6, background: '#881337', color: '#ffffff', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              PROFORMA INVOICE
+          {/* Right: business contact block + invoice title below */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+            <div style={{ textAlign: 'right', fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+              <div style={{ fontWeight: 700 }}>{businessName}</div>
+              <div>{businessAddress}</div>
+              <div>{businessPhone}</div>
+              {businessEmail && <div>{businessEmail}</div>}
+              <div>Kampala Uganda</div>
             </div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.5px' }}>
-              {invoiceNumber}
-            </h2>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#be123c', letterSpacing: '-0.3px', textAlign: 'right' }}>
+              Invoice {invoiceNumber}
+            </div>
           </div>
         </div>
 
-        {/* Issuer Details vs Billed To Cards (2-Column Layout) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 28 }}>
-          {/* Issuer Details Card */}
-          <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              ISSUED BY
-            </p>
-            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{businessName}</p>
-            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569', lineHeight: 1.4 }}>📍 {businessAddress}</p>
-            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>📞 {businessPhone}</p>
-            <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>✉️ {businessEmail}</p>
-          </div>
-
-          {/* Billed To Customer Card */}
-          <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              BILLED TO
-            </p>
-            <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{customerName}</p>
-            {customerPhone ? <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>📞 {customerPhone}</p> : <p style={{ margin: '0 0 3px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No phone listed</p>}
-            {customerEmail && <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>✉️ {customerEmail}</p>}
-            {customerAddress && <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>📍 {customerAddress}</p>}
-          </div>
-        </div>
-
-        {/* Metadata Bar (Date, Due Date, Source, Status) */}
+        {/* ── DATE / DUE DATE / SOURCE INFO CARD ── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          background: '#ffffff',
-          border: '1.5px solid #e2e8f0',
-          borderRadius: 12,
-          padding: '14px 20px',
-          marginBottom: 28,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+          gridTemplateColumns: '1fr 1fr 1fr',
+          border: '1.5px solid #cbd5e1',
+          borderRadius: 10,
+          overflow: 'hidden',
+          marginBottom: 22,
         }}>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice Date</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{invoiceDate}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due Date</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{dueDate}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Source / Ref</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{sourceRef}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Status</p>
-            <span style={{
-              display: 'inline-block',
-              padding: '3px 12px',
-              borderRadius: 20,
-              fontSize: 11,
-              fontWeight: 800,
-              background: statusBg,
-              color: statusColor
+          {[
+            { label: 'Invoice Date', value: invoiceDate },
+            { label: 'Due Date',     value: dueDate     },
+            { label: 'Source',       value: sourceRef   },
+          ].map((cell, i, arr) => (
+            <div key={cell.label} style={{
+              padding: '12px 18px',
+              borderRight: i < arr.length - 1 ? '1.5px solid #cbd5e1' : 'none',
             }}>
-              ● {status}
-            </span>
-          </div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>{cell.label}</div>
+              <div style={{ fontSize: 13, color: '#475569' }}>{cell.value}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Line Items Table */}
-        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        {/* ── LINE ITEMS TABLE ── */}
+        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#881337', color: '#ffffff' }}>
-                <th style={{ padding: '12px 18px', textAlign: 'left', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>DESCRIPTION</th>
-                <th style={{ padding: '12px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>QUANTITY</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '160px' }}>UNIT PRICE</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '170px' }}>AMOUNT</th>
+                <th style={{ padding: '11px 18px', textAlign: 'left',   fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Items</th>
+                <th style={{ padding: '11px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 130 }}>Quantity</th>
+                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 150 }}>Unit Price</th>
+                <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 160 }}>Amount</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item, idx) => {
-                const name = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
-                const qty = parseFloat(item.quantity || 1);
-                const price = parseFloat(item.price || item.unit_price || 0);
-                const amt = parseFloat(item.subtotal || (qty * price));
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan="4" style={{ padding: '20px 18px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No items</td>
+                </tr>
+              ) : items.map((item, idx) => {
+                const name      = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
+                const qty       = parseFloat(item.quantity || 1);
+                const price     = parseFloat(item.price || item.unit_price || 0);
+                const amt       = parseFloat(item.subtotal != null ? item.subtotal : qty * price);
                 const unitLabel = item.product?.unit || item.unit || 'Units';
+                const isLast    = idx === items.length - 1;
 
                 return (
-                  <tr key={idx} style={{ borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                    <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                      {name}
-                    </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
+                  <tr key={idx} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '13px 18px', fontSize: 13, color: '#0f172a' }}>{name}</td>
+                    <td style={{ padding: '13px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
                       {qty.toFixed(2)} {unitLabel}
                     </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
-                      UGX {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
+                      {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 800, color: '#0f172a' }}>
-                      UGX {amt.toLocaleString('en-US')}
+                    <td style={{ padding: '13px 18px', textAlign: 'right', fontSize: 13, color: '#0f172a' }}>
+                      {amt.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
                     </td>
                   </tr>
                 );
@@ -9447,55 +10025,42 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           </table>
         </div>
 
-        {/* Bottom Section: Payment Instructions (Left) & Totals Summary (Right) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 28, marginTop: 20 }}>
-          {/* Payment Instructions (Bottom Left) */}
-          <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
-            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              💳 Payment Details & Instructions
-            </p>
-            <p style={{ margin: '0 0 3px' }}>
-              Payment Communication: <strong style={{ color: '#881337' }}>{invoiceNumber}</strong>
-            </p>
-            <p style={{ margin: '0 0 3px' }}>
-              Bank Account: <strong>6008040719 - ABSA Business Account</strong>
-            </p>
-            <p style={{ margin: '0 0 6px' }}>
-              Mobile Money: <strong>{businessPhone} ({businessName})</strong>
-            </p>
-            <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', fontStyle: 'italic', borderTop: '1px dashed #cbd5e1', paddingTop: 6 }}>
-              Thank you for doing business with {businessName}!
-            </p>
+        {/* ── BOTTOM SECTION: payment note (left) + totals (right) ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24, marginTop: 4 }}>
+
+          {/* Payment terms — only shown if the invoice has notes */}
+          <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+            {invoice.notes && (
+              <div style={{ fontSize: 12, color: '#475569', maxWidth: 380 }}>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>Terms: </span>{invoice.notes}
+              </div>
+            )}
           </div>
 
-          {/* Totals Summary Box (Bottom Right) */}
-          <div style={{ width: '310px', border: '1.5px solid #cbd5e1', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
-              <span style={{ color: '#64748b', fontWeight: 600 }}>Subtotal</span>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
+          {/* Totals block — matches screenshot (paid row + bold amount due) */}
+          <div style={{ minWidth: 300, border: '1.5px solid #cbd5e1', borderRadius: 10, overflow: 'hidden' }}>
+            {/* Paid on date row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
+              <span style={{ fontStyle: 'italic', color: '#475569' }}>Paid on {invoiceDate}</span>
+              <span style={{ color: '#0f172a' }}>
+                {paid.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+              </span>
             </div>
-            {discount > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13, color: '#dc2626' }}>
-                <span>Discount</span>
-                <span>− UGX {discount.toLocaleString()}</span>
-              </div>
-            )}
-            {tax > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13, color: '#16a34a' }}>
-                <span>Tax</span>
-                <span>+ UGX {tax.toLocaleString()}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
-              <span style={{ color: '#475569', fontStyle: 'italic' }}>Amount Paid ({invoiceDate})</span>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {paid.toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: balance > 0 ? '#fff1f2' : '#f0fdf4', fontSize: 15, fontWeight: 900 }}>
-              <span style={{ color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
-              <span style={{ color: balance > 0 ? '#9f1239' : '#166534' }}>UGX {balance.toLocaleString()}</span>
+            {/* Amount Due row — bold, dark background when balance > 0 */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              padding: '12px 18px',
+              background: balance > 0 ? '#fff1f2' : '#f0fdf4',
+              fontSize: 14,
+            }}>
+              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
+              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>
+                {balance.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
+              </span>
             </div>
           </div>
         </div>
+
       </div>
     </Modal>
   );
@@ -9504,28 +10069,114 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
 // ════════════════════════════════════════════════
 // CREATE CUSTOM INVOICE MODAL
 // ════════════════════════════════════════════════
-function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
+function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }) {
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
   const [sourceRef, setSourceRef] = useState(`S00${Math.floor(100 + Math.random() * 900)}`);
-  
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  // Payment status state
+  const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [amountPaid, setAmountPaid] = useState('');
+  const [amountDue, setAmountDue] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
+
+  // Products list for dropdown
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
   const [items, setItems] = useState([
-    { description: '', quantity: '1', price: '' }
+    { description: '', quantity: '1', price: '', mode: 'manual', product_id: '' }
   ]);
 
+  // Fetch products for dropdown
+  useState(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const res = await fetch(`${API}/products?tenant_id=${user.tenant_id}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setProducts(json.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch products:', err);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
   const handleAddItem = () => {
-    setItems(prev => [...prev, { description: '', quantity: '1', price: '' }]);
+    setItems(prev => [...prev, { description: '', quantity: '1', price: '', mode: 'manual', product_id: '' }]);
   };
 
   const handleRemoveItem = (idx) => {
     setItems(prev => prev.filter((_, i) => i !== idx));
+    // Clear item error when removed
+    if (fieldErrors[`item_${idx}`]) {
+      const newErrors = { ...fieldErrors };
+      delete newErrors[`item_${idx}`];
+      setFieldErrors(newErrors);
+    }
   };
 
   const handleItemChange = (idx, field, val) => {
     setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+    // Clear field error when user types
+    if (fieldErrors[`item_${idx}`]) {
+      setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
+    }
+  };
+
+  // Handle product selection from dropdown
+  const handleProductSelect = (idx, productId) => {
+    if (!productId) {
+      handleItemChange(idx, 'product_id', '');
+      handleItemChange(idx, 'mode', 'manual');
+      return;
+    }
+    
+    const product = products.find(p => String(p.id) === String(productId));
+    if (product) {
+      setItems(prev => prev.map((item, i) => i === idx ? {
+        ...item,
+        product_id: productId,
+        mode: 'product',
+        description: product.name,
+        price: String(product.price || 0)
+      } : item));
+      
+      // Clear error
+      if (fieldErrors[`item_${idx}`]) {
+        setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
+      }
+    }
+  };
+
+  // Toggle between product dropdown and manual entry
+  const toggleItemMode = (idx) => {
+    const currentMode = items[idx].mode;
+    const newMode = currentMode === 'manual' ? 'product' : 'manual';
+    
+    setItems(prev => prev.map((item, i) => i === idx ? {
+      ...item,
+      mode: newMode,
+      product_id: '',
+      description: '',
+      price: '',
+      quantity: '1'
+    } : item));
   };
 
   const calculateTotal = () => {
@@ -9544,50 +10195,227 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
       setCustomerName(cust.name || '');
       setCustomerPhone(cust.phone || cust.contact || '');
       setCustomerEmail(cust.email || '');
+      // Clear customer errors
+      if (fieldErrors.customerName) {
+        setFieldErrors(prev => ({ ...prev, customerName: null }));
+      }
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!customerName) {
-      alert('Please enter or select a customer name.');
-      return;
-    }
-    const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
-    if (validItems.length === 0) {
-      alert('Please add at least one valid item with a description and price.');
-      return;
-    }
-
+  // When status changes, reset payment fields and auto-fill where appropriate
+  const handleStatusChange = (newStatus) => {
+    setPaymentStatus(newStatus);
     const total = calculateTotal();
-    const invNumber = `INV/25-26/${String(Math.floor(100 + Math.random() * 9000)).padStart(4, '0')}`;
+    if (newStatus === 'paid') {
+      setAmountPaid(String(total));
+      setAmountDue('0');
+    } else if (newStatus === 'due') {
+      setAmountPaid('0');
+      setAmountDue(String(total));
+    } else {
+      // partial — clear both so user fills in
+      setAmountPaid('');
+      setAmountDue('');
+    }
+    // Clear payment errors
+    setFieldErrors(prev => ({ ...prev, amountPaid: null, amountDue: null }));
+  };
 
-    const newInvoice = {
-      id: Date.now(),
-      invoice_number: invNumber,
+  // When partial amount paid changes, auto-calc amount due
+  const handlePartialPaidChange = (val) => {
+    setAmountPaid(val);
+    const total = calculateTotal();
+    const paid = parseFloat(val) || 0;
+    setAmountDue(String(Math.max(0, total - paid)));
+    // Clear error
+    if (fieldErrors.amountPaid) {
+      setFieldErrors(prev => ({ ...prev, amountPaid: null }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitError('');
+    setFieldErrors({});
+
+    // ══════════════════════════════════════════════════════════════════════
+    // COMPREHENSIVE FORM VALIDATION
+    // ══════════════════════════════════════════════════════════════════════
+    const errors = {};
+    
+    // 1. Customer Name Validation
+    if (!customerName.trim()) {
+      errors.customerName = 'Customer name is required for invoice generation';
+    } else if (customerName.trim().length < 2) {
+      errors.customerName = 'Customer name must be at least 2 characters';
+    } else if (customerName.trim().length > 100) {
+      errors.customerName = 'Customer name must not exceed 100 characters';
+    }
+    
+    // 2. Customer Phone Validation (optional but must be valid if provided)
+    if (customerPhone.trim() && !/^[\d\s\+\-\(\)]+$/.test(customerPhone)) {
+      errors.customerPhone = 'Phone number contains invalid characters';
+    }
+    
+    // 3. Customer Email Validation (optional but must be valid if provided)
+    if (customerEmail.trim()) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+        errors.customerEmail = 'Please enter a valid email address (e.g., customer@example.com)';
+      }
+    }
+    
+    // 4. Invoice Date Validation
+    if (!invoiceDate) {
+      errors.invoiceDate = 'Invoice date is required';
+    }
+    
+    // 5. Due Date Validation
+    if (!dueDate) {
+      errors.dueDate = 'Due date is required';
+    } else if (invoiceDate && dueDate < invoiceDate) {
+      errors.dueDate = 'Due date cannot be earlier than invoice date';
+    }
+    
+    // 6. Items Validation - Comprehensive per-item validation
+    const validItems = [];
+    let hasItemErrors = false;
+    
+    items.forEach((item, idx) => {
+      const itemErrors = [];
+      
+      // Check description
+      if (!item.description.trim()) {
+        itemErrors.push('Description is required');
+        hasItemErrors = true;
+      }
+      
+      // Check quantity
+      const qty = parseFloat(item.quantity);
+      if (!item.quantity || isNaN(qty) || qty <= 0) {
+        itemErrors.push('Valid quantity required (must be greater than 0)');
+        hasItemErrors = true;
+      }
+      
+      // Check price
+      const price = parseFloat(item.price);
+      if (!item.price || isNaN(price) || price < 0) {
+        itemErrors.push('Valid price required (must be 0 or greater)');
+        hasItemErrors = true;
+      }
+      
+      // If this item has errors, record them
+      if (itemErrors.length > 0) {
+        errors[`item_${idx}`] = itemErrors.join(', ');
+      } else {
+        // Only add to valid items if no errors
+        validItems.push(item);
+      }
+    });
+    
+    // Overall items check
+    if (items.length === 0) {
+      errors.items = 'Please add at least one invoice line item';
+    } else if (validItems.length === 0) {
+      errors.items = 'Please provide valid details for at least one item (description, quantity, and price)';
+    }
+    
+    // 7. Payment Status Validation
+    const total = calculateTotal();
+    
+    if (paymentStatus === 'paid') {
+      const paid = parseFloat(amountPaid);
+      if (!amountPaid || isNaN(paid) || paid < 0) {
+        errors.amountPaid = 'Amount paid is required and must be 0 or greater';
+      } else if (paid > total) {
+        errors.amountPaid = `Amount paid (${paid.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
+      }
+    } else if (paymentStatus === 'partial') {
+      const paid = parseFloat(amountPaid);
+      if (!amountPaid || isNaN(paid) || paid <= 0) {
+        errors.amountPaid = 'For partial payment, amount paid must be greater than 0';
+      } else if (paid >= total) {
+        errors.amountPaid = 'For partial payment, amount paid must be less than total. Use "Paid" status instead.';
+      }
+    } else if (paymentStatus === 'due') {
+      const due = parseFloat(amountDue);
+      if (!amountDue || isNaN(due) || due <= 0) {
+        errors.amountDue = 'Amount due is required and must be greater than 0';
+      } else if (due > total) {
+        errors.amountDue = `Amount due (${due.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
+      }
+    }
+
+    // 8. If there are validation errors, show them and stop submission
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setSubmitError('Please fix all validation errors before submitting the invoice');
+      // Scroll to top to show error message
+      setTimeout(() => {
+        const modalContent = document.querySelector('[data-invoice-form]');
+        if (modalContent) modalContent.scrollTop = 0;
+      }, 100);
+      return;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PREPARE AND SUBMIT INVOICE DATA
+    // ══════════════════════════════════════════════════════════════════════
+    const payload = {
       invoice_date: invoiceDate,
       due_date: dueDate,
-      source_ref: sourceRef,
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      customer_email: customerEmail,
-      total_amount: total,
-      amount_paid: total,
-      payment_status: 'paid',
+      source_ref: sourceRef.trim() || null,
+      customer_name: customerName.trim(),
+      customer_phone: customerPhone.trim() || null,
+      customer_email: customerEmail.trim() || null,
+      payment_status: paymentStatus,
+      amount_paid: parseFloat(amountPaid) || 0,
+      notes: paymentTerms.trim() || null,
       items: validItems.map(i => ({
-        description: i.description,
+        description: i.description.trim(),
         quantity: parseFloat(i.quantity) || 1,
         price: parseFloat(i.price) || 0,
         subtotal: (parseFloat(i.quantity) || 1) * (parseFloat(i.price) || 0)
       }))
     };
 
-    onCreated(newInvoice);
+    try {
+      setSubmitting(true);
+      const res = await fetch(`${API}/invoices`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const msg = json.message || (json.errors ? Object.values(json.errors).flat().join(' ') : 'Failed to save invoice.');
+        setSubmitError(msg);
+        return;
+      }
+      onCreated(json.data);
+    } catch (err) {
+      setSubmitError('Network error. Unable to reach the server. Please check your internet connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="720px">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="820px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }} data-invoice-form>
+        {submitError && (
+          <div style={{ padding: '12px 16px', borderRadius: 10, background: '#fef2f2', border: '1.5px solid #fecaca', color: '#b91c1c', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Validation Error</div>
+              <div>{submitError}</div>
+            </div>
+          </div>
+        )}
+
         {customers && customers.length > 0 && (
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -9597,7 +10425,7 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
               onChange={handleSelectCustomer}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff' }}
             >
-              <option value="">— Select an existing customer —</option>
+              <option value="">— Select an existing customer to auto-fill details —</option>
               {customers.map(c => (
                 <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
               ))}
@@ -9607,31 +10435,38 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Customer Name *</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Customer Name (Required)
+            </label>
             <input
               type="text"
-              required
-              placeholder="e.g. Asher"
+              placeholder="e.g., Jane Nakato, Hotel Manager"
               value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setCustomerName(e.target.value); if (fieldErrors.customerName) setFieldErrors(prev => ({ ...prev, customerName: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerName ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.customerName && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerName}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Phone Number</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Phone Number (Optional)
+            </label>
             <input
               type="text"
-              placeholder="e.g. 0776 000000"
+              placeholder="+256 700 000 000"
               value={customerPhone}
-              onChange={e => setCustomerPhone(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setCustomerPhone(e.target.value); if (fieldErrors.customerPhone) setFieldErrors(prev => ({ ...prev, customerPhone: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerPhone ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.customerPhone && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerPhone}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Source / Ref</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Source / Reference
+            </label>
             <input
               type="text"
-              placeholder="e.g. S00124"
+              placeholder="e.g., ORDER-12345"
               value={sourceRef}
               onChange={e => setSourceRef(e.target.value)}
               style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
@@ -9639,31 +10474,51 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Invoice Date</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Customer Email (Optional)
+            </label>
+            <input
+              type="email"
+              placeholder="customer@example.com"
+              value={customerEmail}
+              onChange={e => { setCustomerEmail(e.target.value); if (fieldErrors.customerEmail) setFieldErrors(prev => ({ ...prev, customerEmail: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.customerEmail ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
+            />
+            {fieldErrors.customerEmail && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.customerEmail}</span>}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Invoice Date (Required)
+            </label>
             <input
               type="date"
               value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setInvoiceDate(e.target.value); if (fieldErrors.invoiceDate) setFieldErrors(prev => ({ ...prev, invoiceDate: null })); }}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.invoiceDate ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.invoiceDate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.invoiceDate}</span>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Due Date</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+              Due Date (Required)
+            </label>
             <input
               type="date"
               value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              onChange={e => { setDueDate(e.target.value); if (fieldErrors.dueDate) setFieldErrors(prev => ({ ...prev, dueDate: null })); }}
+              min={invoiceDate}
+              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid', borderColor: fieldErrors.dueDate ? '#dc2626' : '#cbd5e1', borderRadius: 8, fontSize: 13 }}
             />
+            {fieldErrors.dueDate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.dueDate}</span>}
           </div>
         </div>
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 800, color: '#881337', textTransform: 'uppercase' }}>
-              Invoice Line Items
+              Invoice Line Items {fieldErrors.items && <span style={{ color: '#dc2626', fontSize: 11, marginLeft: 8 }}>⚠️ {fieldErrors.items}</span>}
             </label>
             <button
               type="button"
@@ -9676,40 +10531,136 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map((item, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 40px', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="text"
-                  placeholder="Description (e.g. Apple iPhone 17 Pro Max 512GB)"
-                  value={item.description}
-                  onChange={e => handleItemChange(idx, 'description', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
-                  required
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Qty"
-                  value={item.quantity}
-                  onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
-                  required
-                />
-                <input
-                  type="number"
-                  placeholder="Unit Price (UGX)"
-                  value={item.price}
-                  onChange={e => handleItemChange(idx, 'price', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
-                  required
-                />
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, height: 36, fontWeight: 800, cursor: 'pointer' }}
-                  >
-                    ✕
-                  </button>
+              <div key={idx} style={{ border: '1.5px solid', borderColor: fieldErrors[`item_${idx}`] ? '#dc2626' : '#e2e8f0', borderRadius: 10, padding: '12px', background: item.mode === 'product' ? '#fafbff' : '#fff' }}>
+                {/* Mode toggle */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleItemMode(idx)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700,
+                        border: '1.5px solid',
+                        borderColor: item.mode === 'manual' ? '#be123c' : '#3b82f6',
+                        background: item.mode === 'manual' ? '#be123c' : '#3b82f6',
+                        color: '#fff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {item.mode === 'manual' ? '✍️ Manual Entry' : '📦 From Products'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleItemMode(idx)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 16, fontSize: 11, fontWeight: 600,
+                        border: '1.5px solid #e2e8f0',
+                        background: '#f8fafc',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🔄 Switch Mode
+                    </button>
+                  </div>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontWeight: 800, cursor: 'pointer', fontSize: 12 }}
+                    >
+                      ✕ Remove
+                    </button>
+                  )}
+                </div>
+
+                {/* Product dropdown mode */}
+                {item.mode === 'product' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>SELECT PRODUCT</label>
+                      <select
+                        value={item.product_id}
+                        onChange={e => handleProductSelect(idx, e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff' }}
+                        disabled={loadingProducts}
+                      >
+                        <option value="">— Choose from inventory —</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} (UGX {parseFloat(p.price || 0).toLocaleString()})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>QUANTITY</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="1"
+                        value={item.quantity}
+                        onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>UNIT PRICE (UGX)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={item.price}
+                        onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right', background: '#f8fafc' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual entry mode */}
+                {item.mode === 'manual' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                    <input
+                      type="text"
+                      placeholder="Item description (e.g., Memory Foam Mattress Queen Size)"
+                      value={item.description}
+                      onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="Quantity"
+                      value={item.quantity}
+                      onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Unit Price (UGX)"
+                      value={item.price}
+                      onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                      style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
+                    />
+                  </div>
+                )}
+
+                {/* Subtotal display */}
+                {item.quantity && item.price && (
+                  <div style={{ marginTop: 8, textAlign: 'right', fontSize: 12, color: '#475569', fontWeight: 600 }}>
+                    Subtotal: <span style={{ color: '#881337', fontWeight: 800 }}>UGX {((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Item error */}
+                {fieldErrors[`item_${idx}`] && (
+                  <div style={{ marginTop: 8, padding: '6px 10px', background: '#fef2f2', borderRadius: 6, color: '#dc2626', fontSize: 11, fontWeight: 600 }}>
+                    ⚠️ {fieldErrors[`item_${idx}`]}
+                  </div>
                 )}
               </div>
             ))}
@@ -9721,19 +10672,133 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
           <span style={{ fontSize: 18, fontWeight: 900, color: '#881337' }}>UGX {calculateTotal().toLocaleString()}</span>
         </div>
 
+        {/* ── PAYMENT STATUS ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Payment Status (Required)
+            </label>
+            <select
+              value={paymentStatus}
+              onChange={e => handleStatusChange(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            >
+              <option value="paid">✅ Paid - Invoice has been fully paid</option>
+              <option value="partial">⏳ Partial - Invoice partially paid, balance due</option>
+              <option value="due">❌ Due - Invoice unpaid, full amount due</option>
+            </select>
+          </div>
+
+          {/* PAID — show amount paid (pre-filled with total, editable) */}
+          {paymentStatus === 'paid' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Amount Paid (UGX) (Required)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountPaid}
+                onChange={e => { setAmountPaid(e.target.value); if (fieldErrors.amountPaid) setFieldErrors(prev => ({ ...prev, amountPaid: null })); }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
+              />
+              {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
+            </div>
+          )}
+
+          {/* PARTIAL — amount paid (user fills) + amount due (auto-calculated) */}
+          {paymentStatus === 'partial' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Amount Paid (UGX) (Required)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Enter partial amount paid"
+                  value={amountPaid}
+                  onChange={e => handlePartialPaidChange(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fffbeb', boxSizing: 'border-box' }}
+                />
+                {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Amount Due (UGX) — Auto-Calculated
+                </label>
+                <input
+                  type="number"
+                  readOnly
+                  value={amountDue}
+                  style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 700, background: '#fef2f2', color: '#b91c1c', boxSizing: 'border-box', cursor: 'not-allowed' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* DUE — amount due (user fills manually) */}
+          {paymentStatus === 'due' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Amount Due (UGX) (Required)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter full amount due"
+                value={amountDue}
+                onChange={e => { setAmountDue(e.target.value); if (fieldErrors.amountDue) setFieldErrors(prev => ({ ...prev, amountDue: null })); }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountDue ? '#dc2626' : '#fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
+              />
+              {fieldErrors.amountDue && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountDue}</span>}
+            </div>
+          )}
+        </div>
+
+        {/* ── PAYMENT TERMS & CONDITIONS ── */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Payment Terms &amp; Conditions (Optional)
+          </label>
+          <textarea
+            rows={3}
+            value={paymentTerms}
+            onChange={e => setPaymentTerms(e.target.value)}
+            placeholder="e.g., Payment due within 30 days. Accepted methods: Bank transfer, Mobile Money. Late payment fee: 5% per month."
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1.5px solid #cbd5e1',
+              borderRadius: 8,
+              fontSize: 13,
+              color: '#0f172a',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              fontFamily: 'inherit',
+              lineHeight: 1.6,
+            }}
+          />
+        </div>
+
         <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
           <button
             type="button"
             onClick={onClose}
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+            disabled={submitting}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}
           >
             Cancel
           </button>
           <button
             type="submit"
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
+            disabled={submitting}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.75 : 1, boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
           >
-            Generate Invoice 📄
+            {submitting ? '⏳ Saving Invoice…' : '📄 Generate Invoice'}
           </button>
         </div>
       </form>
@@ -9742,60 +10807,433 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
 }
 
 // ════════════════════════════════════════════════
+// INVOICE EDIT STATUS MODAL
+// ════════════════════════════════════════════════
+function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
+  const [status, setStatus] = useState(invoice.payment_status || 'paid');
+  const [amountPaid, setAmountPaid] = useState(String(invoice.amount_paid ?? invoice.total_amount ?? ''));
+  const [saving, setSaving] = useState(false);
+
+  const total = parseFloat(invoice.total_amount || 0);
+  const paid = parseFloat(amountPaid) || 0;
+  const balance = Math.max(0, total - paid);
+
+  // Auto-derive status from amount paid when user changes the amount
+  const handleAmountChange = (val) => {
+    setAmountPaid(val);
+    const p = parseFloat(val) || 0;
+    if (p >= total) setStatus('paid');
+    else if (p > 0) setStatus('partial');
+    else setStatus('due');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(invoice.id, status, parseFloat(amountPaid) || 0);
+    setSaving(false);
+  };
+
+  const statusOptions = [
+    { value: 'paid',    label: 'Paid',    bg: '#dcfce7', color: '#15803d' },
+    { value: 'partial', label: 'Partial', bg: '#fef3c7', color: '#b45309' },
+    { value: 'due',     label: 'Due',     bg: '#fee2e2', color: '#b91c1c' },
+  ];
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Edit Payment Status" maxWidth="440px">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Invoice reference */}
+        <div style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 16px', border: '1px solid #e2e8f0' }}>
+          <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Invoice</p>
+          <p style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoice.invoice_number}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 13, color: '#475569' }}>{invoice.customer_name} · Total: <strong>UGX {total.toLocaleString()}</strong></p>
+        </div>
+
+        {/* Status selector */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            Payment Status
+          </label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {statusOptions.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatus(opt.value)}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  border: status === opt.value ? `2px solid ${opt.color}` : '2px solid #e2e8f0',
+                  background: status === opt.value ? opt.bg : '#fff',
+                  color: status === opt.value ? opt.color : '#64748b',
+                  transition: 'all 0.12s'
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Amount paid */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Amount Paid (UGX)
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountPaid}
+            onChange={e => handleAmountChange(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12, color: '#64748b' }}>
+            <span>Balance remaining: <strong style={{ color: balance > 0 ? '#b91c1c' : '#15803d' }}>UGX {balance.toLocaleString()}</strong></span>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+              background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13,
+              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.75 : 1,
+              boxShadow: '0 4px 12px rgba(136,19,55,0.25)'
+            }}
+          >
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════
 // INVOICES TAB COMPONENT
 // ════════════════════════════════════════════════
 function InvoicesTab({ sales, customers, user, token, toast }) {
-  const [invoicesList, setInvoicesList] = useState([]);
+  const [customInvoices, setCustomInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);   // invoice being status-edited
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    if (sales && sales.length > 0) {
-      const generated = sales.map(s => ({
-        id: s.id,
-        invoice_number: `INV/25-26/${String(s.id).padStart(4, '0')}`,
-        invoice_date: (s.sale_date || s.created_at || '').slice(0, 10),
-        due_date: (s.sale_date || s.created_at || '').slice(0, 10),
-        customer_name: s.customer?.name || 'Walk-in Customer',
-        customer_email: s.customer?.email || '',
-        customer_phone: s.customer?.phone || s.customer?.contact || '',
-        customer_address: s.customer?.address || '',
-        total_amount: parseFloat(s.total_amount || 0),
-        amount_paid: parseFloat(s.total_amount || 0),
-        payment_status: 'paid',
-        items: s.sale_items || s.saleItems || [],
-        source_ref: `S${String(s.id).padStart(5, '0')}`
-      }));
-      setInvoicesList(generated);
-    }
-  }, [sales]);
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
-  const filteredInvoices = invoicesList.filter(inv => {
-    return !search || 
-      inv.invoice_number.toLowerCase().includes(search.toLowerCase()) || 
-      inv.customer_name.toLowerCase().includes(search.toLowerCase());
-  });
+  // Fetch persisted custom invoices from the backend on mount
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const res = await fetch(`${API}/invoices`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+        });
+        const json = await res.json();
+        if (json.success) {
+          setCustomInvoices(json.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to load invoices', err);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    };
+    fetchInvoices();
+  }, [API, token]);
+
+  // Derive invoice rows from sales (sale-based invoices, always present)
+  const saleInvoices = (sales || []).map(s => ({
+    id: `sale-${s.id}`,
+    _type: 'sale',
+    invoice_number: `INV/25-26/${String(s.id).padStart(4, '0')}`,
+    invoice_date: (s.sale_date || s.created_at || '').slice(0, 10),
+    due_date: (s.sale_date || s.created_at || '').slice(0, 10),
+    customer_name: s.customer?.name || 'Walk-in Customer',
+    customer_email: s.customer?.email || '',
+    customer_phone: s.customer?.phone || s.customer?.contact || '',
+    customer_address: s.customer?.address || '',
+    total_amount: parseFloat(s.total_amount || 0),
+    amount_paid: parseFloat(s.total_amount || 0),
+    payment_status: 'paid',
+    items: s.sale_items || s.saleItems || [],
+    source_ref: `S${String(s.id).padStart(5, '0')}`
+  }));
+
+  // Normalise custom invoices from DB for the same shape
+  const dbInvoices = customInvoices.map(inv => ({
+    ...inv,
+    _type: 'custom',
+    invoice_date: inv.invoice_date ? String(inv.invoice_date).slice(0, 10) : '',
+    due_date: inv.due_date ? String(inv.due_date).slice(0, 10) : '',
+    total_amount: parseFloat(inv.total_amount || 0),
+    amount_paid: parseFloat(inv.amount_paid || 0),
+  }));
+
+  // Merge: custom invoices first (newest), then sale-based
+  const invoicesList = [...dbInvoices, ...saleInvoices];
+
+  const filteredInvoices = invoicesList.filter(inv =>
+    !search ||
+    inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+    inv.customer_name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleDeleteInvoice = async (inv) => {
+    if (inv._type !== 'custom') return;
+    if (!window.confirm(`Delete invoice ${inv.invoice_number}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API}/invoices/${inv.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCustomInvoices(prev => prev.filter(i => i.id !== inv.id));
+        if (selectedInvoice?.id === inv.id) setSelectedInvoice(null);
+        toast && toast.success('Invoice deleted', 'The invoice has been removed.');
+      } else {
+        toast && toast.error('Delete failed', json.message || 'Failed to delete invoice.');
+      }
+    } catch (err) {
+      toast && toast.error('Network error', 'Please try again.');
+    }
+  };
+
+  const handleSaveStatus = async (invoiceId, newStatus, amountPaid) => {
+    try {
+      const res = await fetch(`${API}/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ payment_status: newStatus, amount_paid: amountPaid })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setCustomInvoices(prev =>
+          prev.map(i => i.id === invoiceId ? { ...i, payment_status: json.data.payment_status, amount_paid: parseFloat(json.data.amount_paid) } : i)
+        );
+        setEditingInvoice(null);
+        toast && toast.success('Status updated', 'Invoice payment status has been saved.');
+      } else {
+        toast && toast.error('Update failed', json.message || 'Failed to update invoice.');
+      }
+    } catch (err) {
+      toast && toast.error('Network error', 'Please try again.');
+    }
+  };
+
+  const statusStyle = (status) => {
+    if (status === 'paid') return { background: '#dcfce7', color: '#15803d' };
+    if (status === 'partial') return { background: '#fef3c7', color: '#b45309' };
+    return { background: '#fee2e2', color: '#b91c1c' };
+  };
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
       {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Invoices & Proforma Generator</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring Zziwa & Sons branding</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            padding: '10px 20px', borderRadius: 10, border: 'none',
-            background: '#881337', color: '#ffffff', fontWeight: 700,
-            fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-            boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
-          }}
-        >
-          <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {/* Refresh Button */}
+          <button
+            onClick={() => {
+              const fetchInvoices = async () => {
+                try {
+                  const res = await fetch(`${API}/invoices`, {
+                    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+                  });
+                  const json = await res.json();
+                  if (json.success) {
+                    setCustomInvoices(json.data || []);
+                    toast && toast.success('Refreshed', 'Invoice list updated successfully.');
+                  }
+                } catch (err) {
+                  toast && toast.error('Refresh failed', 'Could not reload invoices.');
+                }
+              };
+              fetchInvoices();
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: '1px solid #cbd5e1',
+              background: '#fff', color: '#475569', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+          >
+            🔄 Refresh
+          </button>
+          
+          {/* Export Button */}
+          <button
+            onClick={() => {
+              const exportData = invoicesList.map(inv => ({
+                invoice_number: inv.invoice_number,
+                customer: inv.customer_name,
+                invoice_date: inv.invoice_date,
+                due_date: inv.due_date,
+                total_amount: inv.total_amount,
+                amount_paid: inv.amount_paid,
+                balance: inv.total_amount - inv.amount_paid,
+                status: inv.payment_status,
+                type: inv._type === 'custom' ? 'Custom' : 'Sale'
+              }));
+              
+              const headers = Object.keys(exportData[0] || {});
+              const csvContent = [
+                headers.join(','),
+                ...exportData.map(row => headers.map(h => {
+                  const value = row[h] || '';
+                  return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+                    ? `"${value.replace(/"/g, '""')}"` 
+                    : value;
+                }).join(','))
+              ].join('\n');
+              
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = `invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
+              link.click();
+              
+              toast && toast.success('Exported', `${exportData.length} invoices exported to CSV.`);
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: 'none',
+              background: '#2563eb', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1d4ed8'}
+            onMouseLeave={e => e.currentTarget.style.background = '#2563eb'}
+          >
+            📥 Export CSV
+          </button>
+          
+          {/* Print Button */}
+          <button
+            onClick={() => {
+              const printContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8"/>
+                  <title>Invoices List - ${new Date().toLocaleDateString()}</title>
+                  <style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: 'Arial', sans-serif; padding: 40px; }
+                    h1 { margin-bottom: 10px; color: #881337; }
+                    .meta { margin-bottom: 30px; color: #64748b; font-size: 14px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+                    th { background: #f8fafc; font-weight: 700; font-size: 12px; text-transform: uppercase; color: #475569; }
+                    td { font-size: 14px; }
+                    .total-row { font-weight: 700; background: #f8fafc; }
+                    @media print {
+                      body { padding: 20px; }
+                      @page { margin: 0.5in; }
+                    }
+                  </style>
+                </head>
+                <body>
+                  <h1>Invoices List</h1>
+                  <div class="meta">
+                    Generated: ${new Date().toLocaleString()}<br/>
+                    Total Invoices: ${invoicesList.length}<br/>
+                    Total Value: UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Invoice #</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${invoicesList.map(inv => `
+                        <tr>
+                          <td>${inv.invoice_number}</td>
+                          <td>${inv.customer_name}</td>
+                          <td>${inv.invoice_date}</td>
+                          <td>UGX ${inv.total_amount.toLocaleString()}</td>
+                          <td>${(inv.payment_status || 'paid').toUpperCase()}</td>
+                          <td>${inv._type === 'custom' ? 'Custom' : 'Sale'}</td>
+                        </tr>
+                      `).join('')}
+                      <tr class="total-row">
+                        <td colspan="3">TOTAL</td>
+                        <td>UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}</td>
+                        <td colspan="2">${invoicesList.length} invoices</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </body>
+                </html>
+              `;
+              
+              const win = window.open('', '_blank');
+              if (!win) {
+                alert('Pop-up blocked. Please allow pop-ups for this site.');
+                return;
+              }
+              win.document.write(printContent);
+              win.document.close();
+              win.addEventListener('load', () => {
+                setTimeout(() => {
+                  win.focus();
+                  win.print();
+                }, 300);
+              });
+            }}
+            style={{
+              padding: '10px 16px', borderRadius: 10, border: 'none',
+              background: '#7c3aed', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
+            onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
+          >
+            🖨️ Print List
+          </button>
+          
+          {/* Create Invoice Button */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '10px 20px', borderRadius: 10, border: 'none',
+              background: '#881337', color: '#ffffff', fontWeight: 700,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
+            }}
+          >
+            <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -9830,48 +11268,87 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
 
       {/* Invoices List Table */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-              {['Invoice #', 'Customer', 'Date', 'Amount', 'Status', 'Actions'].map(h => (
-                <th key={h} style={{ padding: '12px 18px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredInvoices.length > 0 ? filteredInvoices.map(inv => (
-              <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 800, color: '#881337' }}>{inv.invoice_number}</td>
-                <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.customer_name}</td>
-                <td style={{ padding: '14px 18px', fontSize: 13, color: '#64748b' }}>{inv.invoice_date}</td>
-                <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {inv.total_amount.toLocaleString()}</td>
-                <td style={{ padding: '14px 18px' }}>
-                  <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, background: '#dcfce7', color: '#15803d' }}>
-                    PAID
-                  </span>
-                </td>
-                <td style={{ padding: '14px 18px' }}>
-                  <button
-                    onClick={() => setSelectedInvoice(inv)}
-                    style={{
-                      padding: '6px 14px', borderRadius: 6, border: '1px solid #881337',
-                      background: '#fff1f2', color: '#881337', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 6
-                    }}
-                  >
-                    <span>📄</span> View / Print Invoice
-                  </button>
-                </td>
+        {loadingInvoices ? (
+          <div style={{ padding: 36, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>Loading invoices…</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
+                {['Invoice #', 'Customer', 'Date', 'Amount', 'Status', 'Type', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '12px 18px', textAlign: h === 'Amount' ? 'right' : 'left', fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                ))}
               </tr>
-            )) : (
-              <tr>
-                <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
-                  No invoices found matching search query.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredInvoices.length > 0 ? filteredInvoices.map(inv => (
+                <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 800, color: '#881337' }}>{inv.invoice_number}</td>
+                  <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{inv.customer_name}</td>
+                  <td style={{ padding: '14px 18px', fontSize: 13, color: '#64748b' }}>{inv.invoice_date}</td>
+                  <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {inv.total_amount.toLocaleString()}</td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 800, ...statusStyle(inv.payment_status) }}>
+                      {(inv.payment_status || 'paid').toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                      background: inv._type === 'custom' ? '#eff6ff' : '#f0fdf4',
+                      color: inv._type === 'custom' ? '#1d4ed8' : '#15803d'
+                    }}>
+                      {inv._type === 'custom' ? 'Custom' : 'Sale'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button
+                        onClick={() => setSelectedInvoice(inv)}
+                        style={{
+                          padding: '6px 14px', borderRadius: 6, border: '1px solid #881337',
+                          background: '#fff1f2', color: '#881337', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                      >
+                        <span>📄</span> View / Print
+                      </button>
+                      {inv._type === 'custom' && (
+                        <button
+                          onClick={() => setEditingInvoice(inv)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #bfdbfe',
+                            background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                          }}
+                          title="Edit payment status"
+                        >
+                          ✏️ Status
+                        </button>
+                      )}
+                      {inv._type === 'custom' && (
+                        <button
+                          onClick={() => handleDeleteInvoice(inv)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #fecaca',
+                            background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                          }}
+                          title="Delete invoice"
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                    No invoices found matching search query.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Printable Invoice Modal */}
@@ -9888,12 +11365,23 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
         <CustomInvoiceCreateModal
           user={user}
           customers={customers}
+          token={token}
           onClose={() => setShowCreateModal(false)}
-          onCreated={(newInv) => {
-            setInvoicesList(prev => [newInv, ...prev]);
+          onCreated={(savedInvoice) => {
+            setCustomInvoices(prev => [savedInvoice, ...prev]);
             setShowCreateModal(false);
-            setSelectedInvoice(newInv);
+            setSelectedInvoice({ ...savedInvoice, _type: 'custom' });
+            toast && toast.success('Invoice created', 'Saved successfully and ready to print.');
           }}
+        />
+      )}
+
+      {/* Edit Payment Status Modal */}
+      {editingInvoice && (
+        <InvoiceEditStatusModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSave={handleSaveStatus}
         />
       )}
     </div>

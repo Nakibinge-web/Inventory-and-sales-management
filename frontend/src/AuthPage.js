@@ -119,6 +119,41 @@ export default function AuthPage() {
     setLoading(true);
     setError(null);
 
+    if (mode === 'register') {
+      if (!form.name.trim()) {
+        setError('Full name is required');
+        setLoading(false);
+        return;
+      }
+      if (!form.business_name.trim()) {
+        setError('Business name is required');
+        setLoading(false);
+        return;
+      }
+      if (form.password.length < 8) {
+        setError('Password must be at least 8 characters');
+        setLoading(false);
+        return;
+      }
+      if (form.password !== form.password_confirmation) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
+    if (!form.password) {
+      setError('Password is required');
+      setLoading(false);
+      return;
+    }
     try {
       let res;
       if (mode === 'login') {
@@ -213,7 +248,7 @@ export default function AuthPage() {
     }
   }, []);
 
-  if (user && token) return <Dashboard user={user} token={token} onLogout={logout} />;
+  if (user && token) return <Dashboard user={user} token={token} onLogout={logout} onUserUpdate={setUser} />;
 
   const isLogin = mode === 'login';
 

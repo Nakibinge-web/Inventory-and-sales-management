@@ -24,6 +24,17 @@ input[type="submit"], input[type="button"] {
   cursor: pointer;
 }
 
+/* ── Remove spinners from number inputs ── */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ── Mono utility ── */
 .mono {
   font-family: 'DM Mono','Fira Code','Cascadia Code',monospace;
@@ -1105,6 +1116,16 @@ textarea.field-input {
 }
 
 /* ════════════════════════════════════════════════
+   INVOICE MODAL — wider, taller, no overflow clip
+   ════════════════════════════════════════════════ */
+.invoice-modal {
+  max-width: 1000px !important;
+  width: 96vw !important;
+  max-height: 94vh !important;
+  overflow: visible !important;
+}
+
+/* ════════════════════════════════════════════════
    PRINT STYLES FOR INVOICES & RECEIPTS
    ════════════════════════════════════════════════ */
 @page {
@@ -1123,7 +1144,7 @@ textarea.field-input {
   }
   
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
   
   .no-print,
@@ -1148,7 +1169,7 @@ textarea.field-input {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 24px !important;
     background: #ffffff !important;
     box-shadow: none !important;
     border: none !important;
@@ -1161,5 +1182,16 @@ textarea.field-input {
 
   .invoice-summary-block {
     page-break-inside: avoid !important;
+
+  .modal-overlay-responsive {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .modal-responsive {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 }

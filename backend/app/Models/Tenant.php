@@ -13,8 +13,13 @@ class Tenant extends Model
         'name',
         'email',
         'phone',
+        'contacts',
         'address',
         'logo_path',
+    ];
+
+    protected $casts = [
+        'contacts' => 'array',
     ];
 
     protected $appends = ['logo_url'];

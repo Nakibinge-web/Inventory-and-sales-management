@@ -3,23 +3,22 @@
 namespace Database\Seeders;
 
 use App\Models\Category;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
     public function run(): void
     {
+        // 1. Create default/sample tenant
         $tenant = Tenant::firstOrCreate(
             ['email' => 'admin@zziwa.com'],
             [
@@ -29,6 +28,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // 2. Create owner user
         $user = User::firstOrCreate(
             ['email' => 'test@example.com'],
             [
@@ -38,11 +38,19 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // 3. Assign owner role
         $ownerRole = Role::where('name', 'owner')->whereNull('tenant_id')->first();
         if ($ownerRole && !$user->roles()->where('roles.id', $ownerRole->id)->exists()) {
             $user->roles()->attach($ownerRole->id);
         }
 
+        // 4. Attach all default permissions to the owner role
+        if ($ownerRole) {
+            $allPermissions = Permission::whereNull('tenant_id')->pluck('id');
+            $ownerRole->permissions()->syncWithoutDetaching($allPermissions);
+        }
+
+        // 5. Seed sample categories
         if ($tenant->categories()->count() === 0) {
             $tenant->categories()->createMany([
                 ['name' => 'Electronics', 'description' => 'Electronic components and devices'],
@@ -51,6 +59,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        // 6. Seed sample supplier
         if ($tenant->suppliers()->count() === 0) {
             $tenant->suppliers()->create([
                 'name' => 'Apex General Supplies',
