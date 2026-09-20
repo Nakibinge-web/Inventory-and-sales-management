@@ -1115,6 +1115,140 @@ textarea.field-input {
   }
 }
 
+
+/* POS customer radio */
+@media (max-width:480px) { .pos-customer-radios label { flex-direction:row !important; } }
+
+/* AI chat input row */
+@media (max-width:640px) {
+  .ai-input-row { flex-direction:column !important; }
+  .ai-input-row textarea, .ai-input-row input { width:100% !important; }
+}
+
+/* Pagination bar compact */
+@media (max-width:520px) {
+  .pagination-bar,
+  div[style*="justifyContent: space-between"][style*="padding: 14px 20px"] {
+    flex-direction:column !important;gap:10px !important;
+    align-items:center !important;padding:12px 14px !important;
+  }
+}
+
+/* ── Overview hero / today's sales card ── */
+@media (max-width:640px) {
+  .overview-hero-card {
+    flex-direction: column !important;
+    padding: 18px !important;
+    gap: 16px !important;
+  }
+  .overview-hero-card > div:last-child {
+    width: 100%;
+    display: flex !important;
+    gap: 8px !important;
+  }
+  .overview-hero-card > div:last-child > button {
+    flex: 1;
+  }
+}
+
+/* ── POS mobile specific ── */
+@media (max-width:960px) {
+  /* Cart panel: make it full-width collapsible section */
+  .pos-cart-panel {
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+}
+
+/* ── Card actions (edit/delete button row) ── */
+@media (max-width:480px) {
+  .card-actions {
+    flex-direction: row !important;
+    gap: 6px !important;
+  }
+  .card-actions > button { flex: 1; font-size: 12px !important; padding: 8px 4px !important; }
+}
+
+/* ── DataTable card view improvements ── */
+.dt-card-row {
+  background: #fff;
+  border-radius: 10px;
+  margin: 6px 8px;
+  padding: 12px !important;
+  border: 1px solid #f1f5f9 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.dt-card-row:last-child { border-bottom: none !important; }
+
+/* ── Sale/Purchase detail modal ── */
+@media (max-width:520px) {
+  .detail-grid-2 { grid-template-columns: 1fr !important; }
+  .detail-items-table { font-size: 12px !important; }
+}
+
+/* ── Users tab role/permission grid ── */
+@media (max-width:640px) {
+  .role-cards-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Reports tab period selector ── */
+@media (max-width:640px) {
+  .reports-period-tabs {
+    width: 100% !important;
+    justify-content: stretch !important;
+  }
+  .reports-period-tabs button { flex: 1; }
+}
+
+/* ── Stock movements form ── */
+@media (max-width:640px) {
+  .stock-form-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Low stock alert table on overview ── */
+@media (max-width:520px) {
+  .low-stock-table-row td:nth-child(3),
+  .low-stock-table-row td:nth-child(4) { display: none; }
+}
+
+/* Ensure images don't overflow cards */
+.product-image-thumb {
+  width: 40px; height: 40px;
+  object-fit: cover; border-radius: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Invoice responsive preview and modals ── */
+.invoice-print-canvas {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+@media (max-width: 640px) {
+  .invoice-print-canvas {
+    padding: 8px 0 !important;
+    justify-content: flex-start !important;
+  }
+  .invoice-a4-sheet {
+    padding: 20px 16px !important;
+    min-width: 520px !important;
+    box-shadow: none !important;
+  }
+  .invoice-actions-bar {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .invoice-actions-bar button {
+    flex: 1 1 calc(50% - 4px) !important;
+  }
+  .invoice-items-flex-table {
+    min-width: 540px !important;
+  }
+}
+
 /* ════════════════════════════════════════════════
    INVOICE MODAL — wider, taller, no overflow clip
    ════════════════════════════════════════════════ */
@@ -1182,6 +1316,7 @@ textarea.field-input {
 
   .invoice-summary-block {
     page-break-inside: avoid !important;
+  }
 
   .modal-overlay-responsive {
     background: transparent !important;
