@@ -62,18 +62,28 @@ class TenantController extends Controller
     public function update(Request $request, Tenant $tenant): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|unique:tenants,email,' . $tenant->id,
-            'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string'
+            'name'    => 'sometimes|required|string|max:255',
+            'email'   => 'sometimes|required|email|unique:tenants,email,' . $tenant->id,
+            'phone'   => 'nullable|string|max:20',
+            'address' => 'nullable|string',
+            'logo'    => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ]);
 
+        if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
+            // Delete old logo if present
+            if ($tenant->logo_path) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($tenant->logo_path);
+            }
+            $validated['logo_path'] = $request->file('logo')->store('logos', 'public');
+        }
+
+        unset($validated['logo']); // don't try to mass-assign the file object
         $tenant->update($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Business updated successfully',
-            'data' => $tenant
+            'data'    => $tenant->fresh(),
         ]);
     }
 

@@ -91,14 +91,22 @@ class AuthController extends Controller
             'business_name' => 'required|string|max:255',
             'phone'         => 'nullable|string|max:20',
             'address'       => 'nullable|string',
+            'logo'          => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ]);
+
+        // Handle logo upload
+        $logoPath = null;
+        if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
+            $logoPath = $request->file('logo')->store('logos', 'public');
+        }
 
         // Create a new tenant for the user
         $tenant = \App\Models\Tenant::create([
-            'name' => $request->business_name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'address' => $request->address,
+            'name'      => $request->business_name,
+            'email'     => $request->email,
+            'phone'     => $request->phone,
+            'address'   => $request->address,
+            'logo_path' => $logoPath,
         ]);
 
         $user = User::create([

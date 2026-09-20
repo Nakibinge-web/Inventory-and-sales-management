@@ -14,7 +14,16 @@ class Tenant extends Model
         'email',
         'phone',
         'address',
+        'logo_path',
     ];
+
+    protected $appends = ['logo_url'];
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (!$this->logo_path) return null;
+        return url('storage/' . $this->logo_path);
+    }
 
     // Relationships
     public function users()

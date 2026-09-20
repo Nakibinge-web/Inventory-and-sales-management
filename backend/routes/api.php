@@ -24,6 +24,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [UserController::class, 'me']);
 
     // Test
     Route::get('/test', function () {

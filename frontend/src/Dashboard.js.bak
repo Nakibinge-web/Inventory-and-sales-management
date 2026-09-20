@@ -217,143 +217,66 @@ export default function Dashboard({ user, token, onLogout }) {
             onClick={() => setMobileNavOpen(v => !v)}
             aria-label="Open navigation"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-
-          {/* Clean enterprise brand badge matching login */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {user.tenant?.logo_url ? (
-              <img
-                src={user.tenant.logo_url}
-                alt={`${user.tenant?.name || 'Business'} logo`}
-                style={{
-                  width: 32, height: 32, objectFit: 'contain',
-                  borderRadius: 8, flexShrink: 0,
-                  border: '1px solid #e2e8f0',
-                  background: '#ffffff'
-                }}
-              />
-            ) : (
-              <div style={{
-                width: 32, height: 32,
-                backgroundColor: '#4f46e5', color: '#ffffff',
-                borderRadius: 8, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', flexShrink: 0,
-                boxShadow: '0 1px 3px rgba(79, 70, 229, 0.3)'
-              }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                  <line x1="12" y1="22.08" x2="12" y2="12" />
-                </svg>
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                {user.tenant?.name || 'StockPro'}
-              </span>
-              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, letterSpacing: '0.01em' }}>
-                {user.tenant?.name ? 'Inventory & Sales' : 'Enterprise'}
-              </span>
-            </div>
+          <div style={styles.logoContainer}>
+            <img 
+              src="/zziwa logo.png" 
+              alt="Zziwa & Sons Logo" 
+              style={{ 
+                width: 36, 
+                height: 36, 
+                objectFit: 'contain', 
+                background: '#ffffff', 
+                padding: '4px', 
+                borderRadius: 8, 
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }} 
+            />
           </div>
+          <Badge variant="primary" size="sm">
+            {user.tenant?.name || 'Business'}
+          </Badge>
         </div>
 
         <div style={styles.headerCenter} className="header-search">
           <div style={{ ...styles.searchContainer, position: 'relative' }}>
-            <span style={{
-              position: 'absolute',
-              left: 12,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#94a3b8',
-              pointerEvents: 'none'
-            }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            </span>
+            <span style={styles.searchIcon}>🔍</span>
             <input
               style={styles.searchInput}
               type="text"
-              placeholder="Search products, suppliers, customers... (/)"
+              placeholder="Search products, suppliers, customers..."
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
               onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
             />
-            <span style={{
-              position: 'absolute',
-              right: 12,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              padding: '1px 6px',
-              fontSize: 11,
-              fontWeight: 600,
-              color: '#94a3b8',
-              background: '#f1f5f9',
-              border: '1px solid #e2e8f0',
-              borderRadius: 4,
-              pointerEvents: 'none'
-            }}>
-              /
-            </span>
-
             {searchOpen && searchResults.length > 0 && (
               <div style={{
-                position: 'absolute',
-                top: 'calc(100% + 8px)',
-                left: 0,
-                right: 0,
-                zIndex: 1000,
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: 12,
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
-                overflow: 'hidden',
+                position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 1000,
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden',
               }}>
                 {searchResults.map((r, i) => (
-                  <div
-                    key={i}
-                    onMouseDown={() => goToResult(r)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '10px 16px',
-                      cursor: 'pointer',
-                      borderBottom: i < searchResults.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background-color 0.12s ease',
-                    }}
+                  <div key={i} onMouseDown={() => goToResult(r)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+                    cursor: 'pointer', borderBottom: i < searchResults.length - 1 ? '1px solid #f8fafc' : 'none',
+                    transition: 'background 0.1s',
+                  }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span style={{ fontSize: 18, width: 22, textAlign: 'center' }}>{r.icon}</span>
+                    <span style={{ fontSize: 18 }}>{r.icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {r.label}
-                      </div>
-                      {r.sub && <div style={{ fontSize: 12, color: '#64748b' }}>{r.sub}</div>}
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</div>
+                      {r.sub && <div style={{ fontSize: 12, color: '#94a3b8' }}>{r.sub}</div>}
                     </div>
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: '#4338ca',
-                      background: '#eef2ff',
-                      border: '1px solid #c7d2fe',
-                      padding: '2px 8px',
-                      borderRadius: 9999
-                    }}>
-                      {r.type}
-                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#4f46e5', background: '#ede9fe', padding: '2px 8px', borderRadius: 20 }}>{r.type}</span>
                   </div>
                 ))}
               </div>
@@ -362,7 +285,7 @@ export default function Dashboard({ user, token, onLogout }) {
         </div>
 
         <div style={styles.headerRight}>
-          <div className="resp-hide" style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px' }}>
+          <div style={{ ...styles.notificationIcon, color: '#94a3b8', fontSize: '18px' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -381,7 +304,7 @@ export default function Dashboard({ user, token, onLogout }) {
               </span>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onLogout}>
+          <Button variant="danger" size="sm" onClick={onLogout}>
             <span className="logout-text-long">Logout</span>
             <span className="logout-text-short">✕</span>
           </Button>
@@ -391,10 +314,10 @@ export default function Dashboard({ user, token, onLogout }) {
       <div style={styles.container} className="dash-container">
         {/* Sidebar */}
         <nav style={styles.sidebar} className={`dash-sidebar${mobileNavOpen ? ' open' : ''}`}>
-          <div style={{ padding: '20px 12px 16px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '20px 12px 12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Close button — mobile only */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 8px', margin: 0 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', margin: 0 }}>
                 Main Menu
               </p>
               <button
@@ -403,15 +326,15 @@ export default function Dashboard({ user, token, onLogout }) {
                 style={{ marginLeft: 'auto' }}
                 aria-label="Close navigation"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
 
-            {/* Main nav items — preserving all icons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {/* Main nav items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {menuItems.filter(i => i.id !== 'users').map(item => (
                 <button
                   key={item.id}
@@ -420,18 +343,8 @@ export default function Dashboard({ user, token, onLogout }) {
                     ...(activeTab === item.id ? styles.menuItemActive : {})
                   }}
                   onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
-                  onMouseEnter={e => {
-                    if (activeTab !== item.id) {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.color = '#0f172a';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (activeTab !== item.id) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#475569';
-                    }
-                  }}
+                  onMouseEnter={e => { if (activeTab !== item.id) { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; } }}
+                  onMouseLeave={e => { if (activeTab !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
                 >
                   <span style={styles.menuIcon}>{item.icon}</span>
                   <span style={styles.menuLabel}>{item.label}</span>
@@ -446,8 +359,8 @@ export default function Dashboard({ user, token, onLogout }) {
             {/* Admin section */}
             {(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
               <div>
-                <div style={{ height: 1, background: '#f1f5f9', margin: '14px 8px 16px' }} />
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 8px', marginBottom: 8 }}>
+                <div style={{ height: 1, background: '#1e293b', margin: '12px 8px 14px' }} />
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 8px', marginBottom: 8 }}>
                   Administration
                 </p>
                 <button
@@ -456,24 +369,14 @@ export default function Dashboard({ user, token, onLogout }) {
                     ...(activeTab === 'users' ? styles.menuItemActive : {})
                   }}
                   onClick={() => { setActiveTab('users'); setMobileNavOpen(false); }}
-                  onMouseEnter={e => {
-                    if (activeTab !== 'users') {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.color = '#0f172a';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (activeTab !== 'users') {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#475569';
-                    }
-                  }}
+                  onMouseEnter={e => { if (activeTab !== 'users') e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#f1f5f9'; }}
+                  onMouseLeave={e => { if (activeTab !== 'users') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
                 >
                   <span style={styles.menuIcon}>🔑</span>
                   <span style={styles.menuLabel}>Users</span>
                   {activeTab === 'users' && <div style={styles.activeIndicator} />}
                 </button>
-                <div style={{ height: 12 }} />
+                <div style={{ height: 20 }} />
               </div>
             )}
           </div>
@@ -496,7 +399,6 @@ export default function Dashboard({ user, token, onLogout }) {
             canAddProduct={hasPermission('products.create')}
             canAddSupplier={hasPermission('suppliers.create')}
             canRecordPurchase={hasPermission('purchases.create')}
-            user={user}
           />}
           {activeTab === 'pos' && (
             <POSTab
@@ -752,7 +654,7 @@ export default function Dashboard({ user, token, onLogout }) {
 }
 
 // Overview Tab Component
-function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, canAddProduct = true, canAddSupplier = true, canRecordPurchase = true, user = {} }) {
+function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, canAddProduct = true, canAddSupplier = true, canRecordPurchase = true }) {
   const today = new Date().toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -792,71 +694,44 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, 
 
       {/* ── Hero header ───────────────────────────────────── */}
       <div className="section-hero" style={{
-        background: '#ffffff',
-        borderRadius: 14, padding: '28px 32px', marginBottom: 28,
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
+        borderRadius: 16, padding: '32px 36px', marginBottom: 36,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04), 0 4px 12px -2px rgba(0,0,0,0.03)',
+        boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <img 
-            src={user.tenant?.logo_url || '/zziwa logo.png'} 
-            alt={`${user.tenant?.name || 'Business'} Logo`}
+            src="/zziwa logo.png" 
+            alt="Zziwa & Sons Logo" 
             style={{ 
-              width: 72, 
-              height: 72, 
+              width: 96, 
+              height: 96, 
               objectFit: 'contain', 
               background: '#ffffff', 
               padding: '6px', 
-              borderRadius: 14, 
+              borderRadius: 18, 
               flexShrink: 0,
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              boxShadow: '0 4px 20px rgba(0,0,0,0.25)'
             }} 
           />
           <div>
-            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
-            <h1 style={{ margin: '0 0 6px', fontSize: 24, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
+            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
+            <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.5px' }}>
               {greeting} 👋
             </h1>
-            <p style={{ margin: 0, fontSize: 13.5, color: '#64748b', maxWidth: 460, lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', maxWidth: 440, lineHeight: 1.5 }}>
               Here's a live snapshot of your business. Use the quick actions below to get things done fast.
             </p>
           </div>
         </div>
-        <div style={{
-          flexShrink: 0,
-          background: '#ffffff',
-          padding: '14px 20px',
-          borderRadius: 12,
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-          minWidth: 200,
-          textAlign: 'right'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Today's Sales
-            </span>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Today's Sales</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc', letterSpacing: '-1px' }}>
+            UGX {data.sales
+              .filter(s => new Date(s.sale_date).toDateString() === new Date().toDateString())
+              .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0)
+              .toLocaleString()}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 5 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>UGX</span>
-            <span style={{
-              fontSize: 24,
-              fontWeight: 800,
-              color: '#0f172a',
-              letterSpacing: '-0.025em',
-              fontFamily: "'DM Mono', monospace",
-              fontFeatureSettings: "'tnum'"
-            }}>
-              {data.sales
-                .filter(s => new Date(s.sale_date).toDateString() === new Date().toDateString())
-                .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0)
-                .toLocaleString()}
-            </span>
-          </div>
-          <p style={{ margin: '4px 0 0', fontSize: 11.5, color: '#94a3b8' }}>Real-time register sync</p>
         </div>
       </div>
 
@@ -3800,454 +3675,202 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         />
       </div>
 
-      {/* ── Sales Query Filters Grid (Day & Week side-by-side) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
-        
-        {/* Card 1: Sales by Specific Day */}
-        <div style={{ 
-          background: '#fff', 
-          border: customDaySales !== null ? '1.5px solid #6366f1' : '1px solid #e2e8f0', 
-          borderRadius: 14, 
-          padding: 20,
-          boxShadow: customDaySales !== null ? '0 4px 14px -2px rgba(99, 102, 241, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          gap: 16,
-          transition: 'all 0.2s ease'
-        }}>
+      {/* ── Custom Day Lookup ── */}
+      <div style={{ ...styles.contentCard, marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🔍</div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                  🔍
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Sales by Specific Day</h3>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Select any single date to view all sales</p>
-                </div>
-              </div>
-              {customDaySales !== null && (
-                <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#e0e7ff', color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4f46e5' }}></span>
-                  Active
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Select Date
-              </label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="date"
-                  value={customDate}
-                  onChange={e => { setCustomDate(e.target.value); setCustomDaySales(null); }}
-                  style={{ 
-                    flex: 1, 
-                    padding: '9px 12px', 
-                    border: '1.5px solid #e2e8f0', 
-                    borderRadius: 9, 
-                    fontSize: 13, 
-                    fontFamily: 'inherit', 
-                    outline: 'none', 
-                    background: '#fff', 
-                    color: '#0f172a', 
-                    cursor: 'pointer' 
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (!customDate) return;
-                    const [y, m, d] = customDate.split('-').map(Number);
-                    const target = new Date(y, m - 1, d);
-                    const results = localSales.filter(sale => {
-                      const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-                      const [sy, sm, sd] = raw.split('-').map(Number);
-                      return new Date(sy, sm - 1, sd).getTime() === target.getTime();
-                    });
-                    setCustomWeekSales(null);
-                    setCustomWeekRange(null);
-                    setCustomDaySales(results);
-                  }}
-                  style={{ 
-                    padding: '9px 18px', 
-                    borderRadius: 9, 
-                    border: 'none', 
-                    background: customDate ? '#4f46e5' : '#f1f5f9', 
-                    color: customDate ? '#fff' : '#94a3b8', 
-                    fontSize: 13, 
-                    fontWeight: 700, 
-                    cursor: customDate ? 'pointer' : 'not-allowed', 
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    boxShadow: customDate ? '0 1px 2px rgba(79, 70, 229, 0.2)' : 'none'
-                  }}
-                >
-                  View Sales
-                </button>
-                {customDaySales !== null && (
-                  <button
-                    onClick={() => { setCustomDaySales(null); setCustomDate(''); }}
-                    style={{ padding: '9px 13px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick presets for Day */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>Quick Select:</span>
-            <button
-              type="button"
-              onClick={() => {
-                const today = new Date().toISOString().slice(0, 10);
-                setCustomDate(today);
-                const [y, m, d] = today.split('-').map(Number);
-                const target = new Date(y, m - 1, d);
-                const results = localSales.filter(sale => {
-                  const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-                  const [sy, sm, sd] = raw.split('-').map(Number);
-                  return new Date(sy, sm - 1, sd).getTime() === target.getTime();
-                });
-                setCustomWeekSales(null);
-                setCustomWeekRange(null);
-                setCustomDaySales(results);
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const dObj = new Date();
-                dObj.setDate(dObj.getDate() - 1);
-                const yest = dObj.toISOString().slice(0, 10);
-                setCustomDate(yest);
-                const [y, m, d] = yest.split('-').map(Number);
-                const target = new Date(y, m - 1, d);
-                const results = localSales.filter(sale => {
-                  const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-                  const [sy, sm, sd] = raw.split('-').map(Number);
-                  return new Date(sy, sm - 1, sd).getTime() === target.getTime();
-                });
-                setCustomWeekSales(null);
-                setCustomWeekRange(null);
-                setCustomDaySales(results);
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              Yesterday
-            </button>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Sales by Specific Day</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Select any date to view all sales made on that day</p>
           </div>
         </div>
 
-        {/* Card 2: Sales by Specific Week */}
-        <div style={{ 
-          background: '#fff', 
-          border: customWeekSales !== null ? '1.5px solid #3b82f6' : '1px solid #e2e8f0', 
-          borderRadius: 14, 
-          padding: 20,
-          boxShadow: customWeekSales !== null ? '0 4px 14px -2px rgba(59, 130, 246, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          gap: 16,
-          transition: 'all 0.2s ease'
-        }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                  📅
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Sales by Specific Week</h3>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Pick any date — shows full week (Mon – Sun)</p>
-                </div>
-              </div>
-              {customWeekSales !== null && (
-                <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#dbeafe', color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb' }}></span>
-                  Active
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Any Date In The Week
-              </label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="date"
-                  value={customWeekDate}
-                  onChange={e => { setCustomWeekDate(e.target.value); setCustomWeekSales(null); setCustomWeekRange(null); }}
-                  style={{ 
-                    flex: 1, 
-                    padding: '9px 12px', 
-                    border: '1.5px solid #e2e8f0', 
-                    borderRadius: 9, 
-                    fontSize: 13, 
-                    fontFamily: 'inherit', 
-                    outline: 'none', 
-                    background: '#fff', 
-                    color: '#0f172a', 
-                    cursor: 'pointer' 
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (!customWeekDate) return;
-                    const [y, m, d] = customWeekDate.split('-').map(Number);
-                    const picked = new Date(y, m - 1, d);
-                    const dow = picked.getDay();
-                    const monday = new Date(picked);
-                    monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
-                    const sunday = new Date(monday);
-                    sunday.setDate(monday.getDate() + 6);
-                    const results = localSales.filter(sale => {
-                      const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-                      const [sy, sm, sd] = raw.split('-').map(Number);
-                      const sd2 = new Date(sy, sm - 1, sd);
-                      return sd2 >= monday && sd2 <= sunday;
-                    });
-                    setCustomDaySales(null);
-                    setCustomWeekSales(results);
-                    setCustomWeekRange({ monday, sunday });
-                  }}
-                  style={{ 
-                    padding: '9px 18px', 
-                    borderRadius: 9, 
-                    border: 'none', 
-                    background: customWeekDate ? '#4f46e5' : '#f1f5f9', 
-                    color: customWeekDate ? '#fff' : '#94a3b8', 
-                    fontSize: 13, 
-                    fontWeight: 700, 
-                    cursor: customWeekDate ? 'pointer' : 'not-allowed', 
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    boxShadow: customWeekDate ? '0 1px 2px rgba(79, 70, 229, 0.2)' : 'none'
-                  }}
-                >
-                  View Week
-                </button>
-                {customWeekSales !== null && (
-                  <button
-                    onClick={() => { setCustomWeekSales(null); setCustomWeekDate(''); setCustomWeekRange(null); }}
-                    style={{ padding: '9px 13px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Select Date</label>
+            <input
+              type="date"
+              value={customDate}
+              onChange={e => { setCustomDate(e.target.value); setCustomDaySales(null); }}
+              style={{ padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', cursor: 'pointer', minWidth: 180 }}
+            />
           </div>
-
-          {/* Quick presets for Week */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>Quick Select:</span>
-            <button
-              type="button"
-              onClick={() => {
-                const today = new Date().toISOString().slice(0, 10);
-                setCustomWeekDate(today);
-                const [y, m, d] = today.split('-').map(Number);
-                const picked = new Date(y, m - 1, d);
-                const dow = picked.getDay();
-                const monday = new Date(picked);
-                monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                const results = localSales.filter(sale => {
-                  const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-                  const [sy, sm, sd] = raw.split('-').map(Number);
-                  const sd2 = new Date(sy, sm - 1, sd);
-                  return sd2 >= monday && sd2 <= sunday;
-                });
-                setCustomDaySales(null);
-                setCustomWeekSales(results);
-                setCustomWeekRange({ monday, sunday });
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              This Week
+          <button
+            onClick={() => {
+              if (!customDate) return;
+              const [y, m, d] = customDate.split('-').map(Number);
+              const target = new Date(y, m - 1, d);
+              const results = localSales.filter(sale => {
+                const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+                const [sy, sm, sd] = raw.split('-').map(Number);
+                return new Date(sy, sm - 1, sd).getTime() === target.getTime();
+              });
+              setCustomDaySales(results);
+            }}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: customDate ? '#4f46e5' : '#e2e8f0', color: customDate ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: customDate ? 'pointer' : 'not-allowed', transition: 'background 0.15s' }}
+          >
+            View Sales
+          </button>
+          {customDaySales !== null && (
+            <button onClick={() => { setCustomDaySales(null); setCustomDate(''); }}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Clear
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                const dObj = new Date();
-                dObj.setDate(dObj.getDate() - 7);
-                const lastWeekDate = dObj.toISOString().slice(0, 10);
-                setCustomWeekDate(lastWeekDate);
-                const [y, m, d] = lastWeekDate.split('-').map(Number);
-                const picked = new Date(y, m - 1, d);
-                const dow = picked.getDay();
-                const monday = new Date(picked);
-                monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                const results = localSales.filter(sale => {
-                  const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-                  const [sy, sm, sd] = raw.split('-').map(Number);
-                  const sd2 = new Date(sy, sm - 1, sd);
-                  return sd2 >= monday && sd2 <= sunday;
-                });
-                setCustomDaySales(null);
-                setCustomWeekSales(results);
-                setCustomWeekRange({ monday, sunday });
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              Last Week
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ── Day Sales Results View ── */}
-      {customDaySales !== null && (
-        <div style={{ ...styles.contentCard, marginTop: 20, border: '1.5px solid #6366f1', borderRadius: 14 }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🔍</div>
-              <div>
-                <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Sales on {new Date(...customDate.split('-').map((v, i) => i === 1 ? v - 1 : +v)).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-                </h4>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Filtered single day results</p>
-              </div>
-            </div>
-            <button
-              onClick={() => { setCustomDaySales(null); setCustomDate(''); }}
-              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              ✕ Close Results
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-            <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
-                {new Date(...customDate.split('-').map((v, i) => i === 1 ? v - 1 : +v))
-                  .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-              </div>
-            </div>
-            <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Transactions</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5', fontFamily: "'DM Mono', monospace, sans-serif" }}>{customDaySales.length}</div>
-            </div>
-            <div style={{ padding: '16px 22px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Revenue</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', fontFamily: "'DM Mono', monospace, sans-serif" }}>
-                UGX {customDaySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0).toLocaleString()}
-              </div>
-            </div>
-          </div>
-          {customDaySales.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ fontSize: 38, marginBottom: 10 }}>🗓️</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No sales recorded on this day</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try selecting a different date</div>
-            </div>
-          ) : (
-            <DataTable columns={columns} data={customDaySales} loading={false} emptyStateProps={{ title: 'No sales', description: '' }} />
           )}
         </div>
-      )}
 
-      {/* ── Week Sales Results View ── */}
-      {customWeekSales !== null && customWeekRange !== null && (() => {
-        const { monday, sunday } = customWeekRange;
-        const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        const weekTotal = customWeekSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
-        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
-          const day = new Date(monday);
-          day.setDate(monday.getDate() + i);
-          const daySales = customWeekSales.filter(sale => {
-            const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
-            const [sy, sm, sd] = raw.split('-').map(Number);
-            return new Date(sy, sm - 1, sd).getTime() === day.getTime();
-          });
-          return { day, name: dayNames[i], count: daySales.length, total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0) };
-        });
-        const maxDayTotal = Math.max(...dayBreakdown.map(d => d.total), 1);
-
-        return (
-          <div style={{ ...styles.contentCard, marginTop: 20, border: '1.5px solid #3b82f6', borderRadius: 14 }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>📅</div>
-                <div>
-                  <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Sales for Week: {fmt(monday)} – {fmt(sunday)}
-                  </h4>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Filtered 7-day weekly summary & breakdown</p>
-                </div>
-              </div>
-              <button
-                onClick={() => { setCustomWeekSales(null); setCustomWeekDate(''); setCustomWeekRange(null); }}
-                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-              >
-                ✕ Close Results
-              </button>
-            </div>
-
+        {customDaySales !== null && (
+          <div style={{ marginTop: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-              <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>to {fmt(sunday)}</div>
+              <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
+                  {new Date(...customDate.split('-').map((v, i) => i === 1 ? v - 1 : +v))
+                    .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                </div>
               </div>
               <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Transactions</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8', fontFamily: "'DM Mono', monospace, sans-serif" }}>{customWeekSales.length}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{customDaySales.length}</div>
               </div>
               <div style={{ padding: '16px 22px' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Revenue</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', fontFamily: "'DM Mono', monospace, sans-serif" }}>UGX {weekTotal.toLocaleString()}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a' }}>
+                  UGX {customDaySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0).toLocaleString()}
+                </div>
               </div>
             </div>
-
-            <div className="week-day-grid" style={{ marginBottom: 20 }}>
-              {dayBreakdown.map(({ day, name, count, total }) => {
-                const barPct = Math.round((total / maxDayTotal) * 100);
-                return (
-                  <div key={name} style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{name}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
-                    <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#3b82f6' : '#e2e8f0', borderRadius: 2 }} />
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? '#1d4ed8' : '#d1d5db', lineHeight: 1, fontFamily: "'DM Mono', monospace, sans-serif" }}>{count}</div>
-                    <div style={{ fontSize: 10, fontWeight: 500, color: count > 0 ? '#64748b' : '#d1d5db', fontFamily: "'DM Mono', monospace, sans-serif" }}>{count > 0 ? `UGX ${total.toLocaleString()}` : '—'}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {customWeekSales.length === 0 ? (
+            {customDaySales.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No sales recorded in this week</div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try picking a date from a different week</div>
+                <div style={{ fontSize: 38, marginBottom: 10 }}>🗓️</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No sales recorded on this day</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try selecting a different date</div>
               </div>
             ) : (
-              <DataTable columns={columns} data={customWeekSales} loading={false} emptyStateProps={{ title: 'No sales', description: '' }} />
+              <DataTable columns={columns} data={customDaySales} loading={false} emptyStateProps={{ title: 'No sales', description: '' }} />
             )}
           </div>
-        );
-      })()}
+        )}
+      </div>
+
+      {/* ── Custom Week Lookup ── */}
+      <div style={{ ...styles.contentCard, marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>📅</div>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Sales by Specific Week</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Pick any date — shows all sales for that full week (Mon – Sun)</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Any date in the week</label>
+            <input
+              type="date"
+              value={customWeekDate}
+              onChange={e => { setCustomWeekDate(e.target.value); setCustomWeekSales(null); setCustomWeekRange(null); }}
+              style={{ padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', cursor: 'pointer', minWidth: 180 }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!customWeekDate) return;
+              const [y, m, d] = customWeekDate.split('-').map(Number);
+              const picked = new Date(y, m - 1, d);
+              const dow = picked.getDay();
+              const monday = new Date(picked);
+              monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
+              const sunday = new Date(monday);
+              sunday.setDate(monday.getDate() + 6);
+              const results = localSales.filter(sale => {
+                const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+                const [sy, sm, sd] = raw.split('-').map(Number);
+                const sd2 = new Date(sy, sm - 1, sd);
+                return sd2 >= monday && sd2 <= sunday;
+              });
+              setCustomWeekSales(results);
+              setCustomWeekRange({ monday, sunday });
+            }}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: customWeekDate ? '#4f46e5' : '#e2e8f0', color: customWeekDate ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: customWeekDate ? 'pointer' : 'not-allowed', transition: 'background 0.15s' }}
+          >
+            View Week
+          </button>
+          {customWeekSales !== null && (
+            <button onClick={() => { setCustomWeekSales(null); setCustomWeekDate(''); setCustomWeekRange(null); }}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Clear
+            </button>
+          )}
+        </div>
+
+        {customWeekSales !== null && customWeekRange !== null && (() => {
+          const { monday, sunday } = customWeekRange;
+          const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const weekTotal = customWeekSales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0);
+          const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
+            const day = new Date(monday);
+            day.setDate(monday.getDate() + i);
+            const daySales = customWeekSales.filter(sale => {
+              const raw = (sale.sale_date || sale.created_at || '').slice(0, 10);
+              const [sy, sm, sd] = raw.split('-').map(Number);
+              return new Date(sy, sm - 1, sd).getTime() === day.getTime();
+            });
+            return { day, name: dayNames[i], count: daySales.length, total: daySales.reduce((s, sale) => s + parseFloat(sale.total_amount || 0), 0) };
+          });
+          const maxDayTotal = Math.max(...dayBreakdown.map(d => d.total), 1);
+
+          return (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>to {fmt(sunday)}</div>
+                </div>
+                <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Transactions</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8' }}>{customWeekSales.length}</div>
+                </div>
+                <div style={{ padding: '16px 22px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Revenue</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a' }}>UGX {weekTotal.toLocaleString()}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 20 }}>
+                {dayBreakdown.map(({ day, name, count, total }) => {
+                  const now = new Date();
+                  const isToday = day.getTime() === new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                  const barPct = Math.round((total / maxDayTotal) * 100);
+                  return (
+                    <div key={name} style={{ background: isToday ? '#eff6ff' : '#fff', border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#3b82f6' : '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{name}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
+                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#3b82f6' : '#e2e8f0', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? '#1d4ed8' : '#d1d5db', lineHeight: 1 }}>{count}</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: count > 0 ? '#64748b' : '#d1d5db' }}>{count > 0 ? `UGX ${total.toLocaleString()}` : '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {customWeekSales.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No sales recorded in this week</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try picking a date from a different week</div>
+                </div>
+              ) : (
+                <DataTable columns={columns} data={customWeekSales} loading={false} emptyStateProps={{ title: 'No sales', description: '' }} />
+              )}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* ── View Modal (Receipt) ── */}
       <Modal
@@ -5061,510 +4684,93 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
         )}
       </div>
 
-      {/* ── Purchases Query Filters Grid (Day & Week side-by-side) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
-        
-        {/* Card 1: Purchases by Specific Day */}
-        <div style={{ 
-          background: '#fff', 
-          border: customDayPurchases !== null ? '1.5px solid #6366f1' : '1px solid #e2e8f0', 
-          borderRadius: 14, 
-          padding: 20,
-          boxShadow: customDayPurchases !== null ? '0 4px 14px -2px rgba(99, 102, 241, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          gap: 16,
-          transition: 'all 0.2s ease'
-        }}>
+      {/* ── Purchases by Specific Day ── */}
+      <div style={{ ...styles.contentCard, marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fef9c3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🔍</div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                  🔍
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Purchases by Specific Day</h3>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Select any single date to view all purchases</p>
-                </div>
-              </div>
-              {customDayPurchases !== null && (
-                <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#e0e7ff', color: '#4338ca', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4f46e5' }}></span>
-                  Active
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Select Date
-              </label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="date"
-                  value={customPurchaseDate}
-                  onChange={e => { setCustomPurchaseDate(e.target.value); setCustomDayPurchases(null); }}
-                  style={{ 
-                    flex: 1, 
-                    padding: '9px 12px', 
-                    border: '1.5px solid #e2e8f0', 
-                    borderRadius: 9, 
-                    fontSize: 13, 
-                    fontFamily: 'inherit', 
-                    outline: 'none', 
-                    background: '#fff', 
-                    color: '#0f172a', 
-                    cursor: 'pointer' 
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (!customPurchaseDate) return;
-                    const [y, m, d] = customPurchaseDate.split('-').map(Number);
-                    const target = new Date(y, m - 1, d);
-                    const results = purchases.filter(p => {
-                      const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-                      const [py, pm, pd] = raw.split('-').map(Number);
-                      return new Date(py, pm - 1, pd).getTime() === target.getTime();
-                    });
-                    setCustomWeekPurchases(null);
-                    setCustomPurchaseWeekRange(null);
-                    setCustomDayPurchases(results);
-                  }}
-                  style={{ 
-                    padding: '9px 18px', 
-                    borderRadius: 9, 
-                    border: 'none', 
-                    background: customPurchaseDate ? '#4f46e5' : '#f1f5f9', 
-                    color: customPurchaseDate ? '#fff' : '#94a3b8', 
-                    fontSize: 13, 
-                    fontWeight: 700, 
-                    cursor: customPurchaseDate ? 'pointer' : 'not-allowed', 
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    boxShadow: customPurchaseDate ? '0 1px 2px rgba(79, 70, 229, 0.2)' : 'none'
-                  }}
-                >
-                  View Purchases
-                </button>
-                {customDayPurchases !== null && (
-                  <button
-                    onClick={() => { setCustomDayPurchases(null); setCustomPurchaseDate(''); }}
-                    style={{ padding: '9px 13px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick presets for Day */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>Quick Select:</span>
-            <button
-              type="button"
-              onClick={() => {
-                const today = new Date().toISOString().slice(0, 10);
-                setCustomPurchaseDate(today);
-                const [y, m, d] = today.split('-').map(Number);
-                const target = new Date(y, m - 1, d);
-                const results = purchases.filter(p => {
-                  const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-                  const [py, pm, pd] = raw.split('-').map(Number);
-                  return new Date(py, pm - 1, pd).getTime() === target.getTime();
-                });
-                setCustomWeekPurchases(null);
-                setCustomPurchaseWeekRange(null);
-                setCustomDayPurchases(results);
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const dObj = new Date();
-                dObj.setDate(dObj.getDate() - 1);
-                const yest = dObj.toISOString().slice(0, 10);
-                setCustomPurchaseDate(yest);
-                const [y, m, d] = yest.split('-').map(Number);
-                const target = new Date(y, m - 1, d);
-                const results = purchases.filter(p => {
-                  const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-                  const [py, pm, pd] = raw.split('-').map(Number);
-                  return new Date(py, pm - 1, pd).getTime() === target.getTime();
-                });
-                setCustomWeekPurchases(null);
-                setCustomPurchaseWeekRange(null);
-                setCustomDayPurchases(results);
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              Yesterday
-            </button>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Purchases by Specific Day</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Select any date to view all purchases made on that day</p>
           </div>
         </div>
 
-        {/* Card 2: Purchases by Specific Week */}
-        <div style={{ 
-          background: '#fff', 
-          border: customWeekPurchases !== null ? '1.5px solid #3b82f6' : '1px solid #e2e8f0', 
-          borderRadius: 14, 
-          padding: 20,
-          boxShadow: customWeekPurchases !== null ? '0 4px 14px -2px rgba(59, 130, 246, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          gap: 16,
-          transition: 'all 0.2s ease'
-        }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                  📅
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Purchases by Specific Week</h3>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Pick any date — shows full week (Mon – Sun)</p>
-                </div>
-              </div>
-              {customWeekPurchases !== null && (
-                <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: '#dbeafe', color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb' }}></span>
-                  Active
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Any Date In The Week
-              </label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="date"
-                  value={customPurchaseWeekDate}
-                  onChange={e => { setCustomPurchaseWeekDate(e.target.value); setCustomWeekPurchases(null); setCustomPurchaseWeekRange(null); }}
-                  style={{ 
-                    flex: 1, 
-                    padding: '9px 12px', 
-                    border: '1.5px solid #e2e8f0', 
-                    borderRadius: 9, 
-                    fontSize: 13, 
-                    fontFamily: 'inherit', 
-                    outline: 'none', 
-                    background: '#fff', 
-                    color: '#0f172a', 
-                    cursor: 'pointer' 
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (!customPurchaseWeekDate) return;
-                    const [y, m, d] = customPurchaseWeekDate.split('-').map(Number);
-                    const picked = new Date(y, m - 1, d);
-                    const dow = picked.getDay();
-                    const monday = new Date(picked);
-                    monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
-                    const sunday = new Date(monday);
-                    sunday.setDate(monday.getDate() + 6);
-                    const results = purchases.filter(p => {
-                      const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-                      const [py, pm, pd] = raw.split('-').map(Number);
-                      const pd2 = new Date(py, pm - 1, pd);
-                      return pd2 >= monday && pd2 <= sunday;
-                    });
-                    setCustomDayPurchases(null);
-                    setCustomWeekPurchases(results);
-                    setCustomPurchaseWeekRange({ monday, sunday });
-                  }}
-                  style={{ 
-                    padding: '9px 18px', 
-                    borderRadius: 9, 
-                    border: 'none', 
-                    background: customPurchaseWeekDate ? '#4f46e5' : '#f1f5f9', 
-                    color: customPurchaseWeekDate ? '#fff' : '#94a3b8', 
-                    fontSize: 13, 
-                    fontWeight: 700, 
-                    cursor: customPurchaseWeekDate ? 'pointer' : 'not-allowed', 
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    boxShadow: customPurchaseWeekDate ? '0 1px 2px rgba(79, 70, 229, 0.2)' : 'none'
-                  }}
-                >
-                  View Week
-                </button>
-                {customWeekPurchases !== null && (
-                  <button
-                    onClick={() => { setCustomWeekPurchases(null); setCustomPurchaseWeekDate(''); setCustomPurchaseWeekRange(null); }}
-                    style={{ padding: '9px 13px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Select Date</label>
+            <input
+              type="date"
+              value={customPurchaseDate}
+              onChange={e => { setCustomPurchaseDate(e.target.value); setCustomDayPurchases(null); }}
+              style={{ padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', cursor: 'pointer', minWidth: 180 }}
+            />
           </div>
-
-          {/* Quick presets for Week */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>Quick Select:</span>
-            <button
-              type="button"
-              onClick={() => {
-                const today = new Date().toISOString().slice(0, 10);
-                setCustomPurchaseWeekDate(today);
-                const [y, m, d] = today.split('-').map(Number);
-                const picked = new Date(y, m - 1, d);
-                const dow = picked.getDay();
-                const monday = new Date(picked);
-                monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                const results = purchases.filter(p => {
-                  const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-                  const [py, pm, pd] = raw.split('-').map(Number);
-                  const pd2 = new Date(py, pm - 1, pd);
-                  return pd2 >= monday && pd2 <= sunday;
-                });
-                setCustomDayPurchases(null);
-                setCustomWeekPurchases(results);
-                setCustomPurchaseWeekRange({ monday, sunday });
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              This Week
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const dObj = new Date();
-                dObj.setDate(dObj.getDate() - 7);
-                const lastWeekDate = dObj.toISOString().slice(0, 10);
-                setCustomPurchaseWeekDate(lastWeekDate);
-                const [y, m, d] = lastWeekDate.split('-').map(Number);
-                const picked = new Date(y, m - 1, d);
-                const dow = picked.getDay();
-                const monday = new Date(picked);
-                monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                const results = purchases.filter(p => {
-                  const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-                  const [py, pm, pd] = raw.split('-').map(Number);
-                  const pd2 = new Date(py, pm - 1, pd);
-                  return pd2 >= monday && pd2 <= sunday;
-                });
-                setCustomDayPurchases(null);
-                setCustomWeekPurchases(results);
-                setCustomPurchaseWeekRange({ monday, sunday });
-              }}
-              style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-            >
-              Last Week
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ── Day Purchases Results View ── */}
-      {customDayPurchases !== null && (
-        <div style={{ ...styles.contentCard, marginTop: 20, border: '1.5px solid #6366f1', borderRadius: 14 }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🔍</div>
-              <div>
-                <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Purchases on {new Date(...customPurchaseDate.split('-').map((v, i) => i === 1 ? v - 1 : +v)).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-                </h4>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Filtered single day results</p>
-              </div>
-            </div>
+          <button
+            onClick={() => {
+              if (!customPurchaseDate) return;
+              const [y, m, d] = customPurchaseDate.split('-').map(Number);
+              const target = new Date(y, m - 1, d);
+              const results = purchases.filter(p => {
+                const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
+                const [py, pm, pd] = raw.split('-').map(Number);
+                return new Date(py, pm - 1, pd).getTime() === target.getTime();
+              });
+              setCustomDayPurchases(results);
+            }}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: customPurchaseDate ? '#4f46e5' : '#e2e8f0', color: customPurchaseDate ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: customPurchaseDate ? 'pointer' : 'not-allowed', transition: 'background 0.15s' }}
+          >
+            View Purchases
+          </button>
+          {customDayPurchases !== null && (
             <button
               onClick={() => { setCustomDayPurchases(null); setCustomPurchaseDate(''); }}
-              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
             >
-              ✕ Close Results
+              Clear
             </button>
-          </div>
-
-          {/* Summary banner */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-            <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
-                {new Date(...customPurchaseDate.split('-').map((v, i) => i === 1 ? v - 1 : +v))
-                  .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-              </div>
-            </div>
-            <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Purchases</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5', fontFamily: "'DM Mono', monospace, sans-serif" }}>{customDayPurchases.length}</div>
-            </div>
-            <div style={{ padding: '16px 22px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Spent</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626', fontFamily: "'DM Mono', monospace, sans-serif" }}>
-                UGX {customDayPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0).toLocaleString()}
-              </div>
-            </div>
-          </div>
-
-          {customDayPurchases.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ fontSize: 38, marginBottom: 10 }}>🗓️</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No purchases recorded on this day</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try selecting a different date</div>
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #f1f5f9', background: '#f8fafc' }}>
-                  {['Supplier', 'Items', 'Total Amount'].map(h => (
-                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {customDayPurchases.map(p => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ padding: '13px 14px' }}>
-                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
-                        {p.supplier?.name || 'N/A'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '13px 14px', color: '#475569', fontSize: 14 }}>
-                      {p.purchase_items?.length || 0} item{(p.purchase_items?.length || 0) !== 1 ? 's' : ''}
-                      {(p.purchase_items || []).length > 0 && (
-                        <ul style={{ margin: '6px 0 0', paddingLeft: 16, listStyle: 'disc' }}>
-                          {(p.purchase_items || []).map((item, idx) => (
-                            <li key={idx} style={{ fontSize: 12, color: '#64748b' }}>
-                              {item.product?.name || `Product #${item.product_id}`} × {item.quantity} @ UGX {parseFloat(item.cost_price || 0).toLocaleString()}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td style={{ padding: '13px 14px', fontWeight: 700, color: '#0f172a', fontSize: 14, fontFamily: "'DM Mono', monospace, sans-serif" }}>
-                      UGX {parseFloat(p.total_amount || 0).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
         </div>
-      )}
 
-      {/* ── Week Purchases Results View ── */}
-      {customWeekPurchases !== null && customPurchaseWeekRange !== null && (() => {
-        const { monday, sunday } = customPurchaseWeekRange;
-        const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        const weekTotal = customWeekPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0);
-        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
-          const day = new Date(monday);
-          day.setDate(monday.getDate() + i);
-          const dayPurchases = customWeekPurchases.filter(p => {
-            const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
-            const [py, pm, pd] = raw.split('-').map(Number);
-            return new Date(py, pm - 1, pd).getTime() === day.getTime();
-          });
-          return {
-            day,
-            name: dayNames[i],
-            count: dayPurchases.length,
-            total: dayPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0),
-          };
-        });
-        const maxDayTotal = Math.max(...dayBreakdown.map(d => d.total), 1);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-        return (
-          <div style={{ ...styles.contentCard, marginTop: 20, border: '1.5px solid #3b82f6', borderRadius: 14 }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>📅</div>
-                <div>
-                  <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Purchases for Week: {fmt(monday)} – {fmt(sunday)}
-                  </h4>
-                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Filtered 7-day weekly summary & breakdown</p>
-                </div>
-              </div>
-              <button
-                onClick={() => { setCustomWeekPurchases(null); setCustomPurchaseWeekDate(''); setCustomPurchaseWeekRange(null); }}
-                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-              >
-                ✕ Close Results
-              </button>
-            </div>
-
+        {customDayPurchases !== null && (
+          <div style={{ marginTop: 20 }}>
             {/* Summary banner */}
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-              <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>to {fmt(sunday)}</div>
+              <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
+                  {new Date(...customPurchaseDate.split('-').map((v, i) => i === 1 ? v - 1 : +v))
+                    .toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                </div>
               </div>
               <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Purchases</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8', fontFamily: "'DM Mono', monospace, sans-serif" }}>{customWeekPurchases.length}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{customDayPurchases.length}</div>
               </div>
               <div style={{ padding: '16px 22px' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Spent</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626', fontFamily: "'DM Mono', monospace, sans-serif" }}>UGX {weekTotal.toLocaleString()}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626' }}>
+                  UGX {customDayPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0).toLocaleString()}
+                </div>
               </div>
             </div>
 
-            {/* Day-by-day breakdown cards */}
-            <div className="week-day-grid" style={{ marginBottom: 20 }}>
-              {dayBreakdown.map(({ day, name, count, total }) => {
-                const isToday = day.getTime() === today.getTime();
-                const barPct = Math.round((total / maxDayTotal) * 100);
-                return (
-                  <div key={name} style={{ background: isToday ? '#eff6ff' : '#fff', border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#3b82f6' : '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{name}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
-                    <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#3b82f6' : '#e2e8f0', borderRadius: 2, transition: 'width 0.4s ease' }} />
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? '#1d4ed8' : '#d1d5db', lineHeight: 1, fontFamily: "'DM Mono', monospace, sans-serif" }}>{count}</div>
-                    <div style={{ fontSize: 10, fontWeight: 500, color: count > 0 ? '#64748b' : '#d1d5db', fontFamily: "'DM Mono', monospace, sans-serif" }}>{count > 0 ? `UGX ${total.toLocaleString()}` : '—'}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {customWeekPurchases.length === 0 ? (
+            {customDayPurchases.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No purchases recorded in this week</div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try picking a date from a different week</div>
+                <div style={{ fontSize: 38, marginBottom: 10 }}>🗓️</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No purchases recorded on this day</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try selecting a different date</div>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #f1f5f9', background: '#f8fafc' }}>
-                    {['Date', 'Supplier', 'Items', 'Total Amount'].map(h => (
+                  <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                    {['Supplier', 'Items', 'Total Amount'].map(h => (
                       <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {customWeekPurchases.map(p => (
+                  {customDayPurchases.map(p => (
                     <tr key={p.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                      <td style={{ padding: '13px 14px', color: '#475569', fontSize: 13 }}>
-                        {new Date(...(p.purchase_date || p.created_at || '').slice(0, 10).split('-').map((v, i) => i === 1 ? v - 1 : +v))
-                          .toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
-                      </td>
                       <td style={{ padding: '13px 14px' }}>
                         <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
                           {p.supplier?.name || 'N/A'}
@@ -5572,8 +4778,17 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                       </td>
                       <td style={{ padding: '13px 14px', color: '#475569', fontSize: 14 }}>
                         {p.purchase_items?.length || 0} item{(p.purchase_items?.length || 0) !== 1 ? 's' : ''}
+                        {(p.purchase_items || []).length > 0 && (
+                          <ul style={{ margin: '6px 0 0', paddingLeft: 16, listStyle: 'disc' }}>
+                            {(p.purchase_items || []).map((item, idx) => (
+                              <li key={idx} style={{ fontSize: 12, color: '#64748b' }}>
+                                {item.product?.name || `Product #${item.product_id}`} × {item.quantity} @ UGX {parseFloat(item.cost_price || 0).toLocaleString()}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </td>
-                      <td style={{ padding: '13px 14px', fontWeight: 700, color: '#0f172a', fontSize: 14, fontFamily: "'DM Mono', monospace, sans-serif" }}>
+                      <td style={{ padding: '13px 14px', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
                         UGX {parseFloat(p.total_amount || 0).toLocaleString()}
                       </td>
                     </tr>
@@ -5582,8 +4797,166 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
               </table>
             )}
           </div>
-        );
-      })()}
+        )}
+      </div>
+
+      {/* ── Purchases by Specific Week ── */}
+      <div style={{ ...styles.contentCard, marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>📅</div>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>Purchases by Specific Week</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>Pick any date — shows all purchases for that full week (Mon – Sun)</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Any date in the week</label>
+            <input
+              type="date"
+              value={customPurchaseWeekDate}
+              onChange={e => { setCustomPurchaseWeekDate(e.target.value); setCustomWeekPurchases(null); setCustomPurchaseWeekRange(null); }}
+              style={{ padding: '9px 13px', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#0f172a', cursor: 'pointer', minWidth: 180 }}
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (!customPurchaseWeekDate) return;
+              const [y, m, d] = customPurchaseWeekDate.split('-').map(Number);
+              const picked = new Date(y, m - 1, d);
+              const dow = picked.getDay();
+              const monday = new Date(picked);
+              monday.setDate(picked.getDate() - (dow === 0 ? 6 : dow - 1));
+              const sunday = new Date(monday);
+              sunday.setDate(monday.getDate() + 6);
+              const results = purchases.filter(p => {
+                const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
+                const [py, pm, pd] = raw.split('-').map(Number);
+                const pd2 = new Date(py, pm - 1, pd);
+                return pd2 >= monday && pd2 <= sunday;
+              });
+              setCustomWeekPurchases(results);
+              setCustomPurchaseWeekRange({ monday, sunday });
+            }}
+            style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: customPurchaseWeekDate ? '#4f46e5' : '#e2e8f0', color: customPurchaseWeekDate ? '#fff' : '#94a3b8', fontSize: 13, fontWeight: 700, cursor: customPurchaseWeekDate ? 'pointer' : 'not-allowed', transition: 'background 0.15s' }}
+          >
+            View Week
+          </button>
+          {customWeekPurchases !== null && (
+            <button
+              onClick={() => { setCustomWeekPurchases(null); setCustomPurchaseWeekDate(''); setCustomPurchaseWeekRange(null); }}
+              style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {customWeekPurchases !== null && customPurchaseWeekRange !== null && (() => {
+          const { monday, sunday } = customPurchaseWeekRange;
+          const fmt = d => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          const weekTotal = customWeekPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0);
+          const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const dayBreakdown = Array.from({ length: 7 }, (_, i) => {
+            const day = new Date(monday);
+            day.setDate(monday.getDate() + i);
+            const dayPurchases = customWeekPurchases.filter(p => {
+              const raw = (p.purchase_date || p.created_at || '').slice(0, 10);
+              const [py, pm, pd] = raw.split('-').map(Number);
+              return new Date(py, pm - 1, pd).getTime() === day.getTime();
+            });
+            return {
+              day,
+              name: dayNames[i],
+              count: dayPurchases.length,
+              total: dayPurchases.reduce((s, p) => s + parseFloat(p.total_amount || 0), 0),
+            };
+          });
+          const maxDayTotal = Math.max(...dayBreakdown.map(d => d.total), 1);
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+          return (
+            <div style={{ marginTop: 20 }}>
+              {/* Summary banner */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>to {fmt(sunday)}</div>
+                </div>
+                <div style={{ padding: '16px 22px', borderRight: '1px solid #f1f5f9' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Purchases</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8' }}>{customWeekPurchases.length}</div>
+                </div>
+                <div style={{ padding: '16px 22px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Total Spent</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626' }}>UGX {weekTotal.toLocaleString()}</div>
+                </div>
+              </div>
+
+              {/* Day-by-day breakdown cards */}
+              <div className="week-day-grid" style={{ marginBottom: 20 }}>
+                {dayBreakdown.map(({ day, name, count, total }) => {
+                  const isToday = day.getTime() === today.getTime();
+                  const barPct = Math.round((total / maxDayTotal) * 100);
+                  return (
+                    <div key={name} style={{ background: isToday ? '#eff6ff' : '#fff', border: `1.5px solid ${isToday ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: isToday ? '#3b82f6' : '#94a3b8', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{name}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</div>
+                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${barPct}%`, background: count > 0 ? '#3b82f6' : '#e2e8f0', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? '#1d4ed8' : '#d1d5db', lineHeight: 1 }}>{count}</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: count > 0 ? '#64748b' : '#d1d5db' }}>{count > 0 ? `UGX ${total.toLocaleString()}` : '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {customWeekPurchases.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No purchases recorded in this week</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Try picking a date from a different week</div>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                      {['Date', 'Supplier', 'Items', 'Total Amount'].map(h => (
+                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customWeekPurchases.map(p => (
+                      <tr key={p.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                        <td style={{ padding: '13px 14px', color: '#475569', fontSize: 13 }}>
+                          {new Date(...(p.purchase_date || p.created_at || '').slice(0, 10).split('-').map((v, i) => i === 1 ? v - 1 : +v))
+                            .toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
+                        </td>
+                        <td style={{ padding: '13px 14px' }}>
+                          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                            {p.supplier?.name || 'N/A'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '13px 14px', color: '#475569', fontSize: 14 }}>
+                          {p.purchase_items?.length || 0} item{(p.purchase_items?.length || 0) !== 1 ? 's' : ''}
+                        </td>
+                        <td style={{ padding: '13px 14px', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
+                          UGX {parseFloat(p.total_amount || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Record Purchase Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Record New Purchase" size="lg">
@@ -7314,13 +6687,13 @@ function AiTab({ token, data }) {
   return (
     <div style={styles.pageContainer}>
       {/* Header */}
-      <div className="section-hero" style={{ background: '#ffffff', borderRadius: 14, padding: '24px 28px', marginBottom: 24, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.03)' }}>
+      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', borderRadius: 16, padding: '28px 32px', marginBottom: 24, boxShadow: '0 4px 24px rgba(15,23,42,0.14)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#eef2ff', border: '1px solid #c7d2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🤖</div>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0, boxShadow: '0 4px 16px rgba(79,70,229,0.4)' }}>🤖</div>
           <div>
-            <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Powered by Mistral AI</p>
-            <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>AI Business Assistant</h1>
-            <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Analyse your financial data, spot trends, and forecast business performance</p>
+            <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Powered by Mistral AI</p>
+            <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>AI Business Assistant</h1>
+            <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Analyse your financial data, spot trends, and forecast business performance</p>
           </div>
         </div>
       </div>
@@ -8687,14 +8060,13 @@ const styles = {
 
   // Header Styles — layout controlled by .dash-header CSS class
   header: {
-    backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e2e8f0',
+    backgroundColor: '#0f172a',
+    borderBottom: '1px solid #1e293b',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexShrink: 0,
     minHeight: 64,
-    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
   },
 
   headerLeft: {
@@ -8718,7 +8090,7 @@ const styles = {
     margin: 0,
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold,
-    color: '#0f172a',
+    color: '#ffffff',
     letterSpacing: '-0.5px',
   },
 
@@ -8737,7 +8109,7 @@ const styles = {
 
   searchIcon: {
     position: 'absolute',
-    left: 12,
+    left: theme.spacing.md,
     top: '50%',
     transform: 'translateY(-50%)',
     fontSize: '14px',
@@ -8746,13 +8118,13 @@ const styles = {
 
   searchInput: {
     width: '100%',
-    padding: '8px 36px 8px 38px',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    fontSize: '13.5px',
-    backgroundColor: '#f8fafc',
-    color: '#0f172a',
-    transition: 'all 0.15s ease',
+    padding: `${theme.spacing.sm} ${theme.spacing.md} ${theme.spacing.sm} ${theme.spacing['2xl']}`,
+    border: '1px solid #334155',
+    borderRadius: theme.borderRadius.lg,
+    fontSize: theme.typography.fontSize.sm,
+    backgroundColor: '#1e293b',
+    color: '#f1f5f9',
+    transition: theme.transitions.default,
     outline: 'none'
   },
 
@@ -8777,35 +8149,34 @@ const styles = {
   },
 
   userAvatar: {
-    width: '36px',
-    height: '36px',
+    width: '40px',
+    height: '40px',
     borderRadius: '50%',
-    backgroundColor: '#eef2ff',
-    color: '#4338ca',
-    border: '1px solid #c7d2fe',
+    backgroundColor: theme.colors.primary[600],
+    color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '13.5px',
-    fontWeight: 700
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold
   },
 
   userDetails: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 2
+    gap: theme.spacing.xs
   },
 
   userName: {
-    fontSize: '13.5px',
-    fontWeight: 600,
-    color: '#0f172a'
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: '#f1f5f9'
   },
 
   userRole: {
-    fontSize: '11.5px',
-    color: '#64748b',
-    fontWeight: 500
+    fontSize: theme.typography.fontSize.xs,
+    color: '#94a3b8',
+    fontWeight: theme.typography.fontWeight.normal
   },
 
   // Container & Layout — controlled by .dash-container CSS class
@@ -8819,8 +8190,8 @@ const styles = {
   // Sidebar — layout controlled by .dash-sidebar CSS class
   sidebar: {
     width: '260px',
-    backgroundColor: '#ffffff',
-    borderRight: '1px solid #e2e8f0',
+    backgroundColor: '#0f172a',
+    borderRight: '1px solid #1e293b',
     display: 'flex',
     flexDirection: 'column',
     overflowY: 'auto',
@@ -8836,39 +8207,37 @@ const styles = {
   menuItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '10px 14px',
+    gap: theme.spacing.md,
+    padding: '13px 14px',
     border: 'none',
     backgroundColor: 'transparent',
     cursor: 'pointer',
-    fontSize: '13.5px',
-    fontWeight: 500,
-    color: '#475569',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: '#94a3b8',
     textAlign: 'left',
-    borderRadius: 8,
-    transition: 'all 0.15s ease',
+    borderRadius: theme.borderRadius.lg,
+    transition: theme.transitions.default,
     position: 'relative',
     width: '100%'
   },
 
   menuItemActive: {
-    backgroundColor: '#eef2ff',
-    color: '#4338ca',
-    fontWeight: 600
+    backgroundColor: '#1e293b',
+    color: '#f8fafc',
+    fontWeight: theme.typography.fontWeight.semibold
   },
 
   menuIcon: {
-    fontSize: '17px',
-    width: '22px',
+    fontSize: '16px',
+    width: '20px',
     textAlign: 'center',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
+    opacity: 0.8
   },
 
   menuLabel: {
     flex: 1,
-    fontSize: '13.5px'
+    fontSize: '14px'
   },
 
   activeIndicator: {
@@ -8878,8 +8247,8 @@ const styles = {
     transform: 'translateY(-50%)',
     width: '3px',
     height: '18px',
-    backgroundColor: '#4f46e5',
-    borderRadius: '4px'
+    backgroundColor: theme.colors.primary[500],
+    borderRadius: theme.borderRadius.sm
   },
 
   // Main Content — padding controlled by .dash-main CSS class
@@ -9312,187 +8681,257 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
               alt={businessName}
               style={{
                 width: 76,
-                height: 76,
-                objectFit: 'contain',
-                background: '#ffffff',
-                padding: '6px',
-                borderRadius: 16,
-                border: '1.5px solid #e2e8f0',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-              }}
-            />
-            <div>
-              <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 900, color: '#881337', letterSpacing: '-0.5px' }}>
-                {businessName}
-              </h1>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#be123c', letterSpacing: '0.02em' }}>
-                Quality & Reliability | Inventory Management
-              </p>
+        <div
+          id="printable-invoice"
+          style={{
+            width: '100%',
+            maxWidth: '794px',
+            minHeight: '1000px',
+            background: '#ffffff',
+            color: '#0f172a',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            padding: '42px 46px',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+            border: '1px solid #cbd5e1',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            lineHeight: 1.5
+          }}
+        >
+          <div>
+            {/* Top Header: Brand (Left) & Document Meta (Right) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 20, borderBottom: '2px solid #0f172a', marginBottom: 20 }}>
+              {/* Logo / Company Identity */}
+              <div style={{ maxWidth: '54%' }}>
+                {logoUrl ? (
+                  <div style={{ marginBottom: 8 }}>
+                    <img src={logoUrl} alt={businessName} style={{ maxHeight: 52, maxWidth: 220, objectFit: 'contain', display: 'block' }} />
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 6, background: '#0f172a',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: 800, fontSize: 14, flexShrink: 0
+                    }}>
+                      {businessName.slice(0, 2).toUpperCase()}
+                    </div>
+                    <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                      {businessName}
+                    </h1>
+                  </div>
+                )}
+                {logoUrl && (
+                  <h1 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                    {businessName}
+                  </h1>
+                )}
+                <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.5 }}>
+                  <div>{businessAddress}</div>
+                  <div>Phone: {businessPhone} &bull; Email: {businessEmail}</div>
+                  {businessTin && (
+                    <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                      TIN / VAT Reg: <span style={{ fontVariantNumeric: 'tabular-nums' }}>{businessTin}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Document Title & Reference Table */}
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', textTransform: 'uppercase', marginBottom: 8 }}>
+                  {documentType}
+                </div>
+                <table style={{ marginLeft: 'auto', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '2px 8px', color: '#64748b', fontWeight: 500, textAlign: 'right' }}>Invoice No:</td>
+                      <td style={{ padding: '2px 0 2px 8px', fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{invoiceNumber}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '2px 8px', color: '#64748b', fontWeight: 500, textAlign: 'right' }}>Date:</td>
+                      <td style={{ padding: '2px 0 2px 8px', fontWeight: 600, color: '#0f172a' }}>{invoiceDate}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '2px 8px', color: '#64748b', fontWeight: 500, textAlign: 'right' }}>Due Date:</td>
+                      <td style={{ padding: '2px 0 2px 8px', fontWeight: 600, color: '#0f172a' }}>{dueDate}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '2px 8px', color: '#64748b', fontWeight: 500, textAlign: 'right' }}>Terms:</td>
+                      <td style={{ padding: '2px 0 2px 8px', fontWeight: 600, color: '#334155' }}>{paymentTerms}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '2px 8px', color: '#64748b', fontWeight: 500, textAlign: 'right' }}>Status:</td>
+                      <td style={{ padding: '2px 0 2px 8px', textAlign: 'right' }}>
+                        <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', ...statusStyle }}>
+                          {status}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
 
-          {/* Document Title & Reference */}
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 6, background: '#881337', color: '#ffffff', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              PROFORMA INVOICE
+            {/* Client & Transaction Section */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 18, borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                  Billed To
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>
+                  {customerName}
+                </div>
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
+                  {customerAddress && <div>{customerAddress}</div>}
+                  {customerPhone && <div>Phone: {customerPhone}</div>}
+                  {customerEmail && <div>Email: {customerEmail}</div>}
+                  {customerTin && <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>Customer TIN: {customerTin}</div>}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right', minWidth: 160 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                  Transaction Details
+                </div>
+                <div style={{ fontSize: 12, color: '#334155' }}>
+                  Source Ref: <strong style={{ color: '#0f172a' }}>{sourceRef}</strong>
+                </div>
+                <div style={{ fontSize: 12, color: '#334155', marginTop: 2 }}>
+                  Currency: <strong style={{ color: '#0f172a' }}>UGX</strong>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  Method: <span style={{ fontWeight: 600, color: '#0f172a' }}>{invoice.payment_method || 'Electronic / Cash'}</span>
+                </div>
+              </div>
             </div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.5px' }}>
-              {invoiceNumber}
-            </h2>
-          </div>
-        </div>
 
-        {/* Issuer Details vs Billed To Cards (2-Column Layout) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 28 }}>
-          {/* Issuer Details Card */}
-          <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              ISSUED BY
-            </p>
-            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{businessName}</p>
-            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569', lineHeight: 1.4 }}>📍 {businessAddress}</p>
-            <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>📞 {businessPhone}</p>
-            <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>✉️ {businessEmail}</p>
-          </div>
-
-          {/* Billed To Customer Card */}
-          <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, color: '#881337', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              BILLED TO
-            </p>
-            <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{customerName}</p>
-            {customerPhone ? <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>📞 {customerPhone}</p> : <p style={{ margin: '0 0 3px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No phone listed</p>}
-            {customerEmail && <p style={{ margin: '0 0 3px', fontSize: 12, color: '#475569' }}>✉️ {customerEmail}</p>}
-            {customerAddress && <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>📍 {customerAddress}</p>}
-          </div>
-        </div>
-
-        {/* Metadata Bar (Date, Due Date, Source, Status) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          background: '#ffffff',
-          border: '1.5px solid #e2e8f0',
-          borderRadius: 12,
-          padding: '14px 20px',
-          marginBottom: 28,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
-        }}>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice Date</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{invoiceDate}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Due Date</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{dueDate}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Source / Ref</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{sourceRef}</p>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Status</p>
-            <span style={{
-              display: 'inline-block',
-              padding: '3px 12px',
-              borderRadius: 20,
-              fontSize: 11,
-              fontWeight: 800,
-              background: statusBg,
-              color: statusColor
-            }}>
-              ● {status}
-            </span>
-          </div>
-        </div>
-
-        {/* Line Items Table */}
-        <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#881337', color: '#ffffff' }}>
-                <th style={{ padding: '12px 18px', textAlign: 'left', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>DESCRIPTION</th>
-                <th style={{ padding: '12px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '130px' }}>QUANTITY</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '160px' }}>UNIT PRICE</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', width: '170px' }}>AMOUNT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, idx) => {
-                const name = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
-                const qty = parseFloat(item.quantity || 1);
-                const price = parseFloat(item.price || item.unit_price || 0);
-                const amt = parseFloat(item.subtotal || (qty * price));
-                const unitLabel = item.product?.unit || item.unit || 'Units';
-
-                return (
-                  <tr key={idx} style={{ borderBottom: idx === items.length - 1 ? 'none' : '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                    <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                      {name}
-                    </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'center', fontSize: 13, color: '#475569' }}>
-                      {qty.toFixed(2)} {unitLabel}
-                    </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 13, color: '#475569' }}>
-                      UGX {price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontSize: 14, fontWeight: 800, color: '#0f172a' }}>
-                      UGX {amt.toLocaleString('en-US')}
+            {/* Line Items Table */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderTop: '1px solid #0f172a', borderBottom: '1px solid #0f172a' }}>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', width: 36 }}>#</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase' }}>Description</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', width: 110 }}>Qty</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', width: 125 }}>Unit Price</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', width: 135 }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, idx) => {
+                  const name = item.product?.name || item.name || item.description || `Item #${idx + 1}`;
+                  const qty = parseFloat(item.quantity || 1);
+                  const price = parseFloat(item.price || item.unit_price || 0);
+                  const amt = parseFloat(item.subtotal || (qty * price));
+                  const unitLabel = item.product?.unit || item.unit || 'Units';
+                  return (
+                    <tr key={idx} className="invoice-table-row" style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 10px', textAlign: 'center', fontSize: 12, color: '#64748b' }}>{idx + 1}</td>
+                      <td style={{ padding: '10px 10px', fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{name}</td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', fontSize: 12, color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                        {qty.toFixed(2)} <span style={{ fontSize: 10, color: '#64748b' }}>{unitLabel}</span>
+                      </td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', fontSize: 12, color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                        UGX {price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: '10px 10px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                        UGX {amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {items.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                      No items listed on this invoice
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
 
-        {/* Bottom Section: Payment Instructions (Left) & Totals Summary (Right) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 28, marginTop: 20 }}>
-          {/* Payment Instructions (Bottom Left) */}
-          <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
-            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              💳 Payment Details & Instructions
-            </p>
-            <p style={{ margin: '0 0 3px' }}>
-              Payment Communication: <strong style={{ color: '#881337' }}>{invoiceNumber}</strong>
-            </p>
-            <p style={{ margin: '0 0 3px' }}>
-              Bank Account: <strong>6008040719 - ABSA Business Account</strong>
-            </p>
-            <p style={{ margin: '0 0 6px' }}>
-              Mobile Money: <strong>{businessPhone} ({businessName})</strong>
-            </p>
-            <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', fontStyle: 'italic', borderTop: '1px dashed #cbd5e1', paddingTop: 6 }}>
-              Thank you for doing business with {businessName}!
-            </p>
+            {/* Bottom Remittance & Summary */}
+            <div className="invoice-summary-block" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 28, marginTop: 8, paddingBottom: 20, borderBottom: '1px solid #e2e8f0' }}>
+              {/* Payment Instructions */}
+              <div style={{ flex: 1, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                  Remittance &amp; Payment Instructions
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div><strong>Payment Reference:</strong> <span style={{ color: '#0f172a', fontWeight: 700 }}>{invoiceNumber}</span></div>
+                  <div><strong>Bank:</strong> {bankName} &bull; <strong>Acc No:</strong> <span style={{ color: '#0f172a', fontWeight: 700 }}>{accountNumber}</span></div>
+                  {accountName && <div><strong>Account Name:</strong> {accountName}</div>}
+                  {mobileMoneyNumber && (
+                    <div><strong>Mobile Money:</strong> {mobileMoneyNumber} ({mobileMoneyName || businessName})</div>
+                  )}
+                </div>
+                {notes && (
+                  <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748b' }}>{notes}</p>
+                )}
+              </div>
+
+              {/* Financial Totals */}
+              <div style={{ width: 280, flexShrink: 0 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '4px 0', color: '#475569' }}>Subtotal</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                        UGX {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    {discount > 0 && (
+                      <tr>
+                        <td style={{ padding: '4px 0', color: '#dc2626' }}>Discount</td>
+                        <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>
+                          &minus; UGX {discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
+                    {tax > 0 && (
+                      <tr>
+                        <td style={{ padding: '4px 0', color: '#16a34a' }}>Tax / VAT</td>
+                        <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#16a34a', fontVariantNumeric: 'tabular-nums' }}>
+                          + UGX {tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    )}
+                    <tr style={{ borderTop: '1px solid #cbd5e1' }}>
+                      <td style={{ padding: '6px 0', fontWeight: 700, color: '#0f172a', fontSize: 13 }}>Total</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                        UGX {total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '4px 0', color: '#64748b' }}>Amount Paid</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', color: '#475569', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        UGX {paid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                    <tr style={{ borderTop: '2px solid #0f172a' }}>
+                      <td style={{ padding: '8px 0 2px', fontWeight: 800, color: balance > 0 ? '#991b1b' : '#0f172a', fontSize: 14 }}>
+                        Balance Due
+                      </td>
+                      <td style={{ padding: '8px 0 2px', textAlign: 'right', fontWeight: 800, color: balance > 0 ? '#991b1b' : '#059669', fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>
+                        UGX {balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          {/* Totals Summary Box (Bottom Right) */}
-          <div style={{ width: '310px', border: '1.5px solid #cbd5e1', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
-              <span style={{ color: '#64748b', fontWeight: 600 }}>Subtotal</span>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {subtotal.toLocaleString()}</span>
+          {/* Sign-off Footer */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: 20, fontSize: 11, color: '#64748b' }}>
+            <div>
+              <div style={{ color: '#0f172a', fontWeight: 600, marginBottom: 2 }}>{businessName}</div>
+              <div>Computer generated document. Official and valid without physical seal.</div>
             </div>
-            {discount > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13, color: '#dc2626' }}>
-                <span>Discount</span>
-                <span>− UGX {discount.toLocaleString()}</span>
-              </div>
-            )}
-            {tax > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px', background: '#ffffff', borderBottom: '1px solid #e2e8f0', fontSize: 13, color: '#16a34a' }}>
-                <span>Tax</span>
-                <span>+ UGX {tax.toLocaleString()}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
-              <span style={{ color: '#475569', fontStyle: 'italic' }}>Amount Paid ({invoiceDate})</span>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>UGX {paid.toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: balance > 0 ? '#fff1f2' : '#f0fdf4', fontSize: 15, fontWeight: 900 }}>
-              <span style={{ color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
-              <span style={{ color: balance > 0 ? '#9f1239' : '#166534' }}>UGX {balance.toLocaleString()}</span>
+            <div style={{ textAlign: 'right', minWidth: 180 }}>
+              <div style={{ borderBottom: '1px solid #94a3b8', width: 160, marginBottom: 4 }}></div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#475569' }}>Authorized Signatory</div>
             </div>
           </div>
         </div>
@@ -9502,16 +8941,30 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
 }
 
 // ════════════════════════════════════════════════
-// CREATE CUSTOM INVOICE MODAL
+// CREATE CUSTOM INVOICE MODAL (Fixed Layout & Dynamic Remittance)
 // ════════════════════════════════════════════════
 function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
+  const storedSettings = getStoredInvoiceSettings(user);
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerTin, setCustomerTin] = useState('');
+
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
   const [sourceRef, setSourceRef] = useState(`S00${Math.floor(100 + Math.random() * 900)}`);
-  
+  const [documentType, setDocumentType] = useState('PROFORMA INVOICE');
+
+  // Remittance overrides
+  const [bankName, setBankName] = useState(storedSettings.bankName);
+  const [accountNumber, setAccountNumber] = useState(storedSettings.accountNumber);
+  const [accountName, setAccountName] = useState(storedSettings.accountName);
+  const [mobileMoneyNumber, setMobileMoneyNumber] = useState(storedSettings.mobileMoneyNumber);
+  const [paymentTerms, setPaymentTerms] = useState(storedSettings.paymentTerms);
+  const [businessTin, setBusinessTin] = useState(storedSettings.tin);
+
   const [items, setItems] = useState([
     { description: '', quantity: '1', price: '' }
   ]);
@@ -9544,18 +8997,20 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
       setCustomerName(cust.name || '');
       setCustomerPhone(cust.phone || cust.contact || '');
       setCustomerEmail(cust.email || '');
+      setCustomerAddress(cust.address || '');
+      setCustomerTin(cust.tin || '');
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!customerName) {
+    if (!customerName.trim()) {
       alert('Please enter or select a customer name.');
       return;
     }
     const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
     if (validItems.length === 0) {
-      alert('Please add at least one valid item with a description and price.');
+      alert('Please add at least one valid item with a description and unit price.');
       return;
     }
 
@@ -9564,6 +9019,7 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
 
     const newInvoice = {
       id: Date.now(),
+      title: documentType,
       invoice_number: invNumber,
       invoice_date: invoiceDate,
       due_date: dueDate,
@@ -9571,6 +9027,14 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
       customer_name: customerName,
       customer_phone: customerPhone,
       customer_email: customerEmail,
+      customer_address: customerAddress,
+      customer_tin: customerTin,
+      bank_name: bankName,
+      account_number: accountNumber,
+      account_name: accountName,
+      mobile_money_number: mobileMoneyNumber,
+      payment_terms: paymentTerms,
+      business_tin: businessTin,
       total_amount: total,
       amount_paid: total,
       payment_status: 'paid',
@@ -9586,16 +9050,16 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Create New Proforma Invoice" maxWidth="720px">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <Modal isOpen={true} onClose={onClose} title="Create New Proforma / Tax Invoice" maxWidth="840px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {customers && customers.length > 0 && (
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>
               Quick Select Customer (Optional)
             </label>
             <select
               onChange={handleSelectCustomer}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13, background: '#fff' }}
+              style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}
             >
               <option value="">— Select an existing customer —</option>
               {customers.map(c => (
@@ -9605,135 +9069,229 @@ function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }) {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        {/* Customer Information Row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Customer Name *</label>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Customer Name *</label>
             <input
               type="text"
               required
-              placeholder="e.g. Asher"
+              placeholder="e.g. Asher Electronics Ltd"
               value={customerName}
               onChange={e => setCustomerName(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Phone Number</label>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Phone Number</label>
             <input
               type="text"
               placeholder="e.g. 0776 000000"
               value={customerPhone}
               onChange={e => setCustomerPhone(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Source / Ref</label>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Customer TIN</label>
+            <input
+              type="text"
+              placeholder="e.g. 1004567890"
+              value={customerTin}
+              onChange={e => setCustomerTin(e.target.value)}
+              style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            />
+          </div>
+        </div>
+
+        {/* Dates & Reference Row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Document Type</label>
+            <select
+              value={documentType}
+              onChange={e => setDocumentType(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff', boxSizing: 'border-box' }}
+            >
+              <option value="PROFORMA INVOICE">Proforma Invoice</option>
+              <option value="TAX INVOICE">Tax Invoice</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Invoice Date</label>
+            <input
+              type="date"
+              value={invoiceDate}
+              onChange={e => setInvoiceDate(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Due Date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 5 }}>Source / Ref</label>
             <input
               type="text"
               placeholder="e.g. S00124"
               value={sourceRef}
               onChange={e => setSourceRef(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
+              style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
             />
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Invoice Date</label>
-            <input
-              type="date"
-              value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Due Date</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 13 }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <label style={{ fontSize: 13, fontWeight: 800, color: '#881337', textTransform: 'uppercase' }}>
+        {/* Invoice Line Items (Clean Responsive Flex Table — Zero Overlapping) */}
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Invoice Line Items
             </label>
             <button
               type="button"
               onClick={handleAddItem}
-              style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#be123c', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'background-color 0.15s' }}
+              onMouseOver={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+              onMouseOut={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
             >
               + Add Item Line
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {items.map((item, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 40px', gap: 10, alignItems: 'center' }}>
-                <input
-                  type="text"
-                  placeholder="Description (e.g. Apple iPhone 17 Pro Max 512GB)"
-                  value={item.description}
-                  onChange={e => handleItemChange(idx, 'description', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
-                  required
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Qty"
-                  value={item.quantity}
-                  onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
-                  required
-                />
-                <input
-                  type="number"
-                  placeholder="Unit Price (UGX)"
-                  value={item.price}
-                  onChange={e => handleItemChange(idx, 'price', e.target.value)}
-                  style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
-                  required
-                />
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, height: 36, fontWeight: 800, cursor: 'pointer' }}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
+          {/* Table Header Row */}
+          <div style={{ display: 'flex', gap: 8, padding: '6px 8px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px 6px 0 0', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+            <div style={{ width: 24, textAlign: 'center' }}>#</div>
+            <div style={{ flex: 3, minWidth: 0 }}>Description *</div>
+            <div style={{ width: 85, textAlign: 'center' }}>Qty</div>
+            <div style={{ flex: 2, minWidth: 0, textAlign: 'right' }}>Unit Price (UGX) *</div>
+            <div style={{ flex: 1.6, minWidth: 0, textAlign: 'right' }}>Subtotal</div>
+            <div style={{ width: 32 }}></div>
+          </div>
+
+          {/* Table Body Rows */}
+          <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 6px 6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff' }}>
+            {items.map((item, idx) => {
+              const q = parseFloat(item.quantity) || 0;
+              const p = parseFloat(item.price) || 0;
+              const sub = q * p;
+              return (
+                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ width: 24, textAlign: 'center', fontSize: 12, color: '#64748b' }}>{idx + 1}</div>
+                  <input
+                    type="text"
+                    placeholder="e.g. Apple iPhone 15 Pro 256GB"
+                    value={item.description}
+                    onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                    style={{ flex: 3, minWidth: 0, padding: '7px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+                    required
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
+                    style={{ width: 85, padding: '7px 6px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center', boxSizing: 'border-box' }}
+                    required
+                  />
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="Price"
+                    value={item.price}
+                    onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                    style={{ flex: 2, minWidth: 0, padding: '7px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right', boxSizing: 'border-box' }}
+                    required
+                  />
+                  <div style={{ flex: 1.6, minWidth: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    UGX {sub.toLocaleString()}
+                  </div>
+                  <div style={{ width: 32, display: 'flex', justifyContent: 'center' }}>
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(idx)}
+                        style={{ width: 28, height: 28, borderRadius: 5, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '14px 20px', borderRadius: 10, border: '1.5px solid #e2e8f0' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>Total Invoice Amount:</span>
-          <span style={{ fontSize: 18, fontWeight: 900, color: '#881337' }}>UGX {calculateTotal().toLocaleString()}</span>
+        {/* Remittance & Bank Info For This Invoice */}
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+            Payment Terms &amp; Remittance Details (Quoted on Invoice)
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Bank Name</label>
+              <input
+                type="text"
+                value={bankName}
+                onChange={e => setBankName(e.target.value)}
+                style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Account Number</label>
+              <input
+                type="text"
+                value={accountNumber}
+                onChange={e => setAccountNumber(e.target.value)}
+                style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 12, fontWeight: 700, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Payment Terms</label>
+              <input
+                type="text"
+                placeholder="e.g. Due upon receipt"
+                value={paymentTerms}
+                onChange={e => setPaymentTerms(e.target.value)}
+                style={{ width: '100%', padding: '7px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+        {/* Total Summary */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 18px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>Total Invoice Amount:</span>
+          <span style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+            UGX {calculateTotal().toLocaleString()}
+          </span>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
           <button
             type="button"
             onClick={onClose}
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 6, border: '1.5px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
           >
             Cancel
           </button>
           <button
             type="submit"
-            style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(136,19,55,0.3)' }}
+            style={{ flex: 1, padding: '10px 0', borderRadius: 6, border: 'none', background: '#0f172a', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'background-color 0.15s' }}
+            onMouseOver={e => e.currentTarget.style.backgroundColor = '#1e293b'}
+            onMouseOut={e => e.currentTarget.style.backgroundColor = '#0f172a'}
           >
-            Generate Invoice 📄
+            Generate Invoice
           </button>
         </div>
       </form>
@@ -9748,7 +9306,11 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
   const [invoicesList, setInvoicesList] = useState([]);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [search, setSearch] = useState('');
+
+  // Invoice Branding & Remittance settings
+  const [settings, setSettings] = useState(() => getStoredInvoiceSettings(user));
 
   useEffect(() => {
     if (sales && sales.length > 0) {
@@ -9765,11 +9327,17 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
         amount_paid: parseFloat(s.total_amount || 0),
         payment_status: 'paid',
         items: s.sale_items || s.saleItems || [],
-        source_ref: `S${String(s.id).padStart(5, '0')}`
+        source_ref: `S${String(s.id).padStart(5, '0')}`,
+        bank_name: settings.bankName,
+        account_number: settings.accountNumber,
+        account_name: settings.accountName,
+        mobile_money_number: settings.mobileMoneyNumber,
+        payment_terms: settings.paymentTerms,
+        business_tin: settings.tin
       }));
       setInvoicesList(generated);
     }
-  }, [sales]);
+  }, [sales, settings]);
 
   const filteredInvoices = invoicesList.filter(inv => {
     return !search || 
@@ -9780,38 +9348,95 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 0 32px' }}>
       {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Invoices & Proforma Generator</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring Zziwa & Sons branding</p>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Invoices &amp; Proforma Generator</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, customize, and print official business invoices</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            padding: '10px 20px', borderRadius: 10, border: 'none',
-            background: '#881337', color: '#ffffff', fontWeight: 700,
-            fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-            boxShadow: '0 4px 14px rgba(136,19,55,0.25)'
-          }}
-        >
-          <span style={{ fontSize: 16 }}>+</span> Create Custom Invoice
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            style={{
+              padding: '9px 16px', borderRadius: 6, border: '1.5px solid #cbd5e1',
+              background: '#ffffff', color: '#0f172a', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'background-color 0.15s'
+            }}
+            onMouseOver={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+            onMouseOut={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Invoice Settings &amp; Branding
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '9px 18px', borderRadius: 6, border: 'none',
+              background: '#0f172a', color: '#ffffff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'background-color 0.15s'
+            }}
+            onMouseOver={e => e.currentTarget.style.backgroundColor = '#1e293b'}
+            onMouseOut={e => e.currentTarget.style.backgroundColor = '#0f172a'}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Create Custom Invoice
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
       <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Invoices', value: invoicesList.length, color: '#881337', icon: '📄' },
-          { label: 'Total Invoiced Value', value: `UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}`, color: '#be123c', icon: '💰' },
-          { label: 'Collected Amount', value: `UGX ${invoicesList.reduce((s, i) => s + i.amount_paid, 0).toLocaleString()}`, color: '#16a34a', icon: '✅' },
+          {
+            label: 'Total Invoices',
+            value: invoicesList.length,
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+            )
+          },
+          {
+            label: 'Total Invoiced Value',
+            value: `UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}`,
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <line x1="12" y1="8" x2="12" y2="16" />
+                <line x1="8" y1="12" x2="16" y2="12" />
+              </svg>
+            )
+          },
+          {
+            label: 'Collected Amount',
+            value: `UGX ${invoicesList.reduce((s, i) => s + i.amount_paid, 0).toLocaleString()}`,
+            icon: (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            )
+          },
         ].map(k => (
-          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 22px', borderTop: `3px solid ${k.color}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</p>
-                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{k.value}</h3>
+                <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</p>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{k.value}</h3>
               </div>
-              <span style={{ fontSize: 24 }}>{k.icon}</span>
+              <div style={{ width: 36, height: 36, borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {k.icon}
+              </div>
             </div>
           </div>
         ))}
@@ -9824,12 +9449,12 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
           placeholder="Search by invoice # or customer name..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ width: '100%', maxWidth: 400, padding: '10px 14px', borderRadius: 10, border: '1.5px solid #cbd5e1', fontSize: 13 }}
+          style={{ width: '100%', maxWidth: 360, padding: '9px 14px', borderRadius: 6, border: '1.5px solid #cbd5e1', fontSize: 13 }}
         />
       </div>
 
       {/* Invoices List Table */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
