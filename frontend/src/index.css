@@ -1182,6 +1182,7 @@ textarea.field-input {
 
   .invoice-summary-block {
     page-break-inside: avoid !important;
+  }
 
   .modal-overlay-responsive {
     background: transparent !important;

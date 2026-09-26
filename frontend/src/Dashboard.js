@@ -731,6 +731,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   <span style={styles.menuIcon}>🔑</span>
                   <span style={styles.menuLabel}>Users</span>
                   {activeTab === 'users' && <div style={styles.activeIndicator} />}
+                </button>
                 <button
                   style={{
                     ...styles.menuItem,
@@ -757,7 +758,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                 <div style={{ height: 16 }} />
               </div>
             )}
-          </div>
+          </div> 
         </nav>
 
         {/* Main Content */}
