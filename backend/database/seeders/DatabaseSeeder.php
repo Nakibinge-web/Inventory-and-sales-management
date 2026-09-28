@@ -2,10 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Category;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -18,29 +16,31 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Create default/sample tenant
+        // 1. Create a default tenant
         $tenant = Tenant::firstOrCreate(
-            ['email' => 'admin@zziwa.com'],
+            ['email' => 'admin@example.com'],
             [
-                'name' => 'Zziwa and Sons Enterprises',
-                'phone' => '+256 700 000000',
-                'address' => 'Kampala, Uganda',
+                'name'    => 'Demo Business',
+                'email'   => 'admin@example.com',
+                'phone'   => '+1 000 000 0000',
+                'address' => '123 Main Street',
             ]
         );
 
-        // 2. Create owner user
+        // 2. Create the owner/admin user for this tenant
         $user = User::firstOrCreate(
-            ['email' => 'test@example.com'],
+            ['email' => 'admin@example.com'],
             [
                 'tenant_id' => $tenant->id,
-                'name' => 'Test User',
-                'password' => Hash::make('password123'),
+                'name'      => 'Admin User',
+                'email'     => 'admin@example.com',
+                'password'  => Hash::make('password'),
             ]
         );
 
-        // 3. Assign owner role
+        // 3. Assign the default 'owner' role (seeded by migration, tenant_id = null)
         $ownerRole = Role::where('name', 'owner')->whereNull('tenant_id')->first();
-        if ($ownerRole && !$user->roles()->where('roles.id', $ownerRole->id)->exists()) {
+        if ($ownerRole && ! $user->roles()->where('role_id', $ownerRole->id)->exists()) {
             $user->roles()->attach($ownerRole->id);
         }
 
@@ -50,23 +50,7 @@ class DatabaseSeeder extends Seeder
             $ownerRole->permissions()->syncWithoutDetaching($allPermissions);
         }
 
-        // 5. Seed sample categories
-        if ($tenant->categories()->count() === 0) {
-            $tenant->categories()->createMany([
-                ['name' => 'Electronics', 'description' => 'Electronic components and devices'],
-                ['name' => 'Hardware', 'description' => 'Tools, equipment and hardware supplies'],
-                ['name' => 'General Merchandise', 'description' => 'Fast-moving consumer products'],
-            ]);
-        }
-
-        // 6. Seed sample supplier
-        if ($tenant->suppliers()->count() === 0) {
-            $tenant->suppliers()->create([
-                'name' => 'Apex General Supplies',
-                'email' => 'supplies@apex.com',
-                'contact' => '+256 750 123456',
-                'address' => 'Industrial Area, Kampala',
-            ]);
-        }
+        $this->command->info('✅ Seeded tenant: Demo Business');
+        $this->command->info('✅ Seeded admin user: admin@example.com / password');
     }
 }
