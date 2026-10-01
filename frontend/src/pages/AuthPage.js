@@ -209,7 +209,9 @@ export default function AuthPage() {
         setToken(data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('token', data.token);
-        window.history.pushState(null, '', '/');
+        const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/overview';
+        sessionStorage.removeItem('redirect_after_login');
+        window.history.pushState(null, '', savedRedirect);
       }
     } catch {
       setError('Could not reach the server. Please verify the backend is running.');
@@ -263,7 +265,7 @@ export default function AuthPage() {
 
     if (user && token) {
       if (path === '/login' || path.startsWith('/login/') || path === '/register' || path.startsWith('/register/')) {
-        window.history.replaceState(null, '', '/');
+        window.history.replaceState(null, '', '/overview');
       }
       fetch(`${API}/users/me`, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
@@ -283,6 +285,9 @@ export default function AuthPage() {
         }
         setMode('register');
       } else {
+        if (path !== '/login' && path !== '/' && !path.startsWith('/login')) {
+          sessionStorage.setItem('redirect_after_login', window.location.pathname);
+        }
         if (window.location.pathname !== '/login') {
           window.history.replaceState(null, '', '/login');
         }

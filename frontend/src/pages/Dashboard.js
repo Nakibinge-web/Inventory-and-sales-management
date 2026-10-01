@@ -24,10 +24,73 @@ import Settings from './Settings';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
+const VALID_TABS = [
+  'overview',
+  'pos',
+  'products',
+  'categories',
+  'suppliers',
+  'customers',
+  'sales',
+  'invoices',
+  'purchases',
+  'stock-movements',
+  'reports',
+  'ai',
+  'users',
+  'settings'
+];
+
+function getTabFromPath() {
+  if (typeof window === 'undefined') return 'overview';
+  const clean = window.location.pathname.replace(/[\\/]+/g, '/').replace(/^\//, '').split('/')[0].toLowerCase();
+  if (clean === 'stock' || clean === 'stockmovements') return 'stock-movements';
+  if (clean === 'point-of-sale') return 'pos';
+  if (clean === 'dashboard') return 'overview';
+  if (VALID_TABS.includes(clean)) return clean;
+  return 'overview';
+}
+
 export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTabState] = useState(getTabFromPath);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
+
+  const setActiveTab = useCallback((tabId, replace = false) => {
+    setActiveTabState(tabId);
+    const targetPath = tabId === 'overview' ? '/overview' : `/${tabId}`;
+    if (window.location.pathname !== targetPath) {
+      if (replace) {
+        window.history.replaceState(null, '', targetPath);
+      } else {
+        window.history.pushState(null, '', targetPath);
+      }
+    }
+  }, []);
+
+  // Sync route on popstate (browser back/forward)
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = getTabFromPath();
+      setActiveTabState(tab);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Sync initial URL on mount
+  useEffect(() => {
+    const raw = window.location.pathname.replace(/[\\/]+/g, '/').toLowerCase();
+    if (raw === '/' || raw === '' || raw === '/dashboard') {
+      window.history.replaceState(null, '', '/overview');
+    } else {
+      const tab = getTabFromPath();
+      const target = tab === 'overview' ? '/overview' : `/${tab}`;
+      if (window.location.pathname !== target && VALID_TABS.includes(tab)) {
+        window.history.replaceState(null, '', target);
+      }
+    }
+  }, []);
 
   // Lock body scroll when mobile nav drawer is open
   useEffect(() => {
