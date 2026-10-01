@@ -86,7 +86,7 @@ function PasswordField({ name, label, placeholder, value, onChange, showStrength
 /* ── Helper to determine mode from pathname ── */
 function getPathMode() {
   if (typeof window === 'undefined') return 'login';
-  const rawPath = window.location.pathname.replace(/\\/g, '/').toLowerCase();
+  const rawPath = window.location.pathname.replace(/[\\/]+/g, '/').toLowerCase();
   if (rawPath === '/register' || rawPath.startsWith('/register/')) return 'register';
   return 'login';
 }
@@ -258,7 +258,7 @@ export default function AuthPage() {
   }, []);
 
   useEffect(() => {
-    const rawPath = window.location.pathname.replace(/\\/g, '/');
+    const rawPath = window.location.pathname.replace(/[\\/]+/g, '/');
     const path = rawPath.toLowerCase();
 
     if (user && token) {
