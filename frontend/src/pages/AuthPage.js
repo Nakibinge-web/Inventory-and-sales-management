@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import Dashboard from '../Dashboard';
+import Dashboard from './Dashboard';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 

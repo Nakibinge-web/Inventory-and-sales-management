@@ -1,26 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import styles from './styles/dashboardStyles';
-import Button from './components/ui/Button';
-import Modal from './components/ui/Modal';
-import AddProductForm from './components/AddProductForm';
-import { ToastContainer, useToast } from './components/ui/Toast';
-import ErrorBoundary from './components/ui/ErrorBoundary';
+import styles from '../styles/dashboardStyles';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import AddProductForm from '../components/AddProductForm';
+import { ToastContainer, useToast } from '../components/ui/Toast';
+import ErrorBoundary from '../components/ui/ErrorBoundary';
 
 // Independent Page Modules
-import OverviewTab from './pages/Overview';
-import ProductsTab from './pages/Products';
-import CategoriesTab from './pages/Categories';
-import SuppliersTab from './pages/Suppliers';
-import CustomersTab from './pages/Customers';
-import POSTab from './pages/POS';
-import SalesTab from './pages/Sales';
-import PurchasesTab from './pages/Purchases';
-import ReportsTab from './pages/Reports';
-import AiTab from './pages/Ai';
-import UsersTab from './pages/Users';
-import StockMovementsTab from './pages/StockMovements';
-import InvoicesTab from './pages/Invoices';
-import Settings from './pages/Settings';
+import OverviewTab from './Overview';
+import ProductsTab from './Products';
+import CategoriesTab from './Categories';
+import SuppliersTab from './Suppliers';
+import CustomersTab from './Customers';
+import POSTab from './POS';
+import SalesTab from './Sales';
+import PurchasesTab from './Purchases';
+import ReportsTab from './Reports';
+import AiTab from './Ai';
+import UsersTab from './Users';
+import StockMovementsTab from './StockMovements';
+import InvoicesTab from './Invoices';
+import Settings from './Settings';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
