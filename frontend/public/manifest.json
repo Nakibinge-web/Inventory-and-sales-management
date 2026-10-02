@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "InventoryPro",
+  "name": "Inventory & Sales Management System",
+  "description": "Enterprise Inventory, POS, Purchases and Customer Management Solution",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,18 +9,15 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "zziwa logo.png",
       "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "logo512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/overview",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "any",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a"
 }

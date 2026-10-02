@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Dashboard from './Dashboard';
+import LandingPage from './LandingPage';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -85,10 +86,11 @@ function PasswordField({ name, label, placeholder, value, onChange, showStrength
 
 /* ── Helper to determine mode from pathname ── */
 function getPathMode() {
-  if (typeof window === 'undefined') return 'login';
+  if (typeof window === 'undefined') return 'landing';
   const rawPath = window.location.pathname.replace(/[\\/]+/g, '/').toLowerCase();
   if (rawPath === '/register' || rawPath.startsWith('/register/')) return 'register';
-  return 'login';
+  if (rawPath === '/login' || rawPath.startsWith('/login/')) return 'login';
+  return 'landing';
 }
 
 /* ── Main Auth Page ── */
@@ -159,11 +161,13 @@ export default function AuthPage() {
       }
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(form.email)) {
-      setError('Please enter a valid email address');
-      setLoading(false);
-      return;
+    if (mode === 'register') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(form.email)) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
     }
 
     if (!form.password) {
@@ -284,19 +288,22 @@ export default function AuthPage() {
           window.history.replaceState(null, '', '/register');
         }
         setMode('register');
-      } else {
-        if (path !== '/login' && path !== '/' && !path.startsWith('/login')) {
-          sessionStorage.setItem('redirect_after_login', window.location.pathname);
-        }
+      } else if (path === '/login' || path.startsWith('/login/')) {
         if (window.location.pathname !== '/login') {
           window.history.replaceState(null, '', '/login');
         }
         setMode('login');
+      } else {
+        setMode('landing');
       }
     }
   }, [user, token]);
 
   if (user && token) return <Dashboard user={user} token={token} onLogout={logout} onUserUpdate={setUser} />;
+
+  if (mode === 'landing') {
+    return <LandingPage onGoToLogin={() => switchMode('login')} onGoToRegister={() => switchMode('register')} />;
+  }
 
   const isLogin = mode === 'login';
 
@@ -384,13 +391,13 @@ export default function AuthPage() {
             )}
 
             <div className="field-group">
-              <label className="field-label" htmlFor="email">Email address</label>
+              <label className="field-label" htmlFor="email">{isLogin ? 'Email address or Username' : 'Email address'}</label>
               <input
                 id="email"
                 className="field-input"
                 name="email"
-                type="email"
-                placeholder="Enter your email"
+                type="text"
+                placeholder={isLogin ? 'Enter email or username' : 'Enter your email'}
                 value={form.email}
                 onChange={handle}
                 required

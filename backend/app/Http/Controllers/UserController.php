@@ -31,7 +31,7 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to view users.'], 403);
         }
 
-        $query = User::with('roles:id,name')->select('id', 'name', 'email', 'created_by', 'created_at');
+        $query = User::with('roles:id,name')->select('id', 'name', 'username', 'email', 'is_active', 'created_by', 'created_at');
 
         // Non-privileged users only see the users they personally created
         if (!$isPrivileged) {
@@ -71,10 +71,12 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
+            'username'   => 'nullable|string|max:255|unique:users,username',
             'email'      => 'required|email|max:255|unique:users,email',
             'role_ids'   => 'required|array|min:1',
             'role_ids.*' => 'exists:roles,id',
             'password'   => ['required', Password::min(8)->mixedCase()->numbers()],
+            'is_active'  => 'nullable|boolean',
         ]);
 
         // Ensure all assigned roles are visible to this tenant
@@ -107,8 +109,10 @@ class UserController extends Controller
         $user = User::create([
             'tenant_id'  => $tenantId,
             'name'       => $validated['name'],
+            'username'   => !empty($validated['username']) ? $validated['username'] : null,
             'email'      => $validated['email'],
             'password'   => Hash::make($validated['password']),
+            'is_active'  => $validated['is_active'] ?? true,
             'created_by' => $actor->id,
         ]);
 
@@ -319,10 +323,12 @@ class UserController extends Controller
         }
 
         $validated = $request->validate([
-            'name'     => 'sometimes|required|string|max:255',
-            'email'    => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
-            'password' => ['sometimes', 'nullable', Password::min(8)->mixedCase()->numbers()],
-            'role_ids' => 'sometimes|array|min:1',
+            'name'      => 'sometimes|required|string|max:255',
+            'username'  => 'sometimes|nullable|string|max:255|unique:users,username,' . $user->id,
+            'email'     => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
+            'password'  => ['sometimes', 'nullable', Password::min(8)->mixedCase()->numbers()],
+            'is_active' => 'sometimes|boolean',
+            'role_ids'  => 'sometimes|array|min:1',
             'role_ids.*' => 'exists:roles,id',
         ]);
 
