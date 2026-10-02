@@ -578,7 +578,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
       </div>
 
       {/* ── Sales Query Filters Grid (Day & Week side-by-side) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
         
         {/* Card 1: Sales by Specific Day */}
         <div style={{ 
@@ -910,7 +910,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+          <div className="day-summary-grid" style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
             <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
@@ -980,7 +980,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+            <div className="day-summary-grid" style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
               <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
@@ -1136,7 +1136,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Items</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {editForm.items?.map((item, idx) => (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: 6, alignItems: 'center', background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }}>
+                  <div key={idx} className="sale-edit-item-row" style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: 6, alignItems: 'center', background: '#f8fafc', borderRadius: 8, padding: '8px 10px' }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.name}
                     </div>
@@ -1200,7 +1200,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
             </div>
 
             {/* ── Payment & Financials ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div className="sale-edit-grid resp-grid-3">
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Payment Method</label>
                 <select

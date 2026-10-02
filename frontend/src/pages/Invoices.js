@@ -631,7 +631,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        <div className="invoice-form-grid-3 resp-grid-3">
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
               Customer Name (Required)
@@ -672,7 +672,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14 }}>
+        <div className="invoice-form-grid-3 resp-grid-3">
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>
               Customer Email (Optional)
@@ -774,7 +774,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
                 {/* Product dropdown mode */}
                 {item.mode === 'product' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                  <div className="invoice-form-grid-3 resp-grid-3">
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>SELECT PRODUCT</label>
                       <select
@@ -818,7 +818,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
                 {/* Manual entry mode */}
                 {item.mode === 'manual' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr', gap: 10 }}>
+                  <div className="invoice-form-grid-3 resp-grid-3">
                     <input
                       type="text"
                       placeholder="Item description (e.g., Memory Foam Mattress Queen Size)"
@@ -907,7 +907,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
           {/* PARTIAL — amount paid (user fills) + amount due (auto-calculated) */}
           {paymentStatus === 'partial' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="invoice-form-grid-2 resp-grid-2">
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                   Amount Paid (UGX) (Required)
