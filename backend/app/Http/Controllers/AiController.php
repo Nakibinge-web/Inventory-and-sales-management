@@ -50,52 +50,69 @@ Here is the current business data snapshot:
 {$context}
 PROMPT;
 
-        $payload = [
-            'model'       => 'mistral-small-latest',
-            'messages'    => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user',   'content' => $request->question],
-            ],
-            'temperature' => 0.4,
-            'max_tokens'  => 1024,
-        ];
+        $candidateModels = array_values(array_unique(array_filter([
+            env('MISTRAL_MODEL', 'open-mistral-7b'),
+            'open-mistral-7b',
+            'open-mistral-nemo',
+            'mistral-tiny',
+            'mistral-small-latest',
+        ])));
 
-        try {
-            $response = $this->mistralClient()
-                ->withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
-                    'Content-Type'  => 'application/json',
-                ])
-                ->post('https://api.mistral.ai/v1/chat/completions', $payload);
-        } catch (\Throwable $e) {
-            $message = $this->connectionErrorMessage($e);
+        $lastError  = null;
+        $lastStatus = 500;
 
-            return response()->json([
-                'success' => false,
-                'message' => $message,
-            ], 502);
-        }
+        foreach ($candidateModels as $model) {
+            $payload = [
+                'model'       => $model,
+                'messages'    => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user',   'content' => $request->question],
+                ],
+                'temperature' => 0.4,
+                'max_tokens'  => 1024,
+            ];
 
-        if (!$response->successful()) {
-            $errorMsg = $response->json('message') ?? $response->json('error.message') ?? 'Unknown error';
-            $status   = $response->status();
-
-            if ($status === 429) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The AI service is temporarily rate-limited. Please wait a moment and try again.',
-                ], 429);
+            try {
+                $response = $this->mistralClient()
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type'  => 'application/json',
+                    ])
+                    ->post('https://api.mistral.ai/v1/chat/completions', $payload);
+            } catch (\Throwable $e) {
+                $lastError  = $this->connectionErrorMessage($e);
+                $lastStatus = 502;
+                continue;
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => "AI service error: {$errorMsg}",
-            ], 502);
+            if ($response->successful()) {
+                $text = $response->json('choices.0.message.content') ?? 'No response generated.';
+                return response()->json(['success' => true, 'answer' => $text]);
+            }
+
+            $lastStatus = $response->status();
+            $lastError  = $response->json('message') ?? $response->json('error.message') ?? 'Unknown error';
+
+            // If rate-limited (429) or model not supported (404), try the next candidate model
+            if ($lastStatus === 429 || $lastStatus === 404) {
+                continue;
+            }
+
+            // If another fatal error (e.g. 401 unauthenticated), stop and return
+            break;
         }
 
-        $text = $response->json('choices.0.message.content') ?? 'No response generated.';
+        if ($lastStatus === 429) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The AI service is temporarily rate-limited. Please wait a moment and try again.',
+            ], 429);
+        }
 
-        return response()->json(['success' => true, 'answer' => $text]);
+        return response()->json([
+            'success' => false,
+            'message' => "AI service error: {$lastError}",
+        ], $lastStatus >= 400 && $lastStatus < 600 ? $lastStatus : 502);
     }
 
     /**
