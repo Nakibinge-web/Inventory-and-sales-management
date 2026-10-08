@@ -6,17 +6,19 @@ const formatSaleDateTime = (saleDate, createdAt) => {
   const dateString = saleDate || createdAt || '';
   if (!dateString) return { date: 'N/A', time: '' };
   
-  const d = new Date(dateString);
+  const dDate = new Date(dateString);
+  const dTime = createdAt ? new Date(createdAt) : dDate;
   
-  if (isNaN(d.getTime())) return { date: 'N/A', time: '' };
+  if (isNaN(dDate.getTime())) return { date: 'N/A', time: '' };
   
-  const date = d.toLocaleDateString('en-GB', { 
+  const date = dDate.toLocaleDateString('en-GB', { 
     day: '2-digit', 
     month: 'short', 
     year: 'numeric'
   });
   
-  const time = d.toLocaleTimeString('en-GB', { 
+  const validTimeDate = isNaN(dTime.getTime()) ? dDate : dTime;
+  const time = validTimeDate.toLocaleTimeString('en-GB', { 
     hour: '2-digit', 
     minute: '2-digit',
     second: '2-digit',

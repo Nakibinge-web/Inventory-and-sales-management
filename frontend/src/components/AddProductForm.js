@@ -5,7 +5,7 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 const UNITS = [
   'Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)',
-  'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)',
+  'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)', 'Inches (in)',
   'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans',
 ];
 
