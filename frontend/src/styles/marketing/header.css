@@ -1,0 +1,299 @@
+/**
+ * StockPro Marketing Header & Navigation
+ * Navy blue styling, restrained, strictly NO gradients.
+ */
+
+.sp-header,
+.sp-brand,
+.sp-brand-name,
+.sp-brand-tagline,
+.sp-nav-link,
+.sp-mobile-menu,
+.sp-mobile-nav-link {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.sp-header .sp-btn {
+  font-family: 'Outfit', 'Outlook', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.sp-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: var(--sp-header-height);
+  background-color: var(--sp-navy-950);
+  border-bottom: 1px solid var(--sp-border-navy);
+  box-shadow: 0 1px 3px rgba(7, 22, 41, 0.4);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sp-header-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* Brand Logo */
+.sp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+  user-select: none;
+}
+
+.sp-brand-logo-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--sp-navy-800);
+  color: #FFFFFF;
+  border-radius: var(--sp-radius-sm);
+  border: 1px solid var(--sp-border-navy);
+}
+
+.sp-brand-text-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-brand-name {
+  line-height: 1.1;
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.sp-brand-tagline {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sp-text-inverted-muted);
+  line-height: 1.2;
+}
+
+/* Desktop Navigation */
+.sp-nav {
+  height: 100%;
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+}
+
+.sp-nav-links {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.sp-nav-links li {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.sp-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100% + 1px);
+  margin-bottom: -1px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #CBD5E1;
+  text-decoration: none;
+  padding: 0 24px;
+  position: relative;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s ease;
+}
+
+.sp-nav-link:hover {
+  background-color: #800020;
+  color: #FFFFFF;
+}
+
+/* Active Tab: Burgundy background, white text, occupying full height from top to bottom of navbar */
+.sp-nav-link.active {
+  background-color: #800020;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+.sp-nav-link.active:hover {
+  background-color: #650019;
+  color: #FFFFFF;
+}
+
+/* Auth Actions */
+.sp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Login Button (Ghost in Header) */
+.sp-header .sp-btn-ghost,
+.sp-header-actions .sp-btn-ghost {
+  color: #FFFFFF;
+  border-radius: 0 !important;
+  border: 1px solid transparent;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-header .sp-btn-ghost:hover,
+.sp-header-actions .sp-btn-ghost:hover {
+  background-color: #FFFFFF;
+  color: var(--sp-navy-950, #071629);
+  border-color: #FFFFFF;
+}
+
+/* Get Started Button (Primary in Header) */
+.sp-header .sp-btn-primary,
+.sp-header-actions .sp-btn-primary,
+.sp-mobile-actions .sp-btn-primary {
+  background-color: #800020;
+  border-color: #800020;
+  color: #FFFFFF;
+  border-radius: 0 !important;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-header .sp-btn-primary:hover,
+.sp-header-actions .sp-btn-primary:hover,
+.sp-mobile-actions .sp-btn-primary:hover {
+  background-color: #FFFFFF;
+  color: var(--sp-navy-950, #071629);
+  border-color: #FFFFFF;
+}
+
+/* Mobile Hamburger Button */
+.sp-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: var(--sp-navy-900);
+  border: 1px solid var(--sp-border-navy);
+  border-radius: var(--sp-radius-sm);
+  color: #FFFFFF;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.sp-mobile-toggle:hover {
+  background-color: var(--sp-navy-800);
+  border-color: #335C85;
+}
+
+/* Mobile Drawer */
+.sp-mobile-menu {
+  position: fixed;
+  top: var(--sp-header-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(7, 22, 41, 0.6);
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.sp-mobile-menu-panel {
+  background-color: var(--sp-navy-950);
+  border-bottom: 1px solid var(--sp-border-navy);
+  box-shadow: var(--sp-shadow-xl);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sp-mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sp-mobile-nav-link {
+  font-size: 17px;
+  font-weight: 600;
+  color: #E2E8F0;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: var(--sp-radius-sm);
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s ease;
+}
+
+.sp-mobile-nav-link:hover,
+.sp-mobile-nav-link.active {
+  background-color: #800020;
+  color: #FFFFFF;
+}
+
+.sp-mobile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sp-border-navy);
+}
+
+.sp-mobile-actions .sp-btn {
+  width: 100%;
+}
+
+.sp-mobile-actions .sp-btn-secondary {
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.25);
+  border-radius: 0 !important;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-mobile-actions .sp-btn-secondary:hover {
+  background-color: #FFFFFF;
+  color: var(--sp-navy-950, #071629);
+  border-color: #FFFFFF;
+}
+
+@media (max-width: 890px) {
+  .sp-nav-links {
+    display: none;
+  }
+
+  .sp-header-actions {
+    display: none;
+  }
+
+  .sp-mobile-toggle {
+    display: inline-flex;
+  }
+}

@@ -1,0 +1,77 @@
+/**
+ * StockPro Marketing Design Tokens
+ * 
+ * Strict rules:
+ * - Navy foundation (#0B1F3A, #102A43, #071629)
+ * - Single restrained accent (#2563EB)
+ * - Restrained radii (6-8px buttons/inputs, 8-12px cards, 12-16px sections)
+ * - ZERO gradients anywhere
+ */
+
+:root {
+  /* Brand Navy Palette */
+  --sp-navy-950: #071629;
+  --sp-navy-900: #0B1F3A;
+  --sp-navy-800: #102A43;
+  --sp-navy-750: #14324F;
+  --sp-navy-700: #1A3E61;
+  --sp-navy-600: #244D75;
+  --sp-navy-500: #335C85;
+
+  /* Surfaces & Neutrals */
+  --sp-white: #FFFFFF;
+  --sp-off-white: #F8FAFC;
+  --sp-cream: #FAF6F0;
+  --sp-cream-border: #ECE5DA;
+  --sp-surface-soft: #F1F5F9;
+  --sp-surface-subtle: #F4F6F9;
+  --sp-border: #E2E8F0;
+  --sp-border-strong: #CBD5E1;
+  --sp-border-navy: #1E3854;
+
+  /* Typography Colors */
+  --sp-text: #0F172A;
+  --sp-text-muted: #64748B;
+  --sp-text-light: #94A3B8;
+  --sp-text-inverted: #FFFFFF;
+  --sp-text-inverted-muted: #94A3B8;
+
+  /* Restrained Accent (Burgundy) */
+  --sp-accent: #800020;
+  --sp-accent-hover: #650019;
+  --sp-accent-subtle: #FFF1F2;
+  --sp-accent-border: #FECDD3;
+
+  /* Semantic Indicators */
+  --sp-success: #059669;
+  --sp-success-bg: #ECFDF5;
+  --sp-success-border: #A7F3D0;
+  --sp-warning: #D97706;
+  --sp-warning-bg: #FFFBEB;
+  --sp-danger: #DC2626;
+  --sp-danger-bg: #FEF2F2;
+
+  /* Restrained Radii */
+  --sp-radius-xs: 4px;
+  --sp-radius-sm: 6px;
+  --sp-radius-md: 8px;
+  --sp-radius-lg: 10px;
+  --sp-radius-xl: 12px;
+  --sp-radius-2xl: 14px;
+
+  /* Subtle Crisp Shadows */
+  --sp-shadow-xs: 0 1px 2px rgba(11, 31, 58, 0.05);
+  --sp-shadow-sm: 0 1px 3px rgba(11, 31, 58, 0.06), 0 1px 2px rgba(11, 31, 58, 0.04);
+  --sp-shadow-md: 0 4px 8px -2px rgba(11, 31, 58, 0.06), 0 2px 4px -2px rgba(11, 31, 58, 0.04);
+  --sp-shadow-lg: 0 12px 24px -6px rgba(11, 31, 58, 0.09), 0 4px 8px -4px rgba(11, 31, 58, 0.04);
+  --sp-shadow-xl: 0 20px 32px -8px rgba(11, 31, 58, 0.12), 0 8px 16px -6px rgba(11, 31, 58, 0.06);
+
+  /* Layout Containers */
+  --sp-container-max: 1240px;
+  --sp-container-narrow: 920px;
+  --sp-header-height: 72px;
+
+  /* Typography Families */
+  --sp-font-title: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sp-font-content: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

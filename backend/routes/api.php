@@ -15,10 +15,12 @@ use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\ContactController;
 
-// Public auth routes — no token required
+// Public routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/contact', [ContactController::class, 'submit']);
 
 // All other routes require a valid Sanctum token + tenant resolution
 Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
