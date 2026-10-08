@@ -42,6 +42,10 @@ class Invoice extends Model
         'amount_paid'     => 'float',
     ];
 
+    protected $attributes = [
+        'items' => '[]',
+    ];
+
     // ── Relationships ────────────────────────────────────────────────────────
 
     public function tenant()

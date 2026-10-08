@@ -35,7 +35,7 @@ return new class extends Migration
             $table->string('payment_status')->default('paid');
 
             // JSON array of line items: [{description, quantity, price, subtotal}]
-            $table->json('items')->default('[]');
+            $table->json('items')->nullable();
 
             $table->text('notes')->nullable();
             $table->timestamps();

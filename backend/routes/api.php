@@ -15,7 +15,6 @@ use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\SettingsController;
 
 // Public auth routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
@@ -26,7 +25,6 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me', [UserController::class, 'me']);
 
     // Test
     Route::get('/test', function () {
@@ -141,11 +139,12 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Products
     Route::prefix('products')->group(function () {
         Route::get('/generate-sku', [ProductController::class, 'generateSku']);
-        Route::get('/', [ProductController::class, 'index']);
-        Route::post('/', [ProductController::class, 'store']);
-        Route::get('/low-stock', [ProductController::class, 'getLowStock']);
-        Route::get('/{product}', [ProductController::class, 'show']);
-        Route::put('/{product}', [ProductController::class, 'update']);
+        Route::get('/low-stock',    [ProductController::class, 'getLowStock']);
+        Route::get('/',             [ProductController::class, 'index']);
+        Route::post('/',            [ProductController::class, 'store']);
+        Route::post('/bulk',        [ProductController::class, 'bulkStore']);
+        Route::get('/{product}',    [ProductController::class, 'show']);
+        Route::put('/{product}',    [ProductController::class, 'update']);
         Route::delete('/{product}', [ProductController::class, 'destroy']);
     });
 
@@ -189,12 +188,6 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // AI Assistant
     Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'chat']);
-
-    // Settings (Business Information)
-    Route::prefix('settings')->group(function () {
-        Route::get('/business', [SettingsController::class, 'getBusinessInfo']);
-        Route::put('/business', [SettingsController::class, 'updateBusinessInfo']);
-    });
 
     // Stock Movements
     Route::prefix('stock-movements')->group(function () {

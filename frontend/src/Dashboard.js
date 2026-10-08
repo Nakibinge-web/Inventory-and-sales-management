@@ -758,7 +758,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                 <div style={{ height: 16 }} />
               </div>
             )}
-          </div>
+          </div> 
         </nav>
 
         {/* Main Content */}
