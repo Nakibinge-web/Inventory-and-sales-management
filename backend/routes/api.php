@@ -198,4 +198,10 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/date-range', [StockMovementController::class, 'getByDateRange']);
         Route::get('/{stockMovement}', [StockMovementController::class, 'show']);
     });
+
+    // Business Settings
+    Route::prefix('settings')->group(function () {
+        Route::get('/business', [\App\Http\Controllers\SettingsController::class, 'getBusinessInfo']);
+        Route::put('/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
+    });
 });

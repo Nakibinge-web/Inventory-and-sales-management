@@ -91,14 +91,35 @@ class AuthController extends Controller
             'business_name' => 'required|string|max:255',
             'phone'         => 'nullable|string|max:20',
             'address'       => 'nullable|string',
+            'logo'          => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
+
+        $logoPath = null;
+        if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
+            $logoPath = $request->file('logo')->store('logos', 'public');
+        } elseif ($request->filled('logo') && is_string($request->logo) && str_starts_with($request->logo, 'data:image/')) {
+            try {
+                preg_match('/^data:image\/(\w+);base64,/', $request->logo, $type);
+                $image = substr($request->logo, strpos($request->logo, ',') + 1);
+                $type = strtolower($type[1] ?? 'png');
+                $decoded = base64_decode($image);
+                if ($decoded !== false) {
+                    $fileName = 'logos/' . \Illuminate\Support\Str::random(40) . '.' . $type;
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($fileName, $decoded);
+                    $logoPath = $fileName;
+                }
+            } catch (\Throwable $e) {
+                // Ignore base64 parse errors
+            }
+        }
 
         // Create a new tenant for the user
         $tenant = \App\Models\Tenant::create([
-            'name' => $request->business_name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'address' => $request->address,
+            'name'      => $request->business_name,
+            'email'     => $request->email,
+            'phone'     => $request->phone,
+            'address'   => $request->address,
+            'logo_path' => $logoPath,
         ]);
 
         $user = User::create([

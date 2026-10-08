@@ -20,13 +20,19 @@ export function getStoredInvoiceSettings(user) {
     mobileMoneyName: tenant.name || 'SURE GADGETS',
     paymentTerms: 'Due upon receipt',
     notes: 'Please quote the invoice number as the payment reference. Thank you for your business!',
-    logoUrl: ''
+    logoUrl: tenant.logo_url || ''
   };
 
   try {
-    const saved = localStorage.getItem('zziwa_invoice_settings');
+    const storageKey = tenant.id ? `invoice_settings_${tenant.id}` : 'app_invoice_settings';
+    const saved = localStorage.getItem(storageKey) || localStorage.getItem('zziwa_invoice_settings');
     if (saved) {
-      return { ...defaults, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      return { 
+        ...defaults, 
+        ...parsed,
+        logoUrl: parsed.logoUrl || tenant.logo_url || defaults.logoUrl 
+      };
     }
   } catch (e) {
     console.error('Failed to load invoice settings', e);
@@ -300,15 +306,16 @@ export function PrintableInvoiceModal({ invoice, user, onClose }) {
     window.print();
   };
 
+  const tenant = user?.tenant || invoice.tenant || {};
   const storedSettings = getStoredInvoiceSettings(user);
 
   // Business & Remittance details (invoice specific overrides fallback to storedSettings)
-  const businessName = invoice.business_name || storedSettings.businessName;
-  const businessPhone = invoice.business_phone || storedSettings.phone;
-  const businessEmail = invoice.business_email || storedSettings.email;
-  const businessAddress = invoice.business_address || storedSettings.address;
+  const businessName = invoice.business_name || storedSettings.businessName || tenant.name;
+  const businessPhone = invoice.business_phone || storedSettings.phone || tenant.phone;
+  const businessEmail = invoice.business_email || storedSettings.email || tenant.email;
+  const businessAddress = invoice.business_address || storedSettings.address || tenant.address;
   const businessTin = invoice.business_tin || storedSettings.tin;
-  const logoUrl = invoice.logo_url || storedSettings.logoUrl;
+  const logoUrl = invoice.logo_url || invoice.tenant?.logo_url || tenant.logo_url || storedSettings.logoUrl;
 
   const bankName = invoice.bank_name || storedSettings.bankName;
   const accountNumber = invoice.account_number || storedSettings.accountNumber;

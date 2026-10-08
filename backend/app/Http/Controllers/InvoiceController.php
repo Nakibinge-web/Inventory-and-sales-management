@@ -20,7 +20,7 @@ class InvoiceController extends Controller
             ->intersect(['owner', 'admin', 'manager'])
             ->isNotEmpty();
 
-        $query = Invoice::with('user:id,name,email')
+        $query = Invoice::with(['user:id,name,email', 'tenant'])
             ->orderBy('invoice_date', 'desc')
             ->orderBy('id', 'desc');
 
@@ -105,6 +105,8 @@ class InvoiceController extends Controller
             'notes'            => $validated['notes'] ?? null,
         ]);
 
+        $invoice->load(['user:id,name,email', 'tenant']);
+
         return response()->json(['success' => true, 'message' => 'Invoice created successfully.', 'data' => $invoice], 201);
     }
 
@@ -122,7 +124,7 @@ class InvoiceController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to view this invoice.'], 403);
         }
 
-        return response()->json(['success' => true, 'data' => $invoice->load('user:id,name,email')]);
+        return response()->json(['success' => true, 'data' => $invoice->load(['user:id,name,email', 'tenant'])]);
     }
 
     // ── Update ────────────────────────────────────────────────────────────────

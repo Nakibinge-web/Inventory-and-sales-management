@@ -281,7 +281,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
 
           {/* Clean enterprise brand badge matching login */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {user.tenant?.logo_url ? (
+            {user?.tenant?.logo_url ? (
               <img
                 src={user.tenant.logo_url}
                 alt={`${user.tenant?.name || 'Business'} logo`}
@@ -1095,21 +1095,42 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, 
         boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04), 0 4px 12px -2px rgba(0,0,0,0.03)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <img 
-            src={user.tenant?.logo_url || '/zziwa logo.png'} 
-            alt={`${user.tenant?.name || 'Business'} Logo`}
-            style={{ 
-              width: 72, 
-              height: 72, 
-              objectFit: 'contain', 
-              background: '#ffffff', 
-              padding: '6px', 
-              borderRadius: 14, 
+          {user?.tenant?.logo_url ? (
+            <img 
+              src={user.tenant.logo_url} 
+              alt={`${user.tenant?.name || 'Business'} Logo`}
+              style={{ 
+                width: 72, 
+                height: 72, 
+                objectFit: 'contain', 
+                background: '#ffffff', 
+                padding: '6px', 
+                borderRadius: 14, 
+                flexShrink: 0,
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }} 
+            />
+          ) : (
+            <div style={{
+              width: 72,
+              height: 72,
+              backgroundColor: '#4f46e5',
+              color: '#ffffff',
+              borderRadius: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               flexShrink: 0,
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }} 
-          />
+              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
+            }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+            </div>
+          )}
           <div>
             <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{today}</p>
             <h1 style={{ margin: '0 0 6px', fontSize: 24, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
@@ -9805,12 +9826,13 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
 
   const handlePrint = () => { window.print(); };
 
-  const tenant = user?.tenant || {};
-  const businessName    = tenant.name    || user?.name  || 'Smart Trendz';
-  const businessPhone   = tenant.phone   || user?.phone || '0776 293691';
-  const businessEmail   = tenant.email   || user?.email || '';
-  const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
+  const tenant = user?.tenant || invoice.tenant || {};
+  const businessName    = invoice.business_name || tenant.name || user?.name  || 'Smart Trendz';
+  const businessPhone   = invoice.business_phone || tenant.phone || user?.phone || '0776 293691';
+  const businessEmail   = invoice.business_email || tenant.email || user?.email || '';
+  const businessAddress = invoice.business_address || tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
   const businessTagline = tenant.tagline || 'Best Unboxing Xperience';
+  const invoiceLogo     = invoice.logo_url || invoice.tenant?.logo_url || tenant.logo_url;
 
   const items    = invoice.items || invoice.sale_items || invoice.saleItems || [];
   const subtotal = invoice.subtotal != null
@@ -9923,11 +9945,14 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
           {/* Left: logo + business name, then customer details below */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <img
-                src="/zziwa logo.png"
-                alt={businessName}
-                style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
-              />
+              {invoiceLogo && (
+                <img
+                  src={invoiceLogo}
+                  alt={businessName}
+                  style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
               <div style={{ paddingTop: 2 }}>
                 <div style={{ fontSize: 28, fontWeight: 900, color: '#be123c', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
                   {businessName}
@@ -10923,12 +10948,340 @@ function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
 }
 
 // ════════════════════════════════════════════════
+// PRINT INVOICES LIST MODAL
+// ════════════════════════════════════════════════
+function PrintInvoicesListModal({ invoices = [], user, onClose }) {
+  if (!invoices) return null;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const tenant = user?.tenant || {};
+  const businessName = tenant.name || user?.name || 'StockPro';
+  const businessPhone = tenant.contacts && tenant.contacts.length > 0
+    ? tenant.contacts.map(c => c.number).join(' / ')
+    : (tenant.phone || user?.phone || '');
+  const businessEmail = tenant.email || user?.email || '';
+  const businessAddress = tenant.address || '';
+  const logoUrl = tenant.logo_url;
+
+  const totalValue = invoices.reduce((s, i) => s + parseFloat(i.total_amount || 0), 0);
+  const totalPaid = invoices.reduce((s, i) => s + parseFloat(i.amount_paid != null ? i.amount_paid : (i.payment_status === 'paid' ? i.total_amount : 0)), 0);
+  const totalBalance = Math.max(0, totalValue - totalPaid);
+
+  const handleExportCSV = () => {
+    const exportData = invoices.map((inv, idx) => ({
+      no: idx + 1,
+      invoice_number: inv.invoice_number,
+      customer: inv.customer_name,
+      invoice_date: inv.invoice_date,
+      due_date: inv.due_date || '—',
+      total_amount: inv.total_amount,
+      amount_paid: inv.amount_paid,
+      balance: Math.max(0, (inv.total_amount || 0) - (inv.amount_paid || 0)),
+      status: (inv.payment_status || 'paid').toUpperCase(),
+      type: inv._type === 'custom' ? 'Custom' : 'Sale'
+    }));
+
+    const headers = ['No', 'Invoice #', 'Customer', 'Invoice Date', 'Due Date', 'Total Amount', 'Amount Paid', 'Balance', 'Status', 'Type'];
+    const keys = ['no', 'invoice_number', 'customer', 'invoice_date', 'due_date', 'total_amount', 'amount_paid', 'balance', 'status', 'type'];
+
+    const csvContent = [
+      `"Invoices List - ${businessName}"`,
+      `"Generated: ${new Date().toLocaleString()}"`,
+      '',
+      headers.join(','),
+      ...exportData.map(row => keys.map(k => {
+        const val = row[k] ?? '';
+        return typeof val === 'string' && (val.includes(',') || val.includes('"'))
+          ? `"${val.replace(/"/g, '""')}"`
+          : `"${val}"`;
+      }).join(',')),
+      '',
+      `"TOTAL",,"${invoices.length} Invoices",,,"UGX ${totalValue.toLocaleString()}","UGX ${totalPaid.toLocaleString()}","UGX ${totalBalance.toLocaleString()}",,`
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `invoices_list_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const todayStr = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="" size="xl" maxWidth="980px" className="invoices-list-modal">
+      {/* ── Action bar (screen only, hidden on print) ── */}
+      <div className="no-print" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 18,
+        paddingBottom: 14,
+        borderBottom: '1px solid #e2e8f0',
+        flexWrap: 'wrap',
+        gap: 12
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, color: '#fff', boxShadow: '0 2px 8px rgba(124,58,237,0.3)'
+          }}>
+            🖨️
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Invoices Print Preview</h3>
+              <span style={{
+                background: '#f3e8ff', color: '#7c3aed',
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12
+              }}>
+                {invoices.length} {invoices.length === 1 ? 'Invoice' : 'Invoices'}
+              </span>
+            </div>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+              Preview formatted list before printing or saving to PDF
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={handleExportCSV}
+            style={{
+              padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1',
+              background: '#fff', color: '#334155', fontWeight: 600, fontSize: 13,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+          >
+            📥 Export CSV
+          </button>
+          <button
+            onClick={handlePrint}
+            style={{
+              padding: '9px 22px', borderRadius: 8, border: 'none',
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+              color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 7,
+              boxShadow: '0 4px 12px rgba(124,58,237,0.35)',
+              transition: 'transform 0.1s, box-shadow 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            🖨️ Print / Save PDF
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '9px 16px', borderRadius: 8, border: '1px solid #cbd5e1',
+              background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13,
+              cursor: 'pointer'
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      {/* ── PRINTABLE INVOICES LIST DOCUMENT ── */}
+      <div id="printable-invoices-list" style={{
+        background: '#ffffff',
+        padding: '24px 28px',
+        color: '#0f172a',
+        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+        boxSizing: 'border-box'
+      }}>
+        {/* Header: Brand & Document Info */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+          paddingBottom: 20, borderBottom: '2px solid #0f172a', marginBottom: 20
+        }}>
+          {/* Brand info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={businessName}
+                style={{ width: 60, height: 60, objectFit: 'contain', borderRadius: 8, border: '1px solid #e2e8f0', padding: 4 }}
+                onError={e => { e.currentTarget.style.display = 'none'; }}
+              />
+            ) : (
+              <div style={{
+                width: 50, height: 50, borderRadius: 10,
+                background: '#4f46e5', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 800, fontSize: 18
+              }}>
+                {businessName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                {businessName}
+              </h2>
+              <div style={{ fontSize: 12, color: '#475569', marginTop: 3, lineHeight: 1.4 }}>
+                {businessAddress && <div>{businessAddress}</div>}
+                <div>{[businessPhone && `Tel: ${businessPhone}`, businessEmail && `Email: ${businessEmail}`].filter(Boolean).join(' | ')}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Report Meta */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{
+              display: 'inline-block', padding: '4px 12px',
+              background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6,
+              fontSize: 11, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em'
+            }}>
+              Summary Statement
+            </div>
+            <h1 style={{ margin: '6px 0 2px', fontSize: 20, fontWeight: 800, color: '#0f172a' }}>
+              INVOICES LIST
+            </h1>
+            <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+              Date: <strong>{todayStr}</strong>
+            </p>
+          </div>
+        </div>
+
+        {/* KPI Mini-cards */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12,
+          marginBottom: 20, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0'
+        }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Total Invoices</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{invoices.length}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Total Value</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>UGX {totalValue.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase' }}>Total Collected</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#16a34a', marginTop: 2 }}>UGX {totalPaid.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase' }}>Outstanding Balance</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: totalBalance > 0 ? '#dc2626' : '#0f172a', marginTop: 2 }}>UGX {totalBalance.toLocaleString()}</div>
+          </div>
+        </div>
+
+        {/* Invoices Table */}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#334155' }}>#</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#334155' }}>Invoice #</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#334155' }}>Customer</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#334155' }}>Date</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#334155' }}>Amount</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#334155' }}>Paid</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#334155' }}>Balance</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#334155' }}>Status</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#334155' }}>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.length > 0 ? invoices.map((inv, idx) => {
+                const amount = parseFloat(inv.total_amount || 0);
+                const paid = parseFloat(inv.amount_paid != null ? inv.amount_paid : amount);
+                const bal = Math.max(0, amount - paid);
+                const status = (inv.payment_status || (bal === 0 ? 'paid' : (paid > 0 ? 'partial' : 'due'))).toLowerCase();
+                
+                const statusColor = status === 'paid' ? { bg: '#dcfce7', text: '#15803d' }
+                  : status === 'partial' ? { bg: '#fef3c7', text: '#b45309' }
+                  : { bg: '#fee2e2', text: '#b91c1c' };
+
+                return (
+                  <tr key={inv.id || idx} style={{
+                    borderBottom: '1px solid #e2e8f0',
+                    background: idx % 2 === 0 ? '#ffffff' : '#fafafa'
+                  }}>
+                    <td style={{ padding: '8px 10px', color: '#64748b' }}>{idx + 1}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, color: '#0f172a' }}>{inv.invoice_number}</td>
+                    <td style={{ padding: '8px 10px', color: '#334155' }}>{inv.customer_name || 'Walk-in'}</td>
+                    <td style={{ padding: '8px 10px', color: '#64748b' }}>{inv.invoice_date || '—'}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>UGX {amount.toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: '#16a34a' }}>UGX {paid.toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: bal > 0 ? '#dc2626' : '#64748b' }}>UGX {bal.toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 10,
+                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                        background: statusColor.bg, color: statusColor.text
+                      }}>
+                        {status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'center', fontSize: 11, color: '#64748b' }}>
+                      {inv._type === 'custom' ? 'Custom' : 'Sale'}
+                    </td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan="9" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                    No invoices recorded.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: '#f8fafc', borderTop: '2px solid #0f172a', fontWeight: 800 }}>
+                <td colSpan="4" style={{ padding: '10px', textAlign: 'left', color: '#0f172a' }}>
+                  TOTAL ({invoices.length} {invoices.length === 1 ? 'Invoice' : 'Invoices'})
+                </td>
+                <td style={{ padding: '10px', textAlign: 'right', color: '#0f172a' }}>
+                  UGX {totalValue.toLocaleString()}
+                </td>
+                <td style={{ padding: '10px', textAlign: 'right', color: '#16a34a' }}>
+                  UGX {totalPaid.toLocaleString()}
+                </td>
+                <td style={{ padding: '10px', textAlign: 'right', color: totalBalance > 0 ? '#dc2626' : '#0f172a' }}>
+                  UGX {totalBalance.toLocaleString()}
+                </td>
+                <td colSpan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          marginTop: 24, paddingTop: 14, borderTop: '1px solid #e2e8f0',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          fontSize: 11, color: '#94a3b8'
+        }}>
+          <div>Printed from {businessName} Management System</div>
+          <div>Generated on {new Date().toLocaleString()}</div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ════════════════════════════════════════════════
 // INVOICES TAB COMPONENT
 // ════════════════════════════════════════════════
 function InvoicesTab({ sales, customers, user, token, toast }) {
   const [customInvoices, setCustomInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [showPrintListModal, setShowPrintListModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);   // invoice being status-edited
   const [search, setSearch] = useState('');
@@ -11051,7 +11404,7 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Invoices & Proforma Generator</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring Zziwa & Sons branding</p>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Generate, view, and print branded invoices featuring {user?.tenant?.name || 'business'} branding</p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {/* Refresh Button */}
@@ -11131,90 +11484,15 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
             📥 Export CSV
           </button>
           
-          {/* Print Button */}
+          {/* Print List Button */}
           <button
-            onClick={() => {
-              const printContent = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta charset="utf-8"/>
-                  <title>Invoices List - ${new Date().toLocaleDateString()}</title>
-                  <style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body { font-family: 'Arial', sans-serif; padding: 40px; }
-                    h1 { margin-bottom: 10px; color: #881337; }
-                    .meta { margin-bottom: 30px; color: #64748b; font-size: 14px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-                    th { background: #f8fafc; font-weight: 700; font-size: 12px; text-transform: uppercase; color: #475569; }
-                    td { font-size: 14px; }
-                    .total-row { font-weight: 700; background: #f8fafc; }
-                    @media print {
-                      body { padding: 20px; }
-                      @page { margin: 0.5in; }
-                    }
-                  </style>
-                </head>
-                <body>
-                  <h1>Invoices List</h1>
-                  <div class="meta">
-                    Generated: ${new Date().toLocaleString()}<br/>
-                    Total Invoices: ${invoicesList.length}<br/>
-                    Total Value: UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}
-                  </div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Invoice #</th>
-                        <th>Customer</th>
-                        <th>Date</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${invoicesList.map(inv => `
-                        <tr>
-                          <td>${inv.invoice_number}</td>
-                          <td>${inv.customer_name}</td>
-                          <td>${inv.invoice_date}</td>
-                          <td>UGX ${inv.total_amount.toLocaleString()}</td>
-                          <td>${(inv.payment_status || 'paid').toUpperCase()}</td>
-                          <td>${inv._type === 'custom' ? 'Custom' : 'Sale'}</td>
-                        </tr>
-                      `).join('')}
-                      <tr class="total-row">
-                        <td colspan="3">TOTAL</td>
-                        <td>UGX ${invoicesList.reduce((s, i) => s + i.total_amount, 0).toLocaleString()}</td>
-                        <td colspan="2">${invoicesList.length} invoices</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </body>
-                </html>
-              `;
-              
-              const win = window.open('', '_blank');
-              if (!win) {
-                alert('Pop-up blocked. Please allow pop-ups for this site.');
-                return;
-              }
-              win.document.write(printContent);
-              win.document.close();
-              win.addEventListener('load', () => {
-                setTimeout(() => {
-                  win.focus();
-                  win.print();
-                }, 300);
-              });
-            }}
+            onClick={() => setShowPrintListModal(true)}
             style={{
               padding: '10px 16px', borderRadius: 10, border: 'none',
               background: '#7c3aed', color: '#fff', fontWeight: 600,
               fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-              transition: 'background 0.15s'
+              transition: 'background 0.15s',
+              boxShadow: '0 2px 8px rgba(124,58,237,0.25)'
             }}
             onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'}
             onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}
@@ -11358,6 +11636,15 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
           invoice={selectedInvoice}
           user={user}
           onClose={() => setSelectedInvoice(null)}
+        />
+      )}
+
+      {/* Print Invoices List Modal */}
+      {showPrintListModal && (
+        <PrintInvoicesListModal
+          invoices={invoicesList}
+          user={user}
+          onClose={() => setShowPrintListModal(false)}
         />
       )}
 

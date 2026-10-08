@@ -30,7 +30,7 @@ class SaleController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to view sales.'], 403);
         }
 
-        $query = Sale::with(['user', 'customer', 'saleItems.product'])
+        $query = Sale::with(['user', 'customer', 'saleItems.product', 'tenant'])
                      ->orderBy('sale_date', 'desc');
 
         // Non-privileged users (cashiers and custom-role users with sales.view)
@@ -133,7 +133,7 @@ class SaleController extends Controller
                     ]);
                 }
 
-                $sale->load(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price']);
+                $sale->load(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price', 'tenant']);
 
                 return response()->json(['success' => true, 'message' => 'Sale completed successfully.', 'data' => $sale], 201);
             });
@@ -161,7 +161,7 @@ class SaleController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to view this sale.'], 403);
         }
 
-        $sale->load(['user', 'customer', 'saleItems.product']);
+        $sale->load(['user', 'customer', 'saleItems.product', 'tenant']);
 
         return response()->json(['success' => true, 'data' => $sale]);
     }

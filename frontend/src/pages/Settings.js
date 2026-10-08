@@ -104,6 +104,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               phone: data.phone,
               contacts: data.contacts,
               address: data.address,
+              logo_url: data.logo_url !== undefined ? data.logo_url : prevUser.tenant?.logo_url,
+              logo_path: data.logo_path !== undefined ? data.logo_path : prevUser.tenant?.logo_path,
             }
           }));
           
@@ -119,6 +121,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                 phone: data.phone,
                 contacts: data.contacts,
                 address: data.address,
+                logo_url: data.logo_url !== undefined ? data.logo_url : userObj.tenant?.logo_url,
+                logo_path: data.logo_path !== undefined ? data.logo_path : userObj.tenant?.logo_path,
               };
               localStorage.setItem('user', JSON.stringify(userObj));
             } catch (e) {

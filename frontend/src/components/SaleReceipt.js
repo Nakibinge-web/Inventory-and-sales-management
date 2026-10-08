@@ -36,13 +36,13 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
   const total = parseFloat(sale.total_amount) || 0;
   const { date, time } = formatSaleDateTime(sale.sale_date, sale.created_at);
   
-  const tenant = user?.tenant || {};
-  const tenantName = tenant.name || 'InventoryPro';
+  const tenant = user?.tenant || sale?.tenant || {};
+  const tenantName = tenant.name || user?.name || 'Business Receipt';
   const receiptPhone = tenant.contacts && tenant.contacts.length > 0 
     ? tenant.contacts.map(c => c.number).join(' / ') 
-    : (tenant.phone || '0705364749 / 0788111823');
-  const receiptEmail = tenant.email || 'zziwa.biz@gmail.com';
-  const receiptAddress = tenant.address || 'Mukwano arcade shop AG 84';
+    : (tenant.phone || user?.phone || '');
+  const receiptEmail = tenant.email || user?.email || '';
+  const receiptAddress = tenant.address || '';
   
   // Build receipt reference
   const saleDate = sale.sale_date || sale.created_at || '';
@@ -62,11 +62,14 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
       {/* ── Business Header ── */}
       <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
         {/* Logo */}
-        <img
-          src="/zziwa logo.png"
-          alt={tenantName}
-          style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
-        />
+        {tenant.logo_url && (
+          <img
+            src={tenant.logo_url}
+            alt={tenantName}
+            style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
         <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
         <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
           {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}

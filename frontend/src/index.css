@@ -1292,11 +1292,14 @@ textarea.field-input {
   }
   
   #printable-invoice,
-  #printable-invoice * {
+  #printable-invoice *,
+  #printable-invoices-list,
+  #printable-invoices-list * {
     visibility: visible !important;
   }
   
-  #printable-invoice {
+  #printable-invoice,
+  #printable-invoices-list {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;

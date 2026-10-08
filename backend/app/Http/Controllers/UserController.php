@@ -47,7 +47,7 @@ class UserController extends Controller
      */
     public function me(): JsonResponse
     {
-        $user = Auth::user()->load('roles.permissions:id,name', 'tenant:id,name,email,phone,address');
+        $user = Auth::user()->load('roles.permissions:id,name', 'tenant');
 
         return response()->json(['success' => true, 'data' => $user]);
     }
