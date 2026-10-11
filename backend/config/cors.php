@@ -34,7 +34,6 @@ return [
         '#^http://(localhost|127\.0\.0\.1):(300[0-9]|517[0-9])$#',
     ],
 
-
     'allowed_headers' => ['*'],
 
     'exposed_headers' => [],

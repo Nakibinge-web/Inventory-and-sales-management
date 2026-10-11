@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -23,11 +22,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     address: ''
   });
 
-  useEffect(() => {
-    fetchBusinessInfo();
-  }, []);
-
-  const fetchBusinessInfo = async () => {
+  const fetchBusinessInfo = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${API}/settings/business?tenant_id=${user.tenant_id}`, {
@@ -57,7 +52,11 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user.tenant_id, token, toast]);
+
+  useEffect(() => {
+    fetchBusinessInfo();
+  }, [fetchBusinessInfo]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -104,6 +103,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               phone: data.phone,
               contacts: data.contacts,
               address: data.address,
+              logo_url: data.logo_url !== undefined ? data.logo_url : prevUser.tenant?.logo_url,
+              logo_path: data.logo_path !== undefined ? data.logo_path : prevUser.tenant?.logo_path,
             }
           }));
           
@@ -119,6 +120,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                 phone: data.phone,
                 contacts: data.contacts,
                 address: data.address,
+                logo_url: data.logo_url !== undefined ? data.logo_url : userObj.tenant?.logo_url,
+                logo_path: data.logo_path !== undefined ? data.logo_path : userObj.tenant?.logo_path,
               };
               localStorage.setItem('user', JSON.stringify(userObj));
             } catch (e) {
@@ -371,7 +374,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                     {businessInfo.contacts.map((contact, index) => (
                       <div key={index} style={styles.contactDisplay}>
                         <span style={styles.contactType}>
-                          {contact.type.charAt(0).toUpperCase() + contact.type.slice(1)}:
+                          {contact.type ? contact.type.charAt(0).toUpperCase() + contact.type.slice(1) : 'Other'}:
                         </span>
                         <span style={styles.contactNumber}>{contact.number}</span>
                       </div>
@@ -390,13 +393,15 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
 
             <div style={styles.infoFooter}>
               <span style={styles.lastUpdated}>
-                Last updated: {new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
-                  day: '2-digit', 
-                  month: 'short', 
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                Last updated: {businessInfo.updated_at
+                  ? new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                  : 'Unknown'}
               </span>
             </div>
           </div>

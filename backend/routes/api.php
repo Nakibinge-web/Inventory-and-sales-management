@@ -201,4 +201,10 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Report Preferences
     Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
+
+    // Business Settings
+    Route::prefix('settings')->group(function () {
+        Route::get('/business', [\App\Http\Controllers\SettingsController::class, 'getBusinessInfo']);
+        Route::put('/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
+    });
 });
