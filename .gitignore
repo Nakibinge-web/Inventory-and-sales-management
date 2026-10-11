@@ -1,3 +1,6 @@
 .kiro/
 frontend/.env
 .vscode/
+
+# Backup files
+*.bak
