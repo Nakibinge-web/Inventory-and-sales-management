@@ -4,3 +4,6 @@ frontend/.env
 
 # Backup files
 *.bak
+
+# Kiro agent working files
+.agents/
