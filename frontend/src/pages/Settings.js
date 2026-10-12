@@ -25,7 +25,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
   const fetchBusinessInfo = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API}/settings/business?tenant_id=${user.tenant_id}`, {
+      const tenantId = user?.tenant_id;
+      const response = await fetch(`${API}/settings/business?tenant_id=${tenantId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -52,7 +53,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     } finally {
       setLoading(false);
     }
-  }, [user.tenant_id, token, toast]);
+  }, [user?.tenant_id, token, toast]);
 
   useEffect(() => {
     fetchBusinessInfo();
@@ -103,8 +104,6 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               phone: data.phone,
               contacts: data.contacts,
               address: data.address,
-              logo_url: data.logo_url !== undefined ? data.logo_url : prevUser.tenant?.logo_url,
-              logo_path: data.logo_path !== undefined ? data.logo_path : prevUser.tenant?.logo_path,
             }
           }));
           
@@ -120,8 +119,6 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                 phone: data.phone,
                 contacts: data.contacts,
                 address: data.address,
-                logo_url: data.logo_url !== undefined ? data.logo_url : userObj.tenant?.logo_url,
-                logo_path: data.logo_path !== undefined ? data.logo_path : userObj.tenant?.logo_path,
               };
               localStorage.setItem('user', JSON.stringify(userObj));
             } catch (e) {
@@ -374,7 +371,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                     {businessInfo.contacts.map((contact, index) => (
                       <div key={index} style={styles.contactDisplay}>
                         <span style={styles.contactType}>
-                          {contact.type ? contact.type.charAt(0).toUpperCase() + contact.type.slice(1) : 'Other'}:
+                          {contact.type.charAt(0).toUpperCase() + contact.type.slice(1)}:
                         </span>
                         <span style={styles.contactNumber}>{contact.number}</span>
                       </div>
@@ -393,15 +390,13 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
 
             <div style={styles.infoFooter}>
               <span style={styles.lastUpdated}>
-                Last updated: {businessInfo.updated_at
-                  ? new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })
-                  : 'Unknown'}
+                Last updated: {new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
+                  day: '2-digit', 
+                  month: 'short', 
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
               </span>
             </div>
           </div>

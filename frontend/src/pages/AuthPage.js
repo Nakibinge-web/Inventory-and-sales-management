@@ -102,8 +102,6 @@ export default function AuthPage() {
     business_name: '',
     phone: '',
     address: '',
-    username: '',
-    login: '',
   });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -149,16 +147,6 @@ export default function AuthPage() {
         setLoading(false);
         return;
       }
-      if (!form.username.trim()) {
-        setError('Username is required');
-        setLoading(false);
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]{3,30}$/.test(form.username.trim())) {
-        setError('Username must be 3–30 characters and contain only letters, numbers, and underscores');
-        setLoading(false);
-        return;
-      }
       if (form.password.length < 8) {
         setError('Password must be at least 8 characters');
         setLoading(false);
@@ -172,25 +160,10 @@ export default function AuthPage() {
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (mode === 'login') {
-      const loginVal = (form.login || form.email || '').trim();
-      if (!loginVal) {
-        setError('Email or username is required');
-        setLoading(false);
-        return;
-      }
-      if (loginVal.includes('@') && !emailRegex.test(loginVal)) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
-    } else {
-      if (!emailRegex.test(form.email)) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
+    if (!emailRegex.test(form.email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
     }
 
     if (!form.password) {
@@ -204,14 +177,13 @@ export default function AuthPage() {
         res = await fetch(`${API}/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ login: form.login || form.email, password: form.password }),
+          body: JSON.stringify({ email: form.email, password: form.password }),
         });
       } else {
         // Use FormData to support file upload
         const fd = new FormData();
         fd.append('name', form.name);
         fd.append('email', form.email);
-        fd.append('username', form.username.trim().toLowerCase());
         fd.append('password', form.password);
         fd.append('password_confirmation', form.password_confirmation);
         fd.append('business_name', form.business_name);
@@ -260,8 +232,6 @@ export default function AuthPage() {
       business_name: '',
       phone: '',
       address: '',
-      username: '',
-      login: '',
     });
     setLogoFile(null);
     setLogoPreview(null);
@@ -413,36 +383,19 @@ export default function AuthPage() {
               </div>
             )}
 
-            {isLogin ? (
-              <div className="field-group">
-                <label className="field-label" htmlFor="login">Email or Username</label>
-                <input
-                  id="login"
-                  className="field-input"
-                  name="login"
-                  type="text"
-                  placeholder="Enter your email or username"
-                  value={form.login || ''}
-                  onChange={handle}
-                  autoComplete="username"
-                  required
-                />
-              </div>
-            ) : (
-              <div className="field-group">
-                <label className="field-label" htmlFor="email">Email address</label>
-                <input
-                  id="email"
-                  className="field-input"
-                  name="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={form.email}
-                  onChange={handle}
-                  required
-                />
-              </div>
-            )}
+            <div className="field-group">
+              <label className="field-label" htmlFor="email">Email address</label>
+              <input
+                id="email"
+                className="field-input"
+                name="email"
+                type="email"
+                placeholder="Enter your email"
+                value={form.email}
+                onChange={handle}
+                required
+              />
+            </div>
 
             <PasswordField
               name="password"
@@ -466,24 +419,6 @@ export default function AuthPage() {
 
                 <div className="auth-section-divider">
                   <span>Business Profile</span>
-                </div>
-
-                {/* Username */}
-                <div className="field-group">
-                  <label className="field-label" htmlFor="username">Username</label>
-                  <input
-                    id="username"
-                    className="field-input"
-                    name="username"
-                    type="text"
-                    placeholder="e.g. john_doe (3-30 chars, letters/numbers/underscores)"
-                    value={form.username}
-                    onChange={handle}
-                    required
-                    minLength={3}
-                    maxLength={30}
-                    pattern="^[a-zA-Z0-9_]+$"
-                  />
                 </div>
 
                 {/* Logo upload */}

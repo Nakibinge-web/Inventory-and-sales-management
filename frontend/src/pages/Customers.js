@@ -317,7 +317,7 @@ function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded,
         </div>
       ) : (
         <>
-          <div className="customer-cards-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
             {pagedCustomers.map(c => (
               <div key={c.id} style={{
                 background: '#fff', borderRadius: 16, padding: '20px',
