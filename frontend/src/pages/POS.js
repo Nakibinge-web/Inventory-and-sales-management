@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import styles, { posS } from '../styles/dashboardStyles';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -461,10 +462,8 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
               {/* Discount */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: '#64748b' }}>Discount:</span>
-                <input
+                <CurrencyInput
                   style={posS.discountInput}
-                  type="number"
-                  min="0"
                   placeholder="0"
                   value={discountValue}
                   onChange={e => setDiscountValue(e.target.value)}
@@ -474,10 +473,8 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
               {/* Tax */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: '#64748b' }}>Tax:</span>
-                <input
+                <CurrencyInput
                   style={posS.discountInput}
-                  type="number"
-                  min="0"
                   placeholder="0"
                   value={taxValue}
                   onChange={e => setTaxValue(e.target.value)}
@@ -524,10 +521,8 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                   {/* Amount Paid */}
                   <div>
                     <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Amount Paid</label>
-                    <input
+                    <CurrencyInput
                       style={{ ...posS.searchInput, textAlign: 'right', fontWeight: 700, fontSize: 16 }}
-                      type="number"
-                      min="0"
                       placeholder="0"
                       value={amountPaid}
                       onChange={e => setAmountPaid(e.target.value)}

@@ -47,7 +47,7 @@ export default function MarketingHeader() {
           <ul className="sp-nav-links">
             <li>
               <MarketingLink href="/#features" className="sp-nav-link">
-                Product
+                Home
               </MarketingLink>
             </li>
             <li>

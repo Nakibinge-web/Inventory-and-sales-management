@@ -12,7 +12,7 @@ export default function CTASection({
   secondaryCtaHref = '/contact',
 }) {
   return (
-    <section className="sp-section sp-section-white sp-cta-section" aria-label="Call to Action">
+    <section className="sp-section sp-cta-section" aria-label="Call to Action">
       <div className="sp-container">
         <div className="sp-cta-card">
           {/* Left Column: High-Conversion Copy & Actions */}
@@ -43,7 +43,7 @@ export default function CTASection({
                 <div className="sp-cta-check">
                   <CheckIcon size={13} />
                 </div>
-                <span>Multi-Register Live Stock Sync</span>
+                <span>Multi-User account registration</span>
               </div>
               <div className="sp-cta-feature-item">
                 <div className="sp-cta-check">
@@ -60,18 +60,9 @@ export default function CTASection({
                 <ArrowRightIcon size={16} />
               </MarketingLink>
 
-              <MarketingLink href={secondaryCtaHref} className="sp-btn sp-btn-secondary-inverted sp-btn-lg">
+              <MarketingLink href={secondaryCtaHref} className="sp-btn sp-btn-secondary-inverted sp-btn-lg sp-cta-btn-secondary">
                 <span>{secondaryCtaText}</span>
               </MarketingLink>
-            </div>
-
-            {/* Reassurance Subtext */}
-            <div className="sp-cta-trust-strip">
-              <span>Free 14-day full access</span>
-              <span className="sp-cta-trust-dot">&bull;</span>
-              <span>Cancel anytime</span>
-              <span className="sp-cta-trust-dot">&bull;</span>
-              <span>Instant setup</span>
             </div>
           </div>
 
@@ -79,7 +70,7 @@ export default function CTASection({
           <div className="sp-cta-aside">
             <div className="sp-cta-aside-card">
               <div className="sp-cta-aside-tag">RELIABILITY & SPEED</div>
-              <h3 className="sp-cta-aside-title">Enterprise precision for every store</h3>
+              <h3 className="sp-cta-aside-title">Enterprise precision for every business</h3>
 
               <div className="sp-cta-aside-metrics">
                 <div className="sp-cta-aside-metric">
@@ -119,11 +110,6 @@ export default function CTASection({
                   </div>
                   <span>Secure role permissions for cashiers and managers</span>
                 </div>
-              </div>
-
-              <div className="sp-cta-aside-status">
-                <span className="sp-cta-status-dot" aria-hidden="true" />
-                <span>Cloud Service Active &bull; Multi-Branch Ready</span>
               </div>
             </div>
           </div>

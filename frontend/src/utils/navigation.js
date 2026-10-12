@@ -7,7 +7,13 @@ export function navigateTo(path, { replace = false, preserveScroll = false } = {
   if (typeof window === 'undefined') return;
 
   const currentPath = window.location.pathname + window.location.search;
-  if (currentPath !== path) {
+  const isHashOnly = path.startsWith('#');
+  const targetPathOnly = isHashOnly
+    ? window.location.pathname
+    : (path.split('#')[0] || '/');
+  const targetHash = path.includes('#') ? path.split('#')[1] : '';
+
+  if (currentPath !== (targetPathOnly + window.location.search) || targetHash) {
     if (replace) {
       window.history.replaceState(null, '', path);
     } else {
@@ -15,16 +21,27 @@ export function navigateTo(path, { replace = false, preserveScroll = false } = {
     }
   }
 
-  // Dispatch popstate so router components re-render immediately
-  window.dispatchEvent(new Event('popstate'));
+  // Only dispatch popstate for path transitions, not pure hash scrolling on the same page
+  if (!isHashOnly) {
+    window.dispatchEvent(new Event('popstate'));
+  }
 
-  if (!preserveScroll && !path.includes('#')) {
+  if (!preserveScroll && !targetHash) {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  } else if (path.includes('#')) {
-    const id = path.split('#')[1];
-    const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+  } else if (targetHash) {
+    const scroll = () => {
+      const el = document.getElementById(targetHash);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+        return true;
+      }
+      return false;
+    };
+
+    if (!scroll()) {
+      setTimeout(scroll, 60);
+      setTimeout(scroll, 180);
+      setTimeout(scroll, 350);
     }
   }
 }
@@ -77,9 +94,10 @@ export function MarketingLink({
     navigateTo(href, { replace });
   };
 
-  const cleanHref = (href ? href.split('#')[0].toLowerCase() : '') || '/';
+  const isHashOnly = href && href.startsWith('#');
+  const cleanHref = (!isHashOnly && href ? href.split('#')[0].toLowerCase() : '') || (!isHashOnly ? '/' : '');
 
-  const isActive = Boolean(activeClassName) && (
+  const isActive = Boolean(activeClassName) && !isHashOnly && (
     (cleanHref === '/' && currentPath === '/') ||
     (cleanHref !== '/' && currentPath.startsWith(cleanHref))
   );

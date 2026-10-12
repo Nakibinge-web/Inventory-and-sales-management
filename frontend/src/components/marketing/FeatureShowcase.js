@@ -9,7 +9,238 @@ import {
   ShieldIcon,
 } from './Icons';
 
-export default function FeatureShowcase({ activeId = '01' }) {
+export const GUIDE_FEATURES = [
+  {
+    id: '01',
+    icon: InventoryIcon,
+    eyebrow: '01 / Products',
+    title: 'Know what you have. Know what needs attention.',
+    desc: 'This is where the StockPro user adds and views their products\'\ information. When the product is added, it automatically appears in the point of sale section. This is where the low stock reorder alert is set from so that the application alerts you when a given product stock runs low',
+    subheading: 'How to use Products section Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "Products"',
+        text: 'After registering your business and logging in, open the sidebar and click on Products to view and add products to your inventory.',
+      },
+      {
+        num: '02',
+        title: 'Click on "Add Product" in the products section',
+        text: 'To add a product, click on "add product". This will open a form for adding a product and fill in the product details required',
+      },
+      {
+        num: '03',
+        title: 'Set Low Stock Alert Level',
+        text: 'When the form for adding a product is opened, there will be a field for setting the low stock alert level. Fill in the low stock alert level for the product so that the application alerts you when stock is below the Low Stock Alert Level.',
+      },
+      {
+        num: '04',
+        title: 'Confirm Product Addition',
+        text: 'After filling in the product details, click on "add product" at the bottom of the form. The application will show you whether the product is added or not. Once the product is added, it will automatically appear in the point of sale section.',
+      },
+    ],
+  },
+  {
+    id: '02',
+    icon: PosIcon,
+    eyebrow: '02 / Point of Sale',
+    title: 'Move customers through checkout without losing track of stock.',
+    desc: 'Keep counter lines moving with an intuitive checkout interface built for speed. Barcode scanning, immediate search by name, multi-tender payment processing, and instant receipt generation allow cashiers to complete sales in seconds while stock levels stay accurate in real time.',
+    subheading: 'How to use Point of Sale Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open cashier shift & drawer float',
+        text: 'Cashiers sign in at their designated register terminal, record their opening drawer cash float, and activate the shift.',
+      },
+      {
+        num: '02',
+        title: 'Scan barcodes or search products',
+        text: 'Add items to the checkout cart quickly using barcode scanners or by typing product names or SKU codes.',
+      },
+      {
+        num: '03',
+        title: 'Process multi-tender payment',
+        text: 'Process customer payments across Cash, Mobile Money (MTN / Airtel), or Card, with full split-payment support.',
+      },
+      {
+        num: '04',
+        title: 'Print thermal receipt & close shift',
+        text: 'Generate branded 80mm/58mm thermal receipts with immediate inventory sync, and perform end-of-shift drawer reconciliation.',
+      },
+    ],
+  },
+  {
+    id: '03',
+    icon: PurchaseIcon,
+    eyebrow: '03 / Purchases & Suppliers',
+    title: 'Keep purchasing activity connected to the inventory it affects.',
+    desc: 'Eliminate lost paper delivery notes and undocumented supplier deliveries. StockPro provides an auditable procurement ledger that connects purchase costs against selling prices, automatically updates catalog inventory upon receipt, and tracks vendor dues.',
+    subheading: 'How to use Purchases & Suppliers Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Set up your vendor directory',
+        text: 'Save supplier contact information, vendor addresses, payment terms, and product categories into the procurement ledger.',
+      },
+      {
+        num: '02',
+        title: 'Draft supplier purchase orders',
+        text: 'Create restock orders specifying product quantities, expected delivery dates, and agreed wholesale unit costs.',
+      },
+      {
+        num: '03',
+        title: 'One-click delivery ingestion',
+        text: 'Confirm incoming supplier shipments upon arrival to instantly increment catalog stock quantities with zero manual recount delay.',
+      },
+      {
+        num: '04',
+        title: 'Manage vendor payables & cost margins',
+        text: 'Track outstanding supplier debts, purchase invoices, and buying cost trends to preserve healthy gross profit spreads.',
+      },
+    ],
+  },
+  {
+    id: '04',
+    icon: CustomersIcon,
+    eyebrow: '04 / Customers & Accounts',
+    title: 'Build repeat business with client histories and credit ledgers.',
+    desc: 'Track individual buyer balances, transaction frequency, and contact details from POS checkout to commercial invoicing. Never lose track of outstanding receivables or which clients drive your highest store revenue.',
+    subheading: 'How to use Customers & Accounts Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Register customer profiles',
+        text: 'Save client contact info, business names, email addresses, and account tiers (Retail, Wholesale, Corporate).',
+      },
+      {
+        num: '02',
+        title: 'Tag clients during checkout',
+        text: 'Link customer profiles during counter checkout or invoicing using fast phone number or name lookup.',
+      },
+      {
+        num: '03',
+        title: 'Issue credit sales & track receivables',
+        text: 'Allow verified clients to purchase on credit, record partial repayments, and track payment due dates to prevent bad debts.',
+      },
+      {
+        num: '04',
+        title: 'Review purchase histories & statements',
+        text: 'Access complete transaction records, lifetime revenue contribution, and running balance statements for every client.',
+      },
+    ],
+  },
+  {
+    id: '05',
+    icon: ReportsIcon,
+    eyebrow: '05 / Reports & Analytics',
+    title: 'Know your profit, margins, and sales without manual spreadsheets.',
+    desc: 'Replace guesswork with automated end-of-day reconciliation. StockPro generates clean profit-and-loss summaries, inventory valuation audits, and cashier performance breakdowns so you always know the true financial health of your store.',
+    subheading: 'How to use Reports & Analytics Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Monitor real-time daily turnover',
+        text: 'View gross revenue, completed receipt counts, and peak counter trading hours across all active terminals throughout the day.',
+      },
+      {
+        num: '02',
+        title: 'Audit cashier shift balancing',
+        text: 'Reconcile recorded drawer cash against physical notes, Mobile Money receipts, and card settlements to identify variances immediately.',
+      },
+      {
+        num: '03',
+        title: 'Analyze product gross margins',
+        text: 'Inspect net profit and margin percentages per category and individual SKU to determine what drives store profitability.',
+      },
+      {
+        num: '04',
+        title: 'Export compliance & tax statements',
+        text: 'Generate one-click PDF summaries and CSV data sheets for bookkeeping, management review, and tax audits.',
+      },
+    ],
+  },
+  {
+    id: '06',
+    icon: ShieldIcon,
+    eyebrow: '06 / Team Access & Permissions',
+    title: 'Control staff permissions while protecting sensitive store data.',
+    desc: 'Give cashiers, store managers, and accountants exactly the access they need without exposing supplier costs, net profit totals, or store-wide administrative controls. Every transaction and stock count is stamped with staff accountability.',
+    subheading: 'How to use Team Access & Permissions Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Invite staff members',
+        text: 'Add employee profiles by name, email, and designated store branch or terminal.',
+      },
+      {
+        num: '02',
+        title: 'Assign role-based access tiers',
+        text: 'Select from preset permission roles (Owner / Super Admin, Store Manager, Cashier) to control system privileges strictly.',
+      },
+      {
+        num: '03',
+        title: 'Protect sensitive commercial data',
+        text: 'Mask supplier purchase prices, discount limits, and store-wide profit figures from front-counter cashiers.',
+      },
+      {
+        num: '04',
+        title: 'Audit user accountability logs',
+        text: 'Review timestamps and staff attribution for every receipt, voided sale, price override, and shift handoff.',
+      },
+    ],
+  },
+];
+
+export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
+  // If textOnly mode (StockPro Guide on How It Works page):
+  if (textOnly) {
+    const guideItem = GUIDE_FEATURES.find((item) => item.id === activeId);
+    if (!guideItem) return null;
+    const IconComp = guideItem.icon;
+
+    return (
+      <div id="features" aria-label="System Capabilities">
+        <section
+          className="sp-section sp-section-white sp-capability-panel"
+          role="tabpanel"
+          aria-label={guideItem.eyebrow}
+        >
+          <div className="sp-container">
+            <div className="sp-guide-card-content">
+              {/* Eyebrow */}
+              <div className="sp-editorial-eyebrow">
+                <IconComp size={14} />
+                <span>{guideItem.eyebrow}</span>
+              </div>
+
+              {/* Title */}
+              <h2 className="sp-editorial-title">{guideItem.title}</h2>
+
+              {/* Description */}
+              <p className="sp-editorial-body">{guideItem.desc}</p>
+
+              {/* Subheading: How to use [Feature] Step-by-Step */}
+              <h3 className="sp-guide-step-subheading">{guideItem.subheading}</h3>
+
+              {/* 2x2 Grid of Step Cards */}
+              <div className="sp-guide-steps-grid">
+                {guideItem.steps.map((step) => (
+                  <div key={step.num} className="sp-guide-step-card">
+                    <div className="sp-guide-step-badge">STEP {step.num}</div>
+                    <h4 className="sp-guide-step-title">{step.title}</h4>
+                    <p className="sp-guide-step-text">{step.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // Default layout with live tables for LandingPage
   return (
     <div id="features" aria-label="System Capabilities">
       {/* 01: REAL-TIME INVENTORY */}
@@ -44,7 +275,6 @@ export default function FeatureShowcase({ activeId = '01' }) {
                 </ul>
               </div>
 
-              {/* Live Inventory UI snippet */}
               <div className="sp-editorial-visual">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.02em' }}>
@@ -162,7 +392,6 @@ export default function FeatureShowcase({ activeId = '01' }) {
                 </ul>
               </div>
 
-              {/* Live POS Terminal UI snippet */}
               <div className="sp-editorial-visual">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
@@ -173,7 +402,7 @@ export default function FeatureShowcase({ activeId = '01' }) {
                   </span>
                 </div>
                 <div style={{ padding: '16px', backgroundColor: 'var(--sp-white)' }}>
-                  <div style={{ backgroundColor: 'var(--sp-surface-soft)', border: '1px solid var(--sp-border)', borderRadius: 6, padding: '8px 12px', fontSize: 12, display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ backgroundColor: 'var(--sp-surface-soft)', border: '1px solid var(--sp-border)', borderRadius: 0, padding: '8px 12px', fontSize: 12, display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                     <span style={{ color: '#64748B' }}>Scan barcode or search product...</span>
                     <span className="sp-num" style={{ color: 'var(--sp-navy-700)', fontWeight: 700 }}>[F4]</span>
                   </div>
@@ -260,7 +489,6 @@ export default function FeatureShowcase({ activeId = '01' }) {
                 </ul>
               </div>
 
-              {/* Live Purchasing Ledger UI snippet */}
               <div className="sp-editorial-visual">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
@@ -365,7 +593,6 @@ export default function FeatureShowcase({ activeId = '01' }) {
                 </ul>
               </div>
 
-              {/* Customer Directory UI snippet */}
               <div className="sp-editorial-visual">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
@@ -470,7 +697,6 @@ export default function FeatureShowcase({ activeId = '01' }) {
                 </ul>
               </div>
 
-              {/* Reports & Margin Analysis UI snippet */}
               <div className="sp-editorial-visual">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
@@ -569,7 +795,6 @@ export default function FeatureShowcase({ activeId = '01' }) {
                 </ul>
               </div>
 
-              {/* Staff Role Security UI snippet */}
               <div className="sp-editorial-visual">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>

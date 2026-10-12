@@ -3,6 +3,7 @@ import DataTable from '../components/ui/DataTable';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import SaleReceipt from '../components/SaleReceipt';
 import { PrintableInvoiceModal } from './Invoices';
 import styles from '../styles/dashboardStyles';
@@ -1154,10 +1155,10 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                     </div>
                     <div>
                       <label style={{ fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Price (UGX)</label>
-                      <input
-                        type="number" min="0"
+                      <CurrencyInput
                         style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                         value={item.price}
+                        placeholder="0.00"
                         onChange={e => setEditForm(p => ({
                           ...p,
                           items: p.items.map((it, i) => i === idx ? { ...it, price: e.target.value } : it),
@@ -1216,8 +1217,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
-                <input
-                  type="number" min="0"
+                <CurrencyInput
                   style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   value={editForm.discount_amount}
                   onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
@@ -1226,8 +1226,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
-                <input
-                  type="number" min="0"
+                <CurrencyInput
                   style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   value={editForm.tax_amount}
                   onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}

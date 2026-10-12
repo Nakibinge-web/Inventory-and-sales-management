@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 
 const CAPABILITIES = [
   {
     index: '01',
-    title: 'Inventory',
-    desc: 'Catalog, auto-SKUs & threshold alerts',
+    title: 'Products',
+    desc: 'Stock Quantity, Low level reorder alerts and Product prices',
   },
   {
     index: '02',
@@ -33,9 +33,9 @@ const CAPABILITIES = [
   },
 ];
 
-export default function TrustStrip({ activeId = '01', onSelect }) {
+const TrustStrip = forwardRef(function TrustStrip({ activeId = '01', onSelect, className = '' }, ref) {
   return (
-    <section className="sp-capability-strip" aria-label="System Specifications">
+    <section ref={ref} className={`sp-capability-strip ${className}`} aria-label="System Specifications">
       <div className="sp-container">
         <div className="sp-spec-bar" role="tablist">
           {CAPABILITIES.map((item) => {
@@ -59,4 +59,7 @@ export default function TrustStrip({ activeId = '01', onSelect }) {
       </div>
     </section>
   );
-}
+});
+
+export default TrustStrip;
+

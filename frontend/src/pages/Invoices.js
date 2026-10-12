@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../components/ui/Modal';
+import CurrencyInput from '../components/ui/CurrencyInput';
 
 
 function PrintableInvoiceModal({ invoice, user, onClose }) {
@@ -803,10 +804,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                     </div>
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>UNIT PRICE (UGX)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                      <CurrencyInput
                         placeholder="0.00"
                         value={item.price}
                         onChange={e => handleItemChange(idx, 'price', e.target.value)}
@@ -835,10 +833,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                       onChange={e => handleItemChange(idx, 'quantity', e.target.value)}
                       style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
                     />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                    <CurrencyInput
                       placeholder="Unit Price (UGX)"
                       value={item.price}
                       onChange={e => handleItemChange(idx, 'price', e.target.value)}
@@ -893,10 +888,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                 Amount Paid (UGX) (Required)
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
+              <CurrencyInput
                 value={amountPaid}
                 onChange={e => { setAmountPaid(e.target.value); if (fieldErrors.amountPaid) setFieldErrors(prev => ({ ...prev, amountPaid: null })); }}
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
@@ -912,10 +904,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                   Amount Paid (UGX) (Required)
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <CurrencyInput
                   placeholder="Enter partial amount paid"
                   value={amountPaid}
                   onChange={e => handlePartialPaidChange(e.target.value)}
@@ -927,8 +916,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                   Amount Due (UGX) — Auto-Calculated
                 </label>
-                <input
-                  type="number"
+                <CurrencyInput
                   readOnly
                   value={amountDue}
                   style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 700, background: '#fef2f2', color: '#b91c1c', boxSizing: 'border-box', cursor: 'not-allowed' }}
@@ -943,10 +931,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                 Amount Due (UGX) (Required)
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
+              <CurrencyInput
                 placeholder="Enter full amount due"
                 value={amountDue}
                 onChange={e => { setAmountDue(e.target.value); if (fieldErrors.amountDue) setFieldErrors(prev => ({ ...prev, amountDue: null })); }}
@@ -1077,10 +1062,8 @@ function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
           <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
             Amount Paid (UGX)
           </label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
+          <CurrencyInput
+            placeholder="0.00"
             value={amountPaid}
             onChange={e => handleAmountChange(e.target.value)}
             style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }}

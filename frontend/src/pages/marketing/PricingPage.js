@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MarketingHeader from '../../components/marketing/MarketingHeader';
 import MarketingFooter from '../../components/marketing/MarketingFooter';
 import SectionHeading from '../../components/marketing/SectionHeading';
@@ -82,6 +82,31 @@ export default function PricingPage() {
   );
 
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'annual'
+
+  useEffect(() => {
+    const scrollToFaq = () => {
+      if (window.location.hash === '#faq') {
+        const el = document.getElementById('faq');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+    };
+
+    scrollToFaq();
+    const t1 = setTimeout(scrollToFaq, 80);
+    const t2 = setTimeout(scrollToFaq, 250);
+
+    window.addEventListener('popstate', scrollToFaq);
+    window.addEventListener('hashchange', scrollToFaq);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('popstate', scrollToFaq);
+      window.removeEventListener('hashchange', scrollToFaq);
+    };
+  }, []);
 
   return (
     <div className="marketing-root">

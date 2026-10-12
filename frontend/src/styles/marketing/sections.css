@@ -1118,6 +1118,10 @@
 }
 
 /* FAQ Accordion */
+#faq {
+  scroll-margin-top: calc(var(--sp-header-height, 72px) + 24px);
+}
+
 .sp-faq-container {
   display: flex;
   flex-direction: column;
@@ -1298,29 +1302,33 @@
    ========================================================================== */
 .sp-cta-section,
 .sp-cta-3d-section {
-  padding: 64px 0 96px 0;
+  padding: 80px 0;
   position: relative;
-  background-color: var(--sp-white, #FFFFFF);
+  background-color: var(--sp-accent, #800020);
+  background: linear-gradient(135deg, #800020 0%, #600018 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  width: 100%;
 }
 
 .sp-cta-card,
 .sp-cta-3d-card {
   position: relative;
-  background-color: var(--sp-navy-950, #071629);
+  background-color: transparent;
   border-radius: 0;
-  border: 1px solid var(--sp-navy-800, #102A43);
+  border: none;
   color: #FFFFFF;
   display: grid;
   grid-template-columns: 1.22fr 0.88fr;
-  align-items: stretch;
-  min-height: 460px;
-  overflow: hidden;
-  box-shadow: 0 16px 36px -10px rgba(7, 22, 41, 0.35);
+  align-items: center;
+  gap: 56px;
+  min-height: auto;
+  overflow: visible;
+  box-shadow: none;
 }
 
 .sp-cta-content,
 .sp-cta-3d-content {
-  padding: 56px 48px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1334,7 +1342,7 @@
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #93C5FD;
+  color: #FECDD3;
   text-transform: uppercase;
   margin-bottom: 16px;
   display: inline-block;
@@ -1356,7 +1364,7 @@
   font-family: var(--sp-font-content, 'Poppins', sans-serif);
   font-size: 16px;
   line-height: 1.62;
-  color: #94A3B8;
+  color: #FFE4E6;
   margin: 0 0 28px 0;
   max-width: 540px;
 }
@@ -1375,7 +1383,7 @@
   align-items: center;
   gap: 10px;
   font-size: 14px;
-  color: #E2E8F0;
+  color: #FFFFFF;
   font-weight: 500;
 }
 
@@ -1387,9 +1395,9 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  color: #34D399;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #FFFFFF;
   flex-shrink: 0;
 }
 
@@ -1404,14 +1412,73 @@
 
 .sp-cta-btn-main,
 .sp-cta-3d-btn-main {
-  box-shadow: 0 6px 20px -4px rgba(128, 0, 32, 0.45);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background-color: #FFFFFF !important;
+  color: var(--sp-navy-950, #071629) !important;
+  border-color: #FFFFFF !important;
+  border-radius: 0 !important;
+  box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.35);
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s ease;
+  font-weight: 700;
 }
 
 .sp-cta-btn-main:hover,
 .sp-cta-3d-btn-main:hover {
+  background-color: var(--sp-navy-950, #071629) !important;
+  color: #FFFFFF !important;
+  border-color: var(--sp-navy-950, #071629) !important;
+  border-radius: 0 !important;
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px -4px rgba(128, 0, 32, 0.65);
+  box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.55);
+  transition-delay: 0.2s;
+}
+
+.sp-cta-btn-main svg,
+.sp-cta-3d-btn-main svg {
+  color: currentColor;
+  transition: transform 0.2s ease, color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-cta-btn-main:hover svg,
+.sp-cta-3d-btn-main:hover svg {
+  color: #FFFFFF;
+  transform: translateX(3px);
+  transition-delay: 0.2s;
+}
+
+.sp-cta-btn-secondary,
+.sp-cta-actions .sp-btn-secondary-inverted {
+  background-color: var(--sp-navy-950, #071629) !important;
+  border: 1px solid var(--sp-navy-950, #071629) !important;
+  border-radius: 0 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s ease;
+  font-weight: 600;
+}
+
+.sp-cta-btn-secondary:hover,
+.sp-cta-actions .sp-btn-secondary-inverted:hover {
+  background-color: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  color: var(--sp-navy-950, #071629) !important;
+  border-radius: 0 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.4);
+  transition-delay: 0.2s;
+}
+
+.sp-cta-btn-secondary:hover span,
+.sp-cta-actions .sp-btn-secondary-inverted:hover span {
+  color: var(--sp-navy-950, #071629) !important;
+  transition-delay: 0.2s;
 }
 
 .sp-cta-trust-strip,
@@ -1420,12 +1487,12 @@
   align-items: center;
   gap: 10px;
   font-size: 12.5px;
-  color: #64748B;
+  color: #FECDD3;
   flex-wrap: wrap;
 }
 
 .sp-cta-trust-dot {
-  color: #475569;
+  color: rgba(254, 205, 211, 0.5);
 }
 
 /* Operational Assurance Aside Panel */
@@ -1433,17 +1500,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 48px 40px 0;
+  padding: 0;
 }
 
 .sp-cta-aside-card {
   width: 100%;
-  background-color: var(--sp-navy-900, #0B1F3A);
-  border: 1px solid var(--sp-navy-800, #102A43);
+  background-color: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   padding: 30px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  backdrop-filter: blur(8px);
 }
 
 .sp-cta-aside-tag {
@@ -1451,7 +1519,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #38BDF8;
+  color: #FECDD3;
   text-transform: uppercase;
 }
 
@@ -1469,12 +1537,12 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   padding-bottom: 18px;
-  border-bottom: 1px solid var(--sp-navy-800, #102A43);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .sp-cta-aside-metric {
-  background-color: var(--sp-navy-950, #071629);
-  border: 1px solid var(--sp-navy-800, #102A43);
+  background-color: rgba(0, 0, 0, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -1491,7 +1559,7 @@
 
 .sp-cta-metric-lbl {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: #FECDD3;
   font-weight: 500;
   line-height: 1.3;
 }
@@ -1507,7 +1575,7 @@
   align-items: flex-start;
   gap: 10px;
   font-size: 13px;
-  color: #CBD5E1;
+  color: #FFF1F2;
   line-height: 1.45;
 }
 
@@ -1523,7 +1591,7 @@
   gap: 8px;
   font-size: 11.5px;
   font-weight: 600;
-  color: #34D399;
+  color: #A7F3D0;
   padding-top: 4px;
 }
 
@@ -1541,22 +1609,23 @@
   .sp-cta-card,
   .sp-cta-3d-card {
     grid-template-columns: 1fr;
+    gap: 40px;
   }
 
   .sp-cta-content,
   .sp-cta-3d-content {
-    padding: 44px 32px 32px 32px;
+    padding: 0;
   }
 
   .sp-cta-aside {
-    padding: 0 32px 44px 32px;
+    padding: 0;
   }
 }
 
 @media (max-width: 640px) {
   .sp-cta-section,
   .sp-cta-3d-section {
-    padding: 44px 0 64px 0;
+    padding: 56px 0;
   }
 
   .sp-cta-card,
@@ -1566,11 +1635,11 @@
 
   .sp-cta-content,
   .sp-cta-3d-content {
-    padding: 32px 20px 24px 20px;
+    padding: 0;
   }
 
   .sp-cta-aside {
-    padding: 0 20px 32px 20px;
+    padding: 0;
   }
 
   .sp-cta-aside-card {
@@ -2059,6 +2128,7 @@
 /* 11.3 Horizontal Capability Specification Bar */
 .sp-capability-strip {
   background-color: var(--sp-white);
+  border-top: 1px solid var(--sp-border);
   border-bottom: 1px solid var(--sp-border);
   padding: 0;
 }
@@ -2795,6 +2865,204 @@
   margin: 0 auto;
 }
 
+/* StockPro Guide Header on How It Works Page */
+.sp-guide-header {
+  text-align: center;
+  max-width: 780px;
+  margin: 0 auto 52px auto;
+}
+
+.sp-guide-eyebrow {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--sp-accent);
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.sp-guide-title {
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: clamp(28px, 3.6vw, 42px);
+  font-weight: 800;
+  color: var(--sp-navy-950, #071629);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  margin: 0 0 16px 0;
+}
+
+.sp-guide-desc {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--sp-text-muted, #64748B);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* StockPro Guide Single Card Viewport with Sliding Overlay */
+.sp-guide-card-viewport {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--sp-white, #FFFFFF);
+  border-top: 1px solid var(--sp-border);
+  border-bottom: 1px solid var(--sp-border);
+  border-radius: 0 !important;
+  width: 100%;
+}
+
+.sp-guide-sheet {
+  width: 100%;
+  background-color: var(--sp-white, #FFFFFF);
+  padding: 44px 0 56px 0;
+  border-radius: 0 !important;
+}
+
+.sp-guide-sheet-outgoing {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sp-guide-sheet-incoming {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+.sp-guide-sheet-incoming.anim-slide-up {
+  will-change: transform;
+  animation: spGuideSlideUpOverlay 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  box-shadow: 
+    0 -1px 0 rgba(11, 31, 58, 0.05),
+    0 -8px 24px -4px rgba(7, 22, 41, 0.08),
+    0 -28px 56px -12px rgba(7, 22, 41, 0.16);
+  border-top: 1px solid var(--sp-border);
+}
+
+@keyframes spGuideSlideUpOverlay {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0%);
+  }
+}
+
+.sp-capability-panel .sp-badge,
+.sp-capability-panel .sp-preview-badge,
+.sp-capability-panel .sp-editorial-visual,
+.sp-capability-panel .sp-tender-btn,
+.sp-guide-card-viewport,
+.sp-guide-sheet {
+  border-radius: 0 !important;
+}
+
+/* How It Works Guide Text-Only Card Layout */
+.sp-guide-card-content {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 8px 0 28px 0;
+}
+
+.sp-guide-card-content .sp-editorial-eyebrow {
+  margin-bottom: 12px;
+}
+
+.sp-guide-card-content .sp-editorial-title {
+  font-family: var(--sp-font-title, 'Montserrat', sans-serif) !important;
+  font-weight: 800;
+  font-size: clamp(26px, 3.2vw, 36px);
+  margin-bottom: 14px;
+}
+
+.sp-guide-card-content .sp-editorial-body {
+  font-family: var(--sp-font-content, 'Poppins', sans-serif) !important;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--sp-text-muted);
+  margin-bottom: 32px;
+}
+
+.sp-guide-step-subheading {
+  font-family: var(--sp-font-title, 'Montserrat', sans-serif) !important;
+  font-size: clamp(19px, 2.3vw, 24px);
+  font-weight: 800;
+  color: var(--sp-navy-950);
+  margin: 0 0 20px 0;
+  letter-spacing: -0.015em;
+}
+
+.sp-guide-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.sp-guide-step-card {
+  background: var(--sp-white);
+  border: 1px solid var(--sp-border);
+  border-radius: 0;
+  padding: 24px 22px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.sp-guide-step-card:hover {
+  border-color: var(--sp-navy-700);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+  transform: translateY(-2px);
+}
+
+.sp-guide-step-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 3px 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sp-accent);
+  background: rgba(128, 0, 32, 0.06);
+  border: 1px solid rgba(128, 0, 32, 0.15);
+  border-radius: 0;
+  margin-bottom: 12px;
+  letter-spacing: 0.06em;
+}
+
+.sp-guide-step-title {
+  font-family: var(--sp-font-title, 'Montserrat', sans-serif) !important;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sp-navy-950);
+  margin: 0 0 10px 0;
+  line-height: 1.35;
+}
+
+.sp-guide-step-text {
+  font-family: var(--sp-font-content, 'Poppins', sans-serif) !important;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--sp-text-muted);
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .sp-guide-steps-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
 .sp-steps-flow {
   display: flex;
   align-items: stretch;
@@ -2911,8 +3179,12 @@ svg.sp-step-arrow-icon::before {
 }
 
 .sp-steps-cta-wrap {
-  text-align: center;
-  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .sp-steps-btn,
@@ -2935,6 +3207,25 @@ svg.sp-step-arrow-icon::before {
   border-color: #CBD5E1;
   color: var(--sp-navy-950, #071629);
   box-shadow: 0 8px 20px -4px rgba(7, 22, 41, 0.15);
+}
+
+.sp-steps-btn-secondary,
+.sp-steps-cta-wrap .sp-btn.sp-steps-btn-secondary {
+  border-radius: 0 !important;
+  background-color: var(--sp-white, #FFFFFF);
+  border: 1px solid var(--sp-cream-border, #ECE5DA);
+  color: var(--sp-navy-950, #071629);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s ease;
+}
+
+.sp-steps-btn-secondary:hover,
+.sp-steps-cta-wrap .sp-btn.sp-steps-btn-secondary:hover {
+  background-color: #FFF1F2;
+  border-color: #800020;
+  color: #800020;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(128, 0, 32, 0.12);
 }
 
 .sp-steps-btn svg {
@@ -3378,6 +3669,7 @@ svg.sp-step-arrow-icon::before {
   grid-template-columns: 56px 1fr;
   gap: 32px;
   margin-bottom: 64px;
+  scroll-margin-top: calc(var(--sp-header-height, 72px) + 24px);
 }
 
 .sp-timeline-node:last-child {
@@ -3387,7 +3679,7 @@ svg.sp-step-arrow-icon::before {
 .sp-timeline-marker {
   width: 56px;
   height: 56px;
-  border-radius: var(--sp-radius-md);
+  border-radius: 0;
   background-color: var(--sp-white);
   border: 2px solid var(--sp-navy-900);
   color: var(--sp-navy-900);
@@ -3415,7 +3707,7 @@ svg.sp-step-arrow-icon::before {
   align-items: center;
   background-color: var(--sp-white);
   border: 1px solid var(--sp-border);
-  border-radius: var(--sp-radius-xl);
+  border-radius: 0;
   padding: 32px;
   box-shadow: var(--sp-shadow-sm);
 }

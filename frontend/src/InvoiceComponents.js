@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './components/ui/Modal';
+import CurrencyInput from './components/ui/CurrencyInput';
 
 // ════════════════════════════════════════════════
 // INVOICE SETTINGS & BRANDING STORAGE HELPERS
@@ -941,10 +942,7 @@ export function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }
                         style={{ width: 85, padding: '7px 6px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center', boxSizing: 'border-box' }}
                         required
                       />
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
+                      <CurrencyInput
                         placeholder="Price"
                         value={item.price}
                         onChange={e => handleItemChange(idx, 'price', e.target.value)}

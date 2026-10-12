@@ -4,6 +4,7 @@
  */
 
 .sp-footer {
+  font-family: var(--sp-font-content, 'Poppins', sans-serif);
   background-color: var(--sp-navy-950);
   color: var(--sp-text-inverted);
   border-top: 1px solid var(--sp-border-navy);
@@ -12,10 +13,20 @@
   font-size: 14.5px;
 }
 
+.sp-footer-brand,
+.sp-footer-desc,
+.sp-footer-status,
+.sp-footer-col-title,
+.sp-footer-link,
+.sp-footer-copyright,
+.sp-footer-bottom-link {
+  font-family: var(--sp-font-content, 'Poppins', sans-serif);
+}
+
 .sp-footer-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr;
-  gap: 48px;
+  grid-template-columns: 1.8fr 1fr 1fr;
+  gap: 56px;
   margin-bottom: 64px;
 }
 
@@ -108,6 +119,67 @@
   color: var(--sp-white);
 }
 
+/* Account Column Buttons */
+.sp-footer-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  width: 100%;
+  max-width: 230px;
+}
+
+.sp-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sp-font-content, 'Poppins', sans-serif) !important;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 12px 20px;
+  border-radius: 0 !important;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  user-select: none;
+}
+
+/* Login Button */
+.sp-footer-btn-login {
+  background-color: transparent !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, transform 0.15s ease;
+}
+
+.sp-footer-btn-login:hover {
+  background-color: #FFFFFF !important;
+  color: var(--sp-navy-950, #071629) !important;
+  border-color: #FFFFFF !important;
+  transform: translateY(-1px);
+  transition-delay: 0.2s;
+}
+
+/* Register Button */
+.sp-footer-btn-register {
+  background-color: #FFFFFF !important;
+  color: var(--sp-navy-950, #071629) !important;
+  border: 1px solid #FFFFFF !important;
+  font-weight: 600;
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, transform 0.15s ease;
+}
+
+.sp-footer-btn-register:hover {
+  background-color: var(--sp-navy-950, #071629) !important;
+  color: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  transform: translateY(-1px);
+  transition-delay: 0.2s;
+}
+
 /* Bottom Bar */
 .sp-footer-bottom {
   display: flex;
@@ -140,7 +212,7 @@
 }
 
 /* Responsive Footer */
-@media (max-width: 1024px) {
+@media (max-width: 900px) {
   .sp-footer-grid {
     grid-template-columns: 1fr 1fr;
     gap: 40px;

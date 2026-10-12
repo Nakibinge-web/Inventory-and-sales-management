@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import CurrencyInput from '../components/ui/CurrencyInput';
 import styles, { supS } from '../styles/dashboardStyles';
 
 
@@ -1071,7 +1072,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
-                      <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
+                      <CurrencyInput style={inp} placeholder="0.00" value={line.cost_price}
                         onChange={e => setLine(i, 'cost_price', e.target.value)} />
                     </div>
                   </div>
@@ -1152,7 +1153,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Retail Price (UGX) (Required)</span>
-                        <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.np_price}
+                        <CurrencyInput style={inp} placeholder="0.00" value={line.np_price}
                           onChange={e => setLine(i, 'np_price', e.target.value)} />
                       </div>
                       <div>
@@ -1167,7 +1168,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                       </div>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
-                        <input style={inp} type="number" min="0" step="0.01" placeholder="0.00" value={line.cost_price}
+                        <CurrencyInput style={inp} placeholder="0.00" value={line.cost_price}
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
                     </div>
@@ -1320,9 +1321,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
-                      <input
+                      <CurrencyInput
                         style={inp}
-                        type="number" min="0" step="0.01" placeholder="0.00"
+                        placeholder="0.00"
                         value={line.cost_price}
                         onChange={e => setEditLine(i, 'cost_price', e.target.value)}
                         required

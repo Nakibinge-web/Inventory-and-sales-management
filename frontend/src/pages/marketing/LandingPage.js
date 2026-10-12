@@ -147,7 +147,7 @@ export default function LandingPage() {
           {/* Strategic Call to Action */}
           <CTASection
             eyebrow="GET STARTED TODAY"
-            title="Take control of your business operations."
+            title="Simplify your business operations."
             subtitle="Join growing merchants and wholesalers who manage stock, sales, and purchases seamlessly with StockPro."
             primaryCtaText="Register Your Business"
             primaryCtaHref="/register"

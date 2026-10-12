@@ -29,23 +29,40 @@ const STEPS = [
   },
 ];
 
-export default function QuickStartSteps() {
+export default function QuickStartSteps({
+  id = 'quick-start-steps',
+  eyebrow = 'GET STARTED IN MINUTES',
+  title = 'Four simple steps to start using the software',
+  desc = 'No complex hardware installations, lengthy onboarding, or tech expertise required. Get your store running smoothly in less than 10 minutes.',
+  ctaText = 'See how more features work',
+  ctaHref = '/how-it-works',
+  secondaryCtaText,
+  secondaryCtaHref,
+  showCta = true,
+  className = '',
+} = {}) {
+  const sectionClass = ['sp-steps-section', className].filter(Boolean).join(' ');
+
   return (
-    <section className="sp-steps-section" aria-labelledby="steps-heading">
+    <section id={id} className={sectionClass} aria-labelledby="steps-heading">
       <div className="sp-container">
         {/* Section Heading */}
         <div className="sp-steps-header">
-          <div className="sp-steps-eyebrow">
-            GET STARTED IN MINUTES
-          </div>
+          {eyebrow && (
+            <div className="sp-steps-eyebrow">
+              {eyebrow}
+            </div>
+          )}
 
           <h2 id="steps-heading" className="sp-steps-title">
-            Four simple steps to start using the software
+            {title}
           </h2>
 
-          <p className="sp-steps-desc">
-            No complex hardware installations, lengthy onboarding, or tech expertise required. Get your store running smoothly in less than 10 minutes.
-          </p>
+          {desc && (
+            <p className="sp-steps-desc">
+              {desc}
+            </p>
+          )}
         </div>
 
         {/* 1--------->2---------->3------------->4 Flow */}
@@ -75,13 +92,23 @@ export default function QuickStartSteps() {
           ))}
         </div>
 
-        {/* Action Button: See how more features work */}
-        <div className="sp-steps-cta-wrap">
-          <MarketingLink href="/how-it-works" className="sp-btn sp-btn-primary sp-btn-lg sp-steps-btn">
-            <span>See how more features work</span>
-            <ArrowRightIcon size={16} />
-          </MarketingLink>
-        </div>
+        {/* Action Buttons */}
+        {showCta && (ctaText || secondaryCtaText) && (
+          <div className="sp-steps-cta-wrap">
+            {ctaText && ctaHref && (
+              <MarketingLink href={ctaHref} className="sp-btn sp-btn-primary sp-btn-lg sp-steps-btn">
+                <span>{ctaText}</span>
+                <ArrowRightIcon size={16} />
+              </MarketingLink>
+            )}
+
+            {secondaryCtaText && secondaryCtaHref && (
+              <MarketingLink href={secondaryCtaHref} className="sp-btn sp-btn-secondary sp-btn-lg sp-steps-btn-secondary">
+                <span>{secondaryCtaText}</span>
+              </MarketingLink>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

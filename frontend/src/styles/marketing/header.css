@@ -28,6 +28,7 @@
   border-bottom: 1px solid var(--sp-border-navy);
   box-shadow: 0 1px 3px rgba(7, 22, 41, 0.4);
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  animation: spHeaderSlideDown 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .sp-header-inner {
@@ -49,6 +50,7 @@
   font-size: 19px;
   letter-spacing: -0.02em;
   user-select: none;
+  animation: spBrandEnter 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.12s backwards;
 }
 
 .sp-brand-logo-icon {
@@ -61,6 +63,7 @@
   color: #FFFFFF;
   border-radius: var(--sp-radius-sm);
   border: 1px solid var(--sp-border-navy);
+  animation: spLogoPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
 }
 
 .sp-brand-text-wrap {
@@ -107,7 +110,13 @@
   display: flex;
   align-items: stretch;
   height: 100%;
+  animation: spNavItemEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
+
+.sp-nav-links li:nth-child(1) { animation-delay: 0.18s; }
+.sp-nav-links li:nth-child(2) { animation-delay: 0.26s; }
+.sp-nav-links li:nth-child(3) { animation-delay: 0.34s; }
+.sp-nav-links li:nth-child(4) { animation-delay: 0.42s; }
 
 .sp-nav-link {
   display: inline-flex;
@@ -146,6 +155,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  animation: spActionsEnter 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.22s backwards;
 }
 
 /* Login Button (Ghost in Header) */
@@ -201,6 +211,7 @@
   cursor: pointer;
   padding: 0;
   transition: background-color 0.15s ease, border-color 0.15s ease;
+  animation: spActionsEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
 }
 
 .sp-mobile-toggle:hover {
@@ -295,5 +306,79 @@
 
   .sp-mobile-toggle {
     display: inline-flex;
+  }
+}
+
+/* ==========================================================================
+   Navbar Page Load Animations
+   ========================================================================== */
+@keyframes spHeaderSlideDown {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes spBrandEnter {
+  0% {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes spLogoPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.65) rotate(-6deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes spNavItemEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes spActionsEnter {
+  0% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-header,
+  .sp-brand,
+  .sp-brand-logo-icon,
+  .sp-nav-links li,
+  .sp-header-actions,
+  .sp-mobile-toggle {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
   }
 }
