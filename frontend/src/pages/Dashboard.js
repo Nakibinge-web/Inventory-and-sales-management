@@ -305,20 +305,41 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     );
   };
 
-  const menuItems = [
-    { id: 'overview', label: 'Overview', icon: '📊', color: 'primary' },
-    ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS', icon: '🖥️', color: 'success' }] : []),
-    ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products', icon: '📦', color: 'success' }] : []),
-    ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️', color: 'warning' }] : []),
-    ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' }] : []),
-    ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers', icon: '👥', color: 'primary' }] : []),
-    ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales', icon: '💰', color: 'success' }] : []),
-    ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄', color: 'primary' }] : []),
-    ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' }] : []),
-    ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
-    ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
-    { id: 'ai', label: 'AI Assistant', icon: '🤖', color: 'primary' },
-    ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
+  const menuGroups = [
+    {
+      title: 'Operations',
+      items: [
+        { id: 'overview', label: 'Overview', icon: '📊' },
+        ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS Terminal', icon: '🖥️' }] : []),
+        ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales History', icon: '💰' }] : []),
+        ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄' }] : []),
+        ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒' }] : []),
+        ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄' }] : []),
+        ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Analytics & Reports', icon: '📈' }] : []),
+      ]
+    },
+    {
+      title: 'Catalog & Inventory',
+      items: [
+        ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products & Stock', icon: '📦' }] : []),
+        ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️' }] : []),
+        ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭' }] : []),
+      ]
+    },
+    {
+      title: 'CRM & Relations',
+      items: [
+        ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers (CRM)', icon: '👥' }] : []),
+      ]
+    },
+    {
+      title: 'System & Intelligence',
+      items: [
+        { id: 'ai', label: 'AI Assistant', icon: '🤖' },
+        ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'User Control', icon: '🔑' }] : []),
+        { id: 'settings', label: 'System Settings', icon: '⚙️' }
+      ]
+    }
   ];
 
   if (loading) {
@@ -741,95 +762,54 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               </button>
             </div>
 
-            {/* Main nav items — preserving all icons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {menuItems.filter(i => i.id !== 'users').map(item => (
-                <button
-                  key={item.id}
-                  style={{
-                    ...styles.menuItem,
-                    ...(activeTab === item.id ? styles.menuItemActive : {})
-                  }}
-                  onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
-                  onMouseEnter={e => {
-                    if (activeTab !== item.id) {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.color = '#0f172a';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (activeTab !== item.id) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#475569';
-                    }
-                  }}
-                >
-                  <span style={styles.menuIcon}>{item.icon}</span>
-                  <span style={styles.menuLabel}>{item.label}</span>
-                  {activeTab === item.id && <div style={styles.activeIndicator} />}
-                </button>
-              ))}
+            {/* Grouped Nav Sections */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+              {menuGroups.map((group, groupIdx) => {
+                const validItems = group.items;
+                if (!validItems || validItems.length === 0) return null;
+                return (
+                  <div key={groupIdx} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <p style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: '#94a3b8',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      padding: '0 8px',
+                      margin: '0 0 4px 0'
+                    }}>
+                      {group.title}
+                    </p>
+                    {validItems.map(item => (
+                      <button
+                        key={item.id}
+                        style={{
+                          ...styles.menuItem,
+                          ...(activeTab === item.id ? styles.menuItemActive : {})
+                        }}
+                        onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
+                        onMouseEnter={e => {
+                          if (activeTab !== item.id) {
+                            e.currentTarget.style.background = '#f8fafc';
+                            e.currentTarget.style.color = '#0f172a';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (activeTab !== item.id) {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#475569';
+                          }
+                        }}
+                      >
+                        <span style={styles.menuIcon}>{item.icon}</span>
+                        <span style={styles.menuLabel}>{item.label}</span>
+                        {activeTab === item.id && <div style={styles.activeIndicator} />}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
-
-            {/* Spacer pushes admin section to bottom */}
-            <div style={{ flex: 1 }} />
-
-            {/* Admin section */}
-            {(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
-              <div>
-                <div style={{ height: 1, background: '#f1f5f9', margin: '14px 8px 16px' }} />
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 8px', marginBottom: 8 }}>
-                  Administration
-                </p>
-                <button
-                  style={{
-                    ...styles.menuItem,
-                    ...(activeTab === 'users' ? styles.menuItemActive : {})
-                  }}
-                  onClick={() => { setActiveTab('users'); setMobileNavOpen(false); }}
-                  onMouseEnter={e => {
-                    if (activeTab !== 'users') {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.color = '#0f172a';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (activeTab !== 'users') {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#475569';
-                    }
-                  }}
-                >
-                  <span style={styles.menuIcon}>🔑</span>
-                  <span style={styles.menuLabel}>Users</span>
-                  {activeTab === 'users' && <div style={styles.activeIndicator} />}
-                </button>
-                <button
-                  style={{
-                    ...styles.menuItem,
-                    ...(activeTab === 'settings' ? styles.menuItemActive : {})
-                  }}
-                  onClick={() => { setActiveTab('settings'); setMobileNavOpen(false); }}
-                  onMouseEnter={e => {
-                    if (activeTab !== 'settings') {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.color = '#0f172a';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (activeTab !== 'settings') {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#475569';
-                    }
-                  }}
-                >
-                  <span style={styles.menuIcon}>⚙️</span>
-                  <span style={styles.menuLabel}>Settings</span>
-                  {activeTab === 'settings' && <div style={styles.activeIndicator} />}
-                </button>
-                <div style={{ height: 16 }} />
-              </div>
-            )}
           </div> 
         </nav>
 

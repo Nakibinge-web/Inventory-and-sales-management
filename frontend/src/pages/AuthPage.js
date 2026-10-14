@@ -159,11 +159,13 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
       }
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(form.email)) {
-      setError('Please enter a valid email address');
-      setLoading(false);
-      return;
+    if (mode === 'register') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(form.email)) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
     }
 
     if (!form.password) {
@@ -395,13 +397,13 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
             )}
 
             <div className="field-group">
-              <label className="field-label" htmlFor="email">Email address</label>
+              <label className="field-label" htmlFor="email">{isLogin ? 'Email address or Username' : 'Email address'}</label>
               <input
                 id="email"
                 className="field-input"
                 name="email"
-                type="email"
-                placeholder="Enter your email"
+                type="text"
+                placeholder={isLogin ? 'Enter email or username' : 'Enter your email'}
                 value={form.email}
                 onChange={handle}
                 required

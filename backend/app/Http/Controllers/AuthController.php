@@ -20,7 +20,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
+            'email'    => 'required|string', // Can be email OR username
             'password' => 'required|string',
         ]);
 
@@ -41,9 +41,24 @@ class AuthController extends Controller
             ]);
         }
 
-        $credentials = $request->only('email', 'password');
+        $loginInput = $request->input('email');
+        $password = $request->input('password');
 
-        if (Auth::attempt($credentials)) {
+        // Search user by email OR username
+        $user = User::where('email', $loginInput)
+            ->orWhere('username', $loginInput)
+            ->first();
+
+        if ($user && Hash::check($password, $user->password)) {
+            // Check if user account is active
+            if (isset($user->is_active) && !$user->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your account has been disabled. Please contact your system administrator.',
+                ], 403);
+            }
+
+            Auth::login($user);
             RateLimiter::clear($key);
 
             if (!$isApi) {
@@ -51,7 +66,6 @@ class AuthController extends Controller
                 return redirect()->intended('/');
             }
 
-            $user = Auth::user();
             $user->load('roles.permissions:id,name', 'tenant');
             $token = $user->createToken('api-token')->plainTextToken;
 
@@ -68,7 +82,7 @@ class AuthController extends Controller
         if ($isApi) {
             return response()->json([
                 'success' => false,
-                'message' => 'The provided credentials do not match our records.',
+                'message' => 'The provided credentials do not match our records or your account is disabled.',
             ], 401);
         }
 

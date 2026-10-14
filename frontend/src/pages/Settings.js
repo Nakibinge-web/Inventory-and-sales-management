@@ -26,7 +26,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     try {
       setLoading(true);
       const tenantId = user?.tenant_id;
-      const response = await fetch(`${API}/settings/business?tenant_id=${tenantId}`, {
+      const response = await fetch(`${API}/tenants/${tenantId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     
     try {
       setSaving(true);
-      const response = await fetch(`${API}/settings/business?tenant_id=${user.tenant_id}`, {
+      const response = await fetch(`${API}/tenants/${user.tenant_id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -6,22 +6,23 @@ const formatSaleDateTime = (saleDate, createdAt) => {
   const dateString = saleDate || createdAt || '';
   if (!dateString) return { date: 'N/A', time: '' };
   
-  // Parse the date string as-is (server already in correct timezone)
-  const d = new Date(dateString);
+  const dDate = new Date(dateString);
+  const dTime = createdAt ? new Date(createdAt) : dDate;
   
-  // Check if the date is valid
-  if (isNaN(d.getTime())) return { date: 'N/A', time: '' };
+  if (isNaN(dDate.getTime())) return { date: 'N/A', time: '' };
   
-  const date = d.toLocaleDateString('en-GB', { 
+  const date = dDate.toLocaleDateString('en-GB', { 
     day: '2-digit', 
     month: 'short', 
     year: 'numeric'
   });
   
-  const time = d.toLocaleTimeString('en-GB', { 
+  const validTimeDate = isNaN(dTime.getTime()) ? dDate : dTime;
+  const time = validTimeDate.toLocaleTimeString('en-GB', { 
     hour: '2-digit', 
     minute: '2-digit',
-    hour12: false  // Use 24-hour format
+    second: '2-digit',
+    hour12: false
   });
   
   return { date, time };

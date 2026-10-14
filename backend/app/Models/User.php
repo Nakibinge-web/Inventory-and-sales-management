@@ -21,8 +21,10 @@ class User extends Authenticatable
     protected $fillable = [
         'tenant_id',
         'name',
+        'username',
         'email',
         'password',
+        'is_active',
         'created_by',
     ];
 
@@ -44,7 +46,8 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'password' => 'hashed',
+            'password'  => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
