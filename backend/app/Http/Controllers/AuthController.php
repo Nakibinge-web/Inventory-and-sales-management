@@ -81,7 +81,19 @@ class AuthController extends Controller
             ]);
         }
 
-        // Credentials matched — log the user in
+        // Credentials matched — check account status before creating a session
+        if (!$user->is_active) {
+            RateLimiter::hit($key, 60);
+            if ($isApi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your account has been disabled. Please contact your administrator.',
+                ], 403);
+            }
+            return back()->withErrors(['login' => 'Your account has been disabled.']);
+        }
+
+        // Account is active — log the user in and clear the rate limiter
         Auth::login($user);
         RateLimiter::clear($key);
 

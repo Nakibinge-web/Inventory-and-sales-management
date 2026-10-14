@@ -144,8 +144,9 @@ class UserControllerTest extends TestCase
             'email'     => 'inactive@example.com',
             'username'  => 'inactiveuser',
             'password'  => Hash::make('Password1!'),
-            'is_active' => false,
         ]);
+        $user->is_active = false;
+        $user->save();
 
         $this->postJson('/api/login', [
             'login'    => 'inactive@example.com',
@@ -168,8 +169,9 @@ class UserControllerTest extends TestCase
             'email'     => 'inactive2@example.com',
             'username'  => 'inactiveuser2',
             'password'  => Hash::make('Password1!'),
-            'is_active' => false,
         ]);
+        $user->is_active = false;
+        $user->save();
 
         $this->postJson('/api/login', [
             'login'    => 'inactiveuser2',

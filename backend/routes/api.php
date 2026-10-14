@@ -106,6 +106,8 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::middleware('role:owner')->group(function () {
             Route::post('/with-custom-role',                    [UserController::class, 'storeWithCustomRole']);
             Route::put('/{user}/custom-role-permissions',       [UserController::class, 'updateCustomRolePermissions']);
+            Route::post('/{id}/disable',                        [UserController::class, 'disable']);
+            Route::post('/{id}/enable',                         [UserController::class, 'enable']);
         });
     });
 
