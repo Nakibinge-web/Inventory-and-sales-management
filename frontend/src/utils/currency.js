@@ -1,80 +1,90 @@
 /**
- * Utility functions for currency formatting, sanitization, and parsing.
+ * Currency Formatting and Parsing Utilities
+ * Provides automatic thousand separator formatting for currency inputs
+ * and cleans values for API submissions and numeric calculations.
  */
 
 /**
- * Strips formatting characters (like commas) and non-numeric input,
- * preserving only digits and at most one decimal point.
- * Also normalizes leading zeros (e.g., '05' -> '5', but keeps '0' and '0.5').
- *
- * @param {string|number} val
- * @returns {string} Clean numeric string (e.g., '1000', '1000.50', or '')
- */
-export const cleanNumber = (val) => {
-  if (val === null || val === undefined) return '';
-  const str = String(val).replace(/,/g, '').trim();
-  if (str === '') return '';
-
-  let cleaned = '';
-  let hasDecimal = false;
-
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    if (char >= '0' && char <= '9') {
-      cleaned += char;
-    } else if (char === '.' && !hasDecimal) {
-      cleaned += '.';
-      hasDecimal = true;
-    }
-  }
-
-  if (cleaned === '' || cleaned === '.') return cleaned === '.' ? '0.' : '';
-
-  // Handle leading zeros in the integer part
-  const parts = cleaned.split('.');
-  if (parts[0].length > 1 && parts[0].startsWith('0')) {
-    parts[0] = parts[0].replace(/^0+/, '') || '0';
-  }
-
-  return parts.join('.');
-};
-
-/**
- * Formats a numeric value or numeric string with thousand separator commas.
- * Handles decimal portions seamlessly without losing trailing dots or zeroes while typing.
+ * Format a numeric or string value with thousand commas in real time.
+ * Preserves decimals and active typing state (e.g. trailing dot).
  *
  * Examples:
- *   formatNumberWithCommas('1000')      => '1,000'
- *   formatNumberWithCommas('1000000')   => '1,000,000'
- *   formatNumberWithCommas('1000.')     => '1,000.'
- *   formatNumberWithCommas('1000.5')    => '1,000.5'
- *   formatNumberWithCommas('1000.50')   => '1,000.50'
- *   formatNumberWithCommas(25000)       => '25,000'
- *
- * @param {string|number} val
- * @returns {string} Formatted string with commas
+ *   formatCurrencyInput('1000')      => '1,000'
+ *   formatCurrencyInput('1000000')   => '1,000,000'
+ *   formatCurrencyInput('1000.')     => '1,000.'
+ *   formatCurrencyInput('1000.50')   => '1,000.50'
+ *   formatCurrencyInput('')          => ''
  */
-export const formatNumberWithCommas = (val) => {
-  if (val === null || val === undefined || val === '') return '';
-  const cleaned = cleanNumber(val);
-  if (!cleaned) return '';
+export function formatCurrencyInput(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val).trim();
+  if (!str) return '';
 
-  const parts = cleaned.split('.');
-  // Add commas to the integer portion
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return parts.join('.');
-};
+  // If user just typed '.', start with '0.'
+  if (str === '.') return '0.';
+
+  // Strip all non-digit and non-dot characters
+  const clean = str.replace(/[^\d.]/g, '');
+  if (!clean) return '';
+
+  const dotIndex = clean.indexOf('.');
+  let intPart = dotIndex !== -1 ? clean.slice(0, dotIndex) : clean;
+  let decPart = dotIndex !== -1 ? clean.slice(dotIndex + 1).replace(/\./g, '').slice(0, 2) : null;
+
+  // Clean leading zeros from integer part
+  if (intPart.length > 1) {
+    intPart = intPart.replace(/^0+/, '') || '0';
+  } else if (intPart.length === 0 && dotIndex !== -1) {
+    intPart = '0';
+  }
+
+  // Format integer part with commas as thousand separators
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  if (dotIndex !== -1) {
+    return `${formattedInt}.${decPart}`;
+  }
+
+  return formattedInt;
+}
 
 /**
- * Parses a currency input string (with or without commas) into a float.
+ * Strips commas and spaces from a formatted currency string, returning
+ * a clean numeric string for API requests or formData payloads.
+ *
+ * Example:
+ *   cleanCurrency('1,500,000.50') => '1500000.50'
+ */
+export function cleanCurrency(val) {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/,/g, '').trim();
+}
+
+/**
+ * Parses a currency input string (with or without commas) into a Float number.
  * Returns 0 if invalid or empty.
  *
- * @param {string|number} val
- * @returns {number}
+ * Example:
+ *   parseCurrency('1,500,000') => 1500000
  */
-export const parseNumber = (val) => {
-  if (val === null || val === undefined || val === '') return 0;
-  const cleaned = cleanNumber(val);
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
-};
+export function parseCurrency(val) {
+  const cleaned = cleanCurrency(val);
+  if (!cleaned) return 0;
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+
+/**
+ * Formats a value for standard UI display with currency symbol and commas.
+ *
+ * Example:
+ *   formatCurrencyDisplay(15000) => 'UGX 15,000'
+ */
+export function formatCurrencyDisplay(val, currency = 'UGX') {
+  const num = typeof val === 'number' ? val : parseCurrency(val);
+  return `${currency} ${Number(num || 0).toLocaleString()}`;
+}
+
+// Aliases for compatibility
+export const formatNumberWithCommas = formatCurrencyInput;
+export const cleanNumber = cleanCurrency;

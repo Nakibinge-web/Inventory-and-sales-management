@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import Button from './ui/Button';
-import CurrencyInput from './ui/CurrencyInput';
-import { cleanNumber } from '../utils/currency';
+import { formatCurrencyInput, cleanCurrency, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -32,8 +31,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
   const fileRef                 = useRef();
 
   const handle = e => {
-    const { name, value, type, checked } = e.target;
-    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    const { name, type, checked } = e.target;
+    let value = type === 'checkbox' ? checked : e.target.value;
+    if (name === 'cost_price' || name === 'price') {
+      value = formatCurrencyInput(value);
+    }
+    setForm(f => ({ ...f, [name]: value }));
     // Clear field error when user types
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: null }));
@@ -64,11 +67,13 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       errors.stock = 'Quantity is required and must be 0 or greater';
     }
     
-    if (!form.price || parseFloat(cleanNumber(form.price)) <= 0) {
+    const priceNum = parseCurrency(form.price);
+    if (!form.price || priceNum <= 0) {
       errors.price = 'Selling price is required and must be greater than 0';
     }
     
-    if (form.cost_price && form.price && parseFloat(cleanNumber(form.cost_price)) > parseFloat(cleanNumber(form.price))) {
+    const costNum = parseCurrency(form.cost_price);
+    if (costNum > 0 && priceNum > 0 && costNum > priceNum) {
       errors.price = 'Selling price should not be less than cost price';
     }
     
@@ -132,8 +137,8 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     fd.append('unit',          form.unit);
     fd.append('supplier_id',   form.supplier_id);
     fd.append('stock',         form.stock);
-    fd.append('cost_price',    form.cost_price ? cleanNumber(form.cost_price) : '');
-    fd.append('price',         cleanNumber(form.price));
+    fd.append('cost_price',    cleanCurrency(form.cost_price));
+    fd.append('price',         cleanCurrency(form.price));
     fd.append('reorder_level', form.reorder_level || 0);
     fd.append('description',   form.description);
     fd.append('track_expiry',  form.track_expiry ? 1 : 0);
@@ -259,22 +264,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       {/* ── Row 4: Cost + Selling price ── */}
       <div className="product-form-row" style={s.row}>
         <Field label="Purchase Cost Price (UGX)">
-          <CurrencyInput
-            style={s.input}
-            name="cost_price"
-            placeholder="What you paid to acquire it"
-            value={form.cost_price}
-            onChange={handle}
-          />
+          <input style={s.input} name="cost_price" type="text" inputMode="decimal"
+            placeholder="e.g. 50,000" value={form.cost_price} onChange={handle} />
         </Field>
         <Field label="Selling Price (Required)" error={fieldErrors.price}>
-          <CurrencyInput
-            style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }}
-            name="price"
-            placeholder="Customer retail price in UGX"
-            value={form.price}
-            onChange={handle}
-          />
+          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="text" inputMode="decimal"
+            placeholder="e.g. 75,000" value={form.price} onChange={handle} />
         </Field>
       </div>
 

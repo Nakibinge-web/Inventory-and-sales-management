@@ -3,10 +3,10 @@ import DataTable from '../components/ui/DataTable';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import CurrencyInput from '../components/ui/CurrencyInput';
 import SaleReceipt from '../components/SaleReceipt';
 import { PrintableInvoiceModal } from './Invoices';
 import styles from '../styles/dashboardStyles';
+import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -79,8 +79,8 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
     const items = sale.sale_items || sale.saleItems || [];
     setEditForm({
       payment_method: sale.payment_method || 'cash',
-      discount_amount: sale.discount_amount || '',
-      tax_amount: sale.tax_amount || '',
+      discount_amount: sale.discount_amount ? formatCurrencyInput(sale.discount_amount) : '',
+      tax_amount: sale.tax_amount ? formatCurrencyInput(sale.tax_amount) : '',
       notes: sale.notes || '',
       customer_type: sale.customer ? 'existing' : 'walk_in',
       customer_id: sale.customer?.id || '',
@@ -88,7 +88,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         product_id: i.product_id,
         name: i.product?.name || `Product #${i.product_id}`,
         quantity: i.quantity,
-        price: i.price,
+        price: formatCurrencyInput(i.price),
       })),
     });
     setEditError(null);
@@ -100,8 +100,8 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
     try {
       const body = {
         payment_method: editForm.payment_method,
-        discount_amount: editForm.discount_amount !== '' ? parseFloat(editForm.discount_amount) : null,
-        tax_amount: editForm.tax_amount !== '' ? parseFloat(editForm.tax_amount) : null,
+        discount_amount: editForm.discount_amount !== '' ? parseCurrency(editForm.discount_amount) : null,
+        tax_amount: editForm.tax_amount !== '' ? parseCurrency(editForm.tax_amount) : null,
         notes: editForm.notes || null,
         customer_type: editForm.customer_type,
         ...(editForm.customer_type === 'existing' && editForm.customer_id
@@ -110,7 +110,7 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         items: editForm.items.map(i => ({
           product_id: i.product_id,
           quantity: parseInt(i.quantity),
-          price: parseFloat(i.price),
+          price: parseCurrency(i.price),
         })),
       };
       const res = await fetch(`${API}/sales/${editingSale.id}`, {
@@ -1155,14 +1155,17 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
                     </div>
                     <div>
                       <label style={{ fontSize: 10, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Price (UGX)</label>
-                      <CurrencyInput
+                      <input
+                        type="text" inputMode="decimal"
                         style={{ width: '100%', padding: '6px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                         value={item.price}
-                        placeholder="0.00"
-                        onChange={e => setEditForm(p => ({
-                          ...p,
-                          items: p.items.map((it, i) => i === idx ? { ...it, price: e.target.value } : it),
-                        }))}
+                        onChange={e => {
+                          const val = formatCurrencyInput(e.target.value);
+                          setEditForm(p => ({
+                            ...p,
+                            items: p.items.map((it, i) => i === idx ? { ...it, price: val } : it),
+                          }));
+                        }}
                       />
                     </div>
                     <button
@@ -1217,19 +1220,21 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Discount (UGX)</label>
-                <CurrencyInput
+                <input
+                  type="text" inputMode="decimal"
                   style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   value={editForm.discount_amount}
-                  onChange={e => setEditForm(p => ({ ...p, discount_amount: e.target.value }))}
+                  onChange={e => setEditForm(p => ({ ...p, discount_amount: formatCurrencyInput(e.target.value) }))}
                   placeholder="0"
                 />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Tax (UGX)</label>
-                <CurrencyInput
+                <input
+                  type="text" inputMode="decimal"
                   style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   value={editForm.tax_amount}
-                  onChange={e => setEditForm(p => ({ ...p, tax_amount: e.target.value }))}
+                  onChange={e => setEditForm(p => ({ ...p, tax_amount: formatCurrencyInput(e.target.value) }))}
                   placeholder="0"
                 />
               </div>
@@ -1247,9 +1252,9 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
 
             {/* Live total preview */}
             {editForm.items?.length > 0 && (() => {
-              const subtotal = editForm.items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.price) || 0), 0);
-              const discount = parseFloat(editForm.discount_amount) || 0;
-              const tax = parseFloat(editForm.tax_amount) || 0;
+              const subtotal = editForm.items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * parseCurrency(i.price), 0);
+              const discount = parseCurrency(editForm.discount_amount);
+              const tax = parseCurrency(editForm.tax_amount);
               const total = Math.max(0, subtotal - discount + tax);
               return (
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>

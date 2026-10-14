@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import CurrencyInput from '../components/ui/CurrencyInput';
 import styles, { supS } from '../styles/dashboardStyles';
+import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 
 
 function PurchasesTab({ purchases, loading, token, user, suppliers, products, categories = [], toast, onPurchaseAdded, onPurchaseUpdated, onPurchaseDeleted, canCreate = true, canEdit = true, canDelete = true }) {
@@ -71,7 +71,11 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
   };
 
   const setLine = (i, key, val) => {
-    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+    let finalVal = val;
+    if (key === 'cost_price' || key === 'np_price') {
+      finalVal = formatCurrencyInput(val);
+    }
+    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: finalVal } : l));
     // Clear line-specific errors
     if (fieldErrors[`line_${i}_${key}`]) {
       setFieldErrors(prev => ({ ...prev, [`line_${i}_${key}`]: null }));
@@ -86,7 +90,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
   const addLine = () => setLines(prev => [...prev, { ...EMPTY_LINE }]);
   const removeLine = (i) => setLines(prev => prev.filter((_, idx) => idx !== i));
 
-  const lineTotal = (l) => (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0);
+  const lineTotal = (l) => (parseFloat(l.quantity) || 0) * parseCurrency(l.cost_price);
   const grandTotal = lines.reduce((s, l) => s + lineTotal(l), 0);
 
   const handleSubmit = async (e) => {
@@ -112,10 +116,10 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
         if (!l.quantity || l.quantity <= 0) {
           errors[`line_${i}_quantity`] = 'Quantity required';
         }
-        if (!l.cost_price || l.cost_price <= 0) {
+        if (!l.cost_price || parseCurrency(l.cost_price) <= 0) {
           errors[`line_${i}_cost`] = 'Cost price required';
         }
-        if (l.product_id && l.quantity && l.cost_price) {
+        if (l.product_id && l.quantity && parseCurrency(l.cost_price) > 0) {
           hasValidLine = true;
         }
       } else {
@@ -123,19 +127,19 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
         if (!l.np_name || !l.np_name.trim()) {
           errors[`line_${i}_name`] = 'Product name required';
         }
-        if (!l.np_price || l.np_price <= 0) {
+        if (!l.np_price || parseCurrency(l.np_price) <= 0) {
           errors[`line_${i}_price`] = 'Selling price required';
         }
         if (!l.quantity || l.quantity <= 0) {
           errors[`line_${i}_quantity`] = 'Quantity required';
         }
-        if (!l.cost_price || l.cost_price <= 0) {
+        if (!l.cost_price || parseCurrency(l.cost_price) <= 0) {
           errors[`line_${i}_cost`] = 'Cost price required';
         }
         if (l.np_track_expiry && !l.np_expiry_date) {
           errors[`line_${i}_expiry`] = 'Expiry date required';
         }
-        if (l.np_name && l.np_price && l.quantity && l.cost_price) {
+        if (l.np_name && parseCurrency(l.np_price) > 0 && l.quantity && parseCurrency(l.cost_price) > 0) {
           hasValidLine = true;
         }
       }
@@ -155,8 +159,8 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
     // Validate lines
     const validLines = lines.filter(l => {
-      if (l.mode === 'existing') return l.product_id && l.quantity && l.cost_price;
-      return l.np_name && l.np_price && l.quantity && l.cost_price;
+      if (l.mode === 'existing') return l.product_id && l.quantity && parseCurrency(l.cost_price) > 0;
+      return l.np_name && parseCurrency(l.np_price) > 0 && l.quantity && parseCurrency(l.cost_price) > 0;
     });
 
     const items = validLines.map(l => {
@@ -164,13 +168,13 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
         return {
           product_id: l.product_id,
           quantity: parseInt(l.quantity),
-          cost_price: parseFloat(l.cost_price),
+          cost_price: parseCurrency(l.cost_price),
         };
       }
       // new product — omit product_id, include new_product object
       return {
         quantity: parseInt(l.quantity),
-        cost_price: parseFloat(l.cost_price),
+        cost_price: parseCurrency(l.cost_price),
         new_product: {
           name: l.np_name,
           sku: l.np_sku || undefined,
@@ -178,7 +182,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           unit: l.np_unit || undefined,
           category_id: l.np_category_mode === 'existing' ? (l.np_category_id || undefined) : undefined,
           new_category: l.np_category_mode === 'new' ? (l.np_new_category || undefined) : undefined,
-          price: parseFloat(l.np_price),
+          price: parseCurrency(l.np_price),
           reorder_level: l.np_reorder ? parseFloat(l.np_reorder) : undefined,
           description: l.np_description || undefined,
           track_expiry: l.np_track_expiry ? 1 : 0,
@@ -239,18 +243,20 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
       mode: 'existing',
       product_id: String(item.product_id),
       quantity: String(item.quantity),
-      cost_price: String(item.cost_price),
+      cost_price: formatCurrencyInput(String(item.cost_price)),
     })));
     setEditError(null);
   };
 
-  const setEditLine = (i, key, val) =>
-    setEditLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: val } : l));
+  const setEditLine = (i, key, val) => {
+    const finalVal = key === 'cost_price' ? formatCurrencyInput(val) : val;
+    setEditLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: finalVal } : l));
+  };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!editSupplierId) { setEditError('Please select a supplier.'); return; }
-    const validLines = editLines.filter(l => l.product_id && l.quantity && l.cost_price);
+    const validLines = editLines.filter(l => l.product_id && l.quantity && parseCurrency(l.cost_price) > 0);
     if (validLines.length === 0) { setEditError('Add at least one complete product line.'); return; }
     setEditSaving(true);
     setEditError(null);
@@ -263,7 +269,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           items: validLines.map(l => ({
             product_id: parseInt(l.product_id),
             quantity: parseInt(l.quantity),
-            cost_price: parseFloat(l.cost_price),
+            cost_price: parseCurrency(l.cost_price),
           })),
         }),
       });
@@ -1072,7 +1078,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
-                      <CurrencyInput style={inp} placeholder="0.00" value={line.cost_price}
+                      <input style={inp} type="text" inputMode="decimal" placeholder="0" value={line.cost_price}
                         onChange={e => setLine(i, 'cost_price', e.target.value)} />
                     </div>
                   </div>
@@ -1153,7 +1159,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Retail Price (UGX) (Required)</span>
-                        <CurrencyInput style={inp} placeholder="0.00" value={line.np_price}
+                        <input style={inp} type="text" inputMode="decimal" placeholder="0" value={line.np_price}
                           onChange={e => setLine(i, 'np_price', e.target.value)} />
                       </div>
                       <div>
@@ -1168,7 +1174,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                       </div>
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Purchase Cost (UGX) (Required)</span>
-                        <CurrencyInput style={inp} placeholder="0.00" value={line.cost_price}
+                        <input style={inp} type="text" inputMode="decimal" placeholder="0" value={line.cost_price}
                           onChange={e => setLine(i, 'cost_price', e.target.value)} />
                       </div>
                     </div>
@@ -1321,9 +1327,9 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cost Price (UGX) *</span>
-                      <CurrencyInput
+                      <input
                         style={inp}
-                        placeholder="0.00"
+                        type="text" inputMode="decimal" placeholder="0"
                         value={line.cost_price}
                         onChange={e => setEditLine(i, 'cost_price', e.target.value)}
                         required
@@ -1339,10 +1345,10 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </button>
                   </div>
                   {/* line subtotal */}
-                  {(parseFloat(line.quantity) || 0) * (parseFloat(line.cost_price) || 0) > 0 && (
+                  {(parseFloat(line.quantity) || 0) * parseCurrency(line.cost_price) > 0 && (
                     <div style={{ marginTop: 8, textAlign: 'right', fontSize: 12, color: '#64748b' }}>
                       Subtotal: <strong style={{ color: '#0f172a' }}>
-                        UGX {((parseFloat(line.quantity) || 0) * (parseFloat(line.cost_price) || 0)).toLocaleString()}
+                        UGX {((parseFloat(line.quantity) || 0) * parseCurrency(line.cost_price)).toLocaleString()}
                       </strong>
                     </div>
                   )}
@@ -1350,10 +1356,10 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
               ))}
 
               {/* Grand total */}
-              {editLines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0), 0) > 0 && (
+              {editLines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * parseCurrency(l.cost_price), 0) > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 6, borderTop: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                    Total: UGX {editLines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.cost_price) || 0), 0).toLocaleString()}
+                    Total: UGX {editLines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * parseCurrency(l.cost_price), 0).toLocaleString()}
                   </span>
                 </div>
               )}
