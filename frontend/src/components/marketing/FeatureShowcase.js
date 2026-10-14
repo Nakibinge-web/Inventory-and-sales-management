@@ -15,7 +15,7 @@ export const GUIDE_FEATURES = [
     icon: InventoryIcon,
     eyebrow: '01 / Products',
     title: 'Know what you have. Know what needs attention.',
-    desc: 'This is where the StockPro user adds and views their products\'\ information. When the product is added, it automatically appears in the point of sale section. This is where the low stock reorder alert is set from so that the application alerts you when a given product stock runs low',
+    desc: 'This is where the StockPro user adds and views their products\' information. When the product is added, it automatically appears in the point of sale section. This is where the low stock reorder alert is set from so that the application alerts you when a given product stock runs low',
     subheading: 'How to use Products section Step-by-Step',
     steps: [
       {
