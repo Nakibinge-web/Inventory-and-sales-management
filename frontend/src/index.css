@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=DM+Mono:wght@400;500&display=swap');
 
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; overflow-x: hidden; }
@@ -738,8 +739,65 @@ textarea.field-input {
 @media (max-width:720px) { .reports-2col { grid-template-columns:1fr !important; } }
 
 /* AI layout */
-.ai-layout { display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start; }
-@media (max-width:860px) { .ai-layout { grid-template-columns:1fr !important; } .ai-sidebar { order:-1; } }
+.ai-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+.ai-chat-panel {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ai-sidebar {
+  width: 100%;
+  min-width: 0;
+}
+.ai-chips-scroll {
+  display: none !important;
+}
+@media (max-width: 860px) {
+  .ai-layout {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .ai-chat-panel {
+    order: 1 !important;
+  }
+  .ai-sidebar {
+    order: 2 !important;
+  }
+  .ai-chips-scroll {
+    display: flex !important;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 14px !important;
+    margin-bottom: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .ai-chips-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .ai-chips-scroll button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .ai-messages-container {
+    padding: 14px 12px !important;
+    min-height: 360px !important;
+    max-height: 52vh !important;
+  }
+  .ai-bubble {
+    max-width: 88% !important;
+    font-size: 13.5px !important;
+    padding: 10px 12px !important;
+  }
+}
 
 /* Stock */
 .stock-layout  { display:grid;align-items:start; }
@@ -842,6 +900,23 @@ textarea.field-input {
 .day-summary-grid { display:grid;grid-template-columns:auto 1fr 1fr; }
 @media (max-width:520px) { .day-summary-grid { grid-template-columns:1fr !important; } }
 
+/* Sale edit item row */
+.sale-edit-item-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 100px 32px;
+  gap: 6px;
+  align-items: center;
+}
+@media (max-width: 520px) {
+  .sale-edit-item-row {
+    grid-template-columns: 1fr 1fr auto !important;
+    gap: 8px !important;
+  }
+  .sale-edit-item-row > div:first-child {
+    grid-column: 1 / -1 !important;
+  }
+}
+
 /* Reports inline grids */
 @media (max-width:768px) { div[style*="2fr 1fr"] { grid-template-columns:1fr !important; } }
 @media (max-width:640px) { div[style*="minmax(400px"] { grid-template-columns:1fr !important; } }
@@ -861,6 +936,7 @@ textarea.field-input {
   gap: 16px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
 }
+
 
 .section-hero h1 {
   color: #0f172a !important;
@@ -1115,6 +1191,140 @@ textarea.field-input {
   }
 }
 
+
+/* POS customer radio */
+@media (max-width:480px) { .pos-customer-radios label { flex-direction:row !important; } }
+
+/* AI chat input row */
+@media (max-width:640px) {
+  .ai-input-row { flex-direction:column !important; }
+  .ai-input-row textarea, .ai-input-row input { width:100% !important; }
+}
+
+/* Pagination bar compact */
+@media (max-width:520px) {
+  .pagination-bar,
+  div[style*="justifyContent: space-between"][style*="padding: 14px 20px"] {
+    flex-direction:column !important;gap:10px !important;
+    align-items:center !important;padding:12px 14px !important;
+  }
+}
+
+/* ── Overview hero / today's sales card ── */
+@media (max-width:640px) {
+  .overview-hero-card {
+    flex-direction: column !important;
+    padding: 18px !important;
+    gap: 16px !important;
+  }
+  .overview-hero-card > div:last-child {
+    width: 100%;
+    display: flex !important;
+    gap: 8px !important;
+  }
+  .overview-hero-card > div:last-child > button {
+    flex: 1;
+  }
+}
+
+/* ── POS mobile specific ── */
+@media (max-width:960px) {
+  /* Cart panel: make it full-width collapsible section */
+  .pos-cart-panel {
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+}
+
+/* ── Card actions (edit/delete button row) ── */
+@media (max-width:480px) {
+  .card-actions {
+    flex-direction: row !important;
+    gap: 6px !important;
+  }
+  .card-actions > button { flex: 1; font-size: 12px !important; padding: 8px 4px !important; }
+}
+
+/* ── DataTable card view improvements ── */
+.dt-card-row {
+  background: #fff;
+  border-radius: 10px;
+  margin: 6px 8px;
+  padding: 12px !important;
+  border: 1px solid #f1f5f9 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.dt-card-row:last-child { border-bottom: none !important; }
+
+/* ── Sale/Purchase detail modal ── */
+@media (max-width:520px) {
+  .detail-grid-2 { grid-template-columns: 1fr !important; }
+  .detail-items-table { font-size: 12px !important; }
+}
+
+/* ── Users tab role/permission grid ── */
+@media (max-width:640px) {
+  .role-cards-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Reports tab period selector ── */
+@media (max-width:640px) {
+  .reports-period-tabs {
+    width: 100% !important;
+    justify-content: stretch !important;
+  }
+  .reports-period-tabs button { flex: 1; }
+}
+
+/* ── Stock movements form ── */
+@media (max-width:640px) {
+  .stock-form-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Low stock alert table on overview ── */
+@media (max-width:520px) {
+  .low-stock-table-row td:nth-child(3),
+  .low-stock-table-row td:nth-child(4) { display: none; }
+}
+
+/* Ensure images don't overflow cards */
+.product-image-thumb {
+  width: 40px; height: 40px;
+  object-fit: cover; border-radius: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Invoice responsive preview and modals ── */
+.invoice-print-canvas {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+@media (max-width: 640px) {
+  .invoice-print-canvas {
+    padding: 8px 0 !important;
+    justify-content: flex-start !important;
+  }
+  .invoice-a4-sheet {
+    padding: 20px 16px !important;
+    min-width: 520px !important;
+    box-shadow: none !important;
+  }
+  .invoice-actions-bar {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .invoice-actions-bar button {
+    flex: 1 1 calc(50% - 4px) !important;
+  }
+  .invoice-items-flex-table {
+    min-width: 540px !important;
+  }
+}
+
 /* ════════════════════════════════════════════════
    INVOICE MODAL — wider, taller, no overflow clip
    ════════════════════════════════════════════════ */
@@ -1126,7 +1336,7 @@ textarea.field-input {
 }
 
 /* ════════════════════════════════════════════════
-   PRINT STYLES FOR INVOICES & RECEIPTS
+   PRINT STYLES
    ════════════════════════════════════════════════ */
 @page {
   size: A4 portrait;
@@ -1141,6 +1351,7 @@ textarea.field-input {
     padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    overflow: visible !important;
   }
   
   body * {
@@ -1158,11 +1369,17 @@ textarea.field-input {
   }
   
   #printable-invoice,
-  #printable-invoice * {
+  #printable-invoice *,
+  #printable-receipt,
+  #printable-receipt *,
+  #printable-invoices-list,
+  #printable-invoices-list * {
     visibility: visible !important;
   }
   
-  #printable-invoice {
+  #printable-invoice,
+  #printable-receipt,
+  #printable-invoices-list {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -1188,11 +1405,14 @@ textarea.field-input {
     background: transparent !important;
     padding: 0 !important;
   }
-
-  .modal-responsive {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
+  
+  #printable-receipt {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

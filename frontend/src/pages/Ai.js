@@ -95,13 +95,39 @@ function AiTab({ token, data }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
-
+      <div className="ai-layout">
         {/* ── Chat panel ── */}
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div className="ai-chat-panel" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+
+          {/* Quick chips bar — visible on mobile for 1-tap questions */}
+          <div className="ai-chips-scroll" style={{ padding: '12px 14px 4px', borderBottom: '1px solid #f1f5f9', background: '#fafbff' }}>
+            {QUICK_PROMPTS.map(p => (
+              <button
+                key={p.label}
+                onClick={() => send(p.text)}
+                disabled={loading || cooldown > 0}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 12px',
+                  borderRadius: 20,
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#334155',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                }}
+              >
+                <span>{p.icon}</span>
+                <span>{p.label}</span>
+              </button>
+            ))}
+          </div>
 
           {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 420, maxHeight: 560 }}>
+          <div className="ai-messages-container" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 420, maxHeight: 560 }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
                 {/* Avatar */}
@@ -114,12 +140,13 @@ function AiTab({ token, data }) {
                   {msg.role === 'user' ? '👤' : '🤖'}
                 </div>
                 {/* Bubble */}
-                <div style={{
+                <div className="ai-bubble" style={{
                   maxWidth: '78%', padding: '12px 16px', borderRadius: msg.role === 'user' ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
                   background: msg.role === 'user' ? '#4f46e5' : '#f8fafc',
                   border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0',
                   color: msg.role === 'user' ? '#fff' : '#0f172a',
                   fontSize: 14, lineHeight: '1.6',
+                  wordBreak: 'break-word',
                 }}>
                   {renderText(msg.text)}
                 </div>
@@ -129,7 +156,7 @@ function AiTab({ token, data }) {
             {/* Typing indicator */}
             {loading && (
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🤖</div>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>🤖</div>
                 <div style={{ padding: '12px 18px', borderRadius: '4px 14px 14px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', gap: 5, alignItems: 'center' }}>
                   {[0, 1, 2].map(d => (
                     <div key={d} style={{ width: 7, height: 7, borderRadius: '50%', background: '#94a3b8', animation: `aiPulse 1.2s ease-in-out ${d * 0.2}s infinite` }} />
@@ -154,12 +181,12 @@ function AiTab({ token, data }) {
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder="Ask anything about your business… (Enter to send, Shift+Enter for new line)"
                 rows={2}
-                style={{ flex: 1, padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', resize: 'none', outline: 'none', background: '#fff', color: '#0f172a', lineHeight: '1.5' }}
+                style={{ flex: 1, padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', resize: 'none', outline: 'none', background: '#fff', color: '#0f172a', lineHeight: '1.5', minWidth: 0 }}
               />
               <button
                 onClick={() => send()}
                 disabled={!input.trim() || loading || cooldown > 0}
-                style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: input.trim() && !loading && !cooldown ? '#4f46e5' : '#e2e8f0', color: input.trim() && !loading && !cooldown ? '#fff' : '#94a3b8', cursor: input.trim() && !loading && !cooldown ? 'pointer' : 'not-allowed', fontSize: 18, transition: 'all 0.15s', flexShrink: 0, lineHeight: 1 }}
+                style={{ minHeight: 44, minWidth: 44, padding: '10px 16px', borderRadius: 10, border: 'none', background: input.trim() && !loading && !cooldown ? '#4f46e5' : '#e2e8f0', color: input.trim() && !loading && !cooldown ? '#fff' : '#94a3b8', cursor: input.trim() && !loading && !cooldown ? 'pointer' : 'not-allowed', fontSize: 18, transition: 'all 0.15s', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 {cooldown > 0 ? `${cooldown}s` : '➤'}
               </button>
@@ -169,7 +196,7 @@ function AiTab({ token, data }) {
         </div>
 
         {/* ── Right panel: quick prompts + data snapshot ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="ai-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Quick prompts */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>

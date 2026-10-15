@@ -110,6 +110,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               contacts: data.contacts,
               address: data.address,
               receipt_color: data.receipt_color,
+              logo_url: data.logo_url !== undefined ? data.logo_url : prevUser.tenant?.logo_url,
+              logo_path: data.logo_path !== undefined ? data.logo_path : prevUser.tenant?.logo_path,
             }
           }));
           
@@ -126,6 +128,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                 contacts: data.contacts,
                 address: data.address,
                 receipt_color: data.receipt_color,
+                logo_url: data.logo_url !== undefined ? data.logo_url : userObj.tenant?.logo_url,
+                logo_path: data.logo_path !== undefined ? data.logo_path : userObj.tenant?.logo_path,
               };
               localStorage.setItem('user', JSON.stringify(userObj));
             } catch (e) {
@@ -491,7 +495,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                     {businessInfo.contacts.map((contact, index) => (
                       <div key={index} style={styles.contactDisplay}>
                         <span style={styles.contactType}>
-                          {contact.type.charAt(0).toUpperCase() + contact.type.slice(1)}:
+                          {contact.type ? contact.type.charAt(0).toUpperCase() + contact.type.slice(1) : 'Other'}:
                         </span>
                         <span style={styles.contactNumber}>{contact.number}</span>
                       </div>
@@ -526,13 +530,15 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
 
             <div style={styles.infoFooter}>
               <span style={styles.lastUpdated}>
-                Last updated: {new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
-                  day: '2-digit', 
-                  month: 'short', 
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                Last updated: {businessInfo.updated_at
+                  ? new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                  : 'Unknown'}
               </span>
             </div>
           </div>

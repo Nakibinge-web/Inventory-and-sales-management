@@ -34,7 +34,12 @@ class TenantController extends Controller
             'contacts' => 'nullable|array',
             'address' => 'nullable|string',
             'receipt_color' => 'nullable|string|max:30',
+            'logo' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120'
         ]);
+
+        if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
+            $validated['logo_path'] = $request->file('logo')->store('logos', 'public');
+        }
 
         $tenant = Tenant::create($validated);
 
@@ -70,7 +75,15 @@ class TenantController extends Controller
             'contacts' => 'nullable|array',
             'address' => 'nullable|string',
             'receipt_color' => 'nullable|string|max:30',
+            'logo' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120'
         ]);
+
+        if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
+            if ($tenant->logo_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($tenant->logo_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($tenant->logo_path);
+            }
+            $validated['logo_path'] = $request->file('logo')->store('logos', 'public');
+        }
 
         $tenant->update($validated);
 

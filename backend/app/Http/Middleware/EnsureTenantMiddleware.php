@@ -17,6 +17,14 @@ class EnsureTenantMiddleware
             return response()->json(['success' => false, 'message' => 'Tenant not identified.'], 403);
         }
 
+        // Block disabled users from using existing tokens
+        if (!$user->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been disabled.',
+            ], 403);
+        }
+
         $tenant = Tenant::find($user->tenant_id);
 
         if (!$tenant) {
