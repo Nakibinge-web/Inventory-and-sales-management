@@ -1,4 +1,5 @@
 import React from 'react';
+import { getReceiptTheme } from '../styles/receiptThemes';
 
 // Helper function to format sale date and time
 // Handles timezone properly - assumes server sends timestamp in Africa/Kampala timezone
@@ -29,7 +30,7 @@ const formatSaleDateTime = (saleDate, createdAt) => {
 };
 
 // Unified Receipt Component - Used by both POS and Sales sections
-export default function SaleReceipt({ sale, user, elementId = 'receipt-content' }) {
+export default function SaleReceipt({ sale, user, elementId = 'receipt-content', colorTheme }) {
   const items = sale.sale_items || sale.saleItems || sale.items || [];
   const subtotal = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
   const discount = parseFloat(sale.discount_amount) || 0;
@@ -38,6 +39,9 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
   const { date, time } = formatSaleDateTime(sale.sale_date, sale.created_at);
   
   const tenant = user?.tenant || {};
+  const themeKey = colorTheme || tenant.receipt_color || tenant.receiptColor || 'rose';
+  const theme = getReceiptTheme(themeKey);
+
   const tenantName = tenant.name || 'InventoryPro';
   const receiptPhone = tenant.contacts && tenant.contacts.length > 0 
     ? tenant.contacts.map(c => c.number).join(' / ') 
@@ -57,18 +61,18 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
       <div style={{
         position: 'absolute', top: -60, right: -60,
         width: 200, height: 200, borderRadius: '50%',
-        background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+        background: theme.watermark, pointerEvents: 'none',
       }} />
 
       {/* ── Business Header ── */}
-      <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: '2px solid #be123c', position: 'relative' }}>
+      <div style={{ textAlign: 'center', paddingBottom: 20, borderBottom: `2px solid ${theme.primary}`, position: 'relative' }}>
         {/* Logo */}
         <img
           src="/zziwa logo.png"
           alt={tenantName}
           style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 8 }}
         />
-        <div style={{ fontWeight: 900, fontSize: 24, color: '#be123c', letterSpacing: '-0.5px' }}>{tenantName}</div>
+        <div style={{ fontWeight: 900, fontSize: 24, color: theme.primary, letterSpacing: '-0.5px' }}>{tenantName}</div>
         <div style={{ fontSize: 13, color: '#475569', marginTop: 6, fontWeight: 500 }}>
           {[receiptPhone && `Tel: ${receiptPhone}`, receiptEmail && `Email: ${receiptEmail}`].filter(Boolean).join(' | ')}
         </div>
@@ -78,10 +82,10 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
           marginTop: 10,
           display: 'inline-block',
           padding: '6px 16px',
-          background: '#fff1f2',
-          border: '1.5px solid #fda4af',
+          background: theme.light,
+          border: `1.5px solid ${theme.border}`,
           borderRadius: 20,
-          color: '#881337',
+          color: theme.dark,
           fontSize: 12,
           fontWeight: 800,
           letterSpacing: '0.05em',
@@ -94,8 +98,8 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
       {/* ── Receipt Details + Customer ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '18px 0', borderBottom: '1.5px solid #cbd5e1', position: 'relative' }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
-          <div style={{ color: '#be123c', fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{receiptRef}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: theme.dark, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Receipt Details</div>
+          <div style={{ color: theme.primary, fontWeight: 800, fontSize: 16, marginBottom: 6 }}>{receiptRef}</div>
           <div style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
             <span>📅</span> {date}
           </div>
@@ -109,7 +113,7 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: theme.dark, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Customer</div>
           <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>
             {sale.customer?.name || 'Walk-in Customer'}
           </div>
@@ -124,11 +128,11 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
 
       {/* ── Items Table ── */}
       <div style={{ paddingTop: 18, position: 'relative' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#881337', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: theme.dark, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Items Purchased</div>
         <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#881337' }}>
+              <tr style={{ background: theme.dark }}>
                 {['#', 'Product', 'Qty', 'Unit Price', 'Total'].map((h, i) => (
                   <th key={h} style={{
                     padding: '10px', fontSize: 11, fontWeight: 800, color: '#ffffff',
@@ -185,13 +189,13 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
           )}
           <div style={{
             padding: '12px 16px',
-            background: '#fff1f2',
+            background: theme.light,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <span style={{ fontWeight: 800, fontSize: 16, color: '#881337' }}>TOTAL:</span>
-            <span style={{ fontWeight: 800, fontSize: 18, color: '#be123c' }}>UGX {total.toLocaleString()}</span>
+            <span style={{ fontWeight: 800, fontSize: 16, color: theme.dark }}>TOTAL:</span>
+            <span style={{ fontWeight: 800, fontSize: 18, color: theme.primary }}>UGX {total.toLocaleString()}</span>
           </div>
         </div>
         
@@ -220,14 +224,14 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
 
       {/* Notes */}
       {sale.notes && (
-        <div style={{ marginTop: 16, padding: '12px 16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, fontSize: 13, color: '#475569', borderLeft: '4px solid #be123c' }}>
+        <div style={{ marginTop: 16, padding: '12px 16px', background: theme.light, border: `1px solid ${theme.noteBorder}`, borderRadius: 10, fontSize: 13, color: '#475569', borderLeft: `4px solid ${theme.primary}` }}>
           📝 {sale.notes}
         </div>
       )}
 
       {/* ── Thank you footer ── */}
-      <div style={{ marginTop: 24, paddingTop: 18, borderTop: '2px solid #be123c', textAlign: 'center', position: 'relative' }}>
-        <div style={{ fontWeight: 800, fontSize: 17, color: '#881337', marginBottom: 6 }}>Thank you for your business!</div>
+      <div style={{ marginTop: 24, paddingTop: 18, borderTop: `2px solid ${theme.primary}`, textAlign: 'center', position: 'relative' }}>
+        <div style={{ fontWeight: 800, fontSize: 17, color: theme.dark, marginBottom: 6 }}>Thank you for your business!</div>
         <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>We appreciate your patronage. Visit us again!</div>
       </div>
     </div>

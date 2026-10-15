@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../components/ui/Button';
+import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -9,7 +10,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     email: '',
     phone: '',
     contacts: [],
-    address: ''
+    address: '',
+    receipt_color: 'rose'
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,7 +21,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     email: '',
     phone: '',
     contacts: [],
-    address: ''
+    address: '',
+    receipt_color: 'rose'
   });
 
   const fetchBusinessInfo = useCallback(async () => {
@@ -40,7 +43,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
         // Ensure contacts is always an array
         const data = {
           ...result.data,
-          contacts: Array.isArray(result.data.contacts) ? result.data.contacts : []
+          contacts: Array.isArray(result.data.contacts) ? result.data.contacts : [],
+          receipt_color: result.data.receipt_color || 'rose'
         };
         setBusinessInfo(data);
         setFormData(data);
@@ -88,7 +92,8 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
         // Ensure contacts is always an array
         const data = {
           ...result.data,
-          contacts: Array.isArray(result.data.contacts) ? result.data.contacts : []
+          contacts: Array.isArray(result.data.contacts) ? result.data.contacts : [],
+          receipt_color: result.data.receipt_color || formData.receipt_color || 'rose'
         };
         setBusinessInfo(data);
         setIsEditing(false);
@@ -104,6 +109,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               phone: data.phone,
               contacts: data.contacts,
               address: data.address,
+              receipt_color: data.receipt_color,
             }
           }));
           
@@ -119,6 +125,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
                 phone: data.phone,
                 contacts: data.contacts,
                 address: data.address,
+                receipt_color: data.receipt_color,
               };
               localStorage.setItem('user', JSON.stringify(userObj));
             } catch (e) {
@@ -328,6 +335,119 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               />
             </div>
 
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Receipt &amp; Invoice Color Theme
+              </label>
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-4px', marginBottom: '14px' }}>
+                Choose the color accents and styling for all customer receipts and printed invoices.
+              </p>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px', marginBottom: '18px' }}>
+                {THEME_OPTIONS.map(opt => {
+                  const isSelected = (formData.receipt_color || 'rose') === opt.id;
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => setFormData(prev => ({ ...prev, receipt_color: opt.id }))}
+                      style={{
+                        border: isSelected ? `2px solid ${opt.primary}` : '1.5px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        background: isSelected ? opt.light : '#ffffff',
+                        transition: 'all 0.15s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        boxShadow: isSelected ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                      }}
+                    >
+                      <div style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: '50%',
+                        background: opt.primary,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '14px',
+                        flexShrink: 0,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}>
+                        {isSelected ? '✓' : ''}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{opt.name}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>{opt.description}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Live Preview Box */}
+              {(() => {
+                const previewTheme = getReceiptTheme(formData.receipt_color || 'rose');
+                return (
+                  <div style={{
+                    border: '1.5px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '16px',
+                    background: '#f8fafc',
+                    marginTop: '8px'
+                  }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                      Live Preview &bull; {previewTheme.name}
+                    </div>
+                    <div style={{
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      maxWidth: '460px',
+                      margin: '0 auto',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: -30, right: -30, width: 100, height: 100,
+                        borderRadius: '50%', background: previewTheme.watermark, pointerEvents: 'none'
+                      }} />
+                      <div style={{ textAlign: 'center', paddingBottom: '10px', borderBottom: `2px solid ${previewTheme.primary}` }}>
+                        <div style={{ fontWeight: 800, fontSize: '16px', color: previewTheme.primary }}>
+                          {formData.name || 'Your Business Name'}
+                        </div>
+                        <div style={{
+                          display: 'inline-block', marginTop: '6px', padding: '3px 12px',
+                          background: previewTheme.light, border: `1px solid ${previewTheme.border}`,
+                          borderRadius: '12px', color: previewTheme.dark, fontSize: '11px', fontWeight: 700
+                        }}>
+                          RECEIPT &bull; PREVIEW
+                        </div>
+                      </div>
+                      <div style={{ marginTop: '10px' }}>
+                        <div style={{ background: previewTheme.dark, color: '#ffffff', padding: '6px 10px', borderRadius: '4px 4px 0 0', display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
+                          <span>ITEM DESCRIPTION</span>
+                          <span>TOTAL</span>
+                        </div>
+                        <div style={{ padding: '8px 10px', border: '1px solid #e2e8f0', borderTop: 'none', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#0f172a' }}>
+                          <span>Sample Product Item</span>
+                          <span style={{ fontWeight: 600 }}>UGX 50,000</span>
+                        </div>
+                        <div style={{ background: previewTheme.light, padding: '8px 10px', borderRadius: '0 0 4px 4px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 800 }}>
+                          <span style={{ color: previewTheme.dark }}>TOTAL:</span>
+                          <span style={{ color: previewTheme.primary }}>UGX 50,000</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             <div style={styles.formActions}>
               <Button 
                 type="button" 
@@ -386,6 +506,22 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
             <div style={styles.infoRow}>
               <div style={styles.infoLabel}>Business Address</div>
               <div style={styles.infoValue}>{businessInfo.address || 'Not set'}</div>
+            </div>
+
+            <div style={styles.infoRow}>
+              <div style={styles.infoLabel}>Receipt &amp; Invoice Theme</div>
+              <div style={styles.infoValue}>
+                {(() => {
+                  const currentTheme = getReceiptTheme(businessInfo.receipt_color || 'rose');
+                  return (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '6px 14px', borderRadius: '8px', background: currentTheme.light, border: `1.5px solid ${currentTheme.border}` }}>
+                      <span style={{ width: 14, height: 14, borderRadius: '50%', background: currentTheme.primary, display: 'inline-block' }}></span>
+                      <span style={{ fontWeight: 700, color: currentTheme.dark, fontSize: '13px' }}>{currentTheme.name}</span>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>— {currentTheme.description}</span>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
 
             <div style={styles.infoFooter}>

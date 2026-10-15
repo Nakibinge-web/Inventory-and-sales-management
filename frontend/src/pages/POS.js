@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
+import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 import styles, { posS } from '../styles/dashboardStyles';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -14,6 +15,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState(null);
   const [viewingSale, setViewingSale] = useState(null);
+  const [receiptThemeOverride, setReceiptThemeOverride] = useState('');
 
   // Customer selection state
   const [customerType, setCustomerType] = useState('walk_in');
@@ -610,20 +612,22 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           onClose={() => setViewingSale(null)}
           title=""
           size="md"
-          footer={
-            <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>✓</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>Sale Completed Successfully!</span>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <Button variant="secondary" onClick={() => setViewingSale(null)}>Close &amp; New Sale</Button>
-                <Button
-                  variant="success"
-                  style={{ background: '#be123c', borderColor: '#be123c' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#881337'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
-                  onClick={() => {
+          footer={(() => {
+            const activeReceiptTheme = getReceiptTheme(receiptThemeOverride || user?.tenant?.receipt_color || 'rose');
+            return (
+              <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 22, color: activeReceiptTheme.primary }}>✓</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: activeReceiptTheme.primary }}>Sale Completed Successfully!</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <Button variant="secondary" onClick={() => setViewingSale(null)}>Close &amp; New Sale</Button>
+                  <Button
+                    variant="success"
+                    style={{ background: activeReceiptTheme.primary, borderColor: activeReceiptTheme.primary }}
+                    onMouseEnter={e => e.currentTarget.style.background = activeReceiptTheme.dark}
+                    onMouseLeave={e => e.currentTarget.style.background = activeReceiptTheme.primary}
+                    onClick={() => {
                   const src = document.getElementById('pos-receipt-content');
                   if (!src) {
                     alert('Receipt content not found. Please try again.');
@@ -688,11 +692,40 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
               >
                 🖨️ Print / Save PDF
               </Button>
+                </div>
               </div>
-            </div>
-          }
+            );
+          })()}
         >
-          <SaleReceipt sale={viewingSale} user={user} elementId="pos-receipt-content" />
+          {/* Quick theme selector pill bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Receipt Color:</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {THEME_OPTIONS.map(t => {
+                const isSelected = (receiptThemeOverride || user?.tenant?.receipt_color || 'rose') === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setReceiptThemeOverride(t.id)}
+                    title={t.name}
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: t.primary,
+                      border: isSelected ? '2px solid #0f172a' : '2px solid transparent',
+                      cursor: 'pointer',
+                      transform: isSelected ? 'scale(1.25)' : 'scale(1)',
+                      boxShadow: isSelected ? '0 0 0 2px #ffffff' : 'none',
+                      transition: 'all 0.12s'
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <SaleReceipt sale={viewingSale} user={user} elementId="pos-receipt-content" colorTheme={receiptThemeOverride || user?.tenant?.receipt_color} />
         </Modal>
       )}
     </div>

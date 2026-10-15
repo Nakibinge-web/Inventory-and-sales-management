@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
 import { PrintableInvoiceModal } from './Invoices';
+import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 import styles from '../styles/dashboardStyles';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -24,6 +25,7 @@ function formatSaleDateTime(saleDate, createdAt) {
 function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, canEdit = true, canDelete = false, onSaleDeleted }) {
   const [viewingSale, setViewingSale] = useState(null);
   const [viewingInvoice, setViewingInvoice] = useState(null);
+  const [receiptThemeOverride, setReceiptThemeOverride] = useState('');
   const [editingSale, setEditingSale] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
@@ -1032,25 +1034,30 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
         onClose={() => setViewingSale(null)}
         title=""
         size="md"
-        footer={
-          <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setViewingSale(null)}>Close</Button>
-            <Button
-              variant="success"
-              onClick={() => {
-                const src = document.getElementById('receipt-content');
-                if (!src) {
-                  alert('Receipt content not found. Please try again.');
-                  return;
-                }
-                
-                const win = window.open('', '_blank', 'width=800,height=900');
-                if (!win) {
-                  alert('Pop-up blocked. Please allow pop-ups for this site.');
-                  return;
-                }
-                
-                win.document.write(`<!DOCTYPE html>
+        footer={(() => {
+          const activeReceiptTheme = getReceiptTheme(receiptThemeOverride || user?.tenant?.receipt_color || 'rose');
+          return (
+            <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => setViewingSale(null)}>Close</Button>
+              <Button
+                variant="success"
+                style={{ background: activeReceiptTheme.primary, borderColor: activeReceiptTheme.primary }}
+                onMouseEnter={e => e.currentTarget.style.background = activeReceiptTheme.dark}
+                onMouseLeave={e => e.currentTarget.style.background = activeReceiptTheme.primary}
+                onClick={() => {
+                  const src = document.getElementById('receipt-content');
+                  if (!src) {
+                    alert('Receipt content not found. Please try again.');
+                    return;
+                  }
+                  
+                  const win = window.open('', '_blank', 'width=800,height=900');
+                  if (!win) {
+                    alert('Pop-up blocked. Please allow pop-ups for this site.');
+                    return;
+                  }
+                  
+                  win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -1089,25 +1096,52 @@ function SalesTab({ sales, loading, onNewSale, token, user, canCreate = true, ca
 </head>
 <body>${src.innerHTML}</body>
 </html>`);
-                win.document.close();
-                
-                // Wait for images to load
-                win.addEventListener('load', () => {
-                  setTimeout(() => {
-                    win.focus();
-                    win.print();
-                    // Don't auto-close to allow user to save as PDF
-                    // win.close();
-                  }, 500);
-                });
-              }}
-            >
-              🖨️ Print / Save PDF
-            </Button>
-          </div>
-        }
+                  win.document.close();
+                  
+                  // Wait for images to load
+                  win.addEventListener('load', () => {
+                    setTimeout(() => {
+                      win.focus();
+                      win.print();
+                    }, 500);
+                  });
+                }}
+              >
+                🖨️ Print / Save PDF
+              </Button>
+            </div>
+          );
+        })()}
       >
-        <SaleReceipt sale={viewingSale} user={user} elementId="receipt-content" />
+        {/* Quick theme selector pill bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Receipt Color:</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {THEME_OPTIONS.map(t => {
+              const isSelected = (receiptThemeOverride || user?.tenant?.receipt_color || 'rose') === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setReceiptThemeOverride(t.id)}
+                  title={t.name}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: t.primary,
+                    border: isSelected ? '2px solid #0f172a' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transform: isSelected ? 'scale(1.25)' : 'scale(1)',
+                    boxShadow: isSelected ? '0 0 0 2px #ffffff' : 'none',
+                    transition: 'all 0.12s'
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <SaleReceipt sale={viewingSale} user={user} elementId="receipt-content" colorTheme={receiptThemeOverride || user?.tenant?.receipt_color} />
       </Modal>
 
       {/* ── Edit Modal ── */}

@@ -31,7 +31,9 @@ class TenantController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:tenants,email',
             'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string'
+            'contacts' => 'nullable|array',
+            'address' => 'nullable|string',
+            'receipt_color' => 'nullable|string|max:30',
         ]);
 
         $tenant = Tenant::create($validated);
@@ -65,7 +67,9 @@ class TenantController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|unique:tenants,email,' . $tenant->id,
             'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string'
+            'contacts' => 'nullable|array',
+            'address' => 'nullable|string',
+            'receipt_color' => 'nullable|string|max:30',
         ]);
 
         $tenant->update($validated);

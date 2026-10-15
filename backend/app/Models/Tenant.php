@@ -13,7 +13,14 @@ class Tenant extends Model
         'name',
         'email',
         'phone',
+        'contacts',
         'address',
+        'receipt_color',
+        'logo_path',
+    ];
+
+    protected $casts = [
+        'contacts' => 'array',
     ];
 
     // Relationships

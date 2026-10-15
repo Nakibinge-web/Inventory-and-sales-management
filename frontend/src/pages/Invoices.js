@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../components/ui/Modal';
+import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 
 
-function PrintableInvoiceModal({ invoice, user, onClose }) {
+function PrintableInvoiceModal({ invoice, user, onClose, colorTheme }) {
+  const tenant = user?.tenant || {};
+  const [selectedTheme, setSelectedTheme] = useState(() => colorTheme || tenant?.receipt_color || tenant?.receiptColor || 'rose');
+  const theme = getReceiptTheme(selectedTheme);
+
   if (!invoice) return null;
 
   const handlePrint = () => { window.print(); };
 
-  const tenant = user?.tenant || {};
   const businessName    = tenant.name    || user?.name  || 'Smart Trendz';
   const businessPhone   = tenant.phone   || user?.phone || '0776 293691';
   const businessEmail   = tenant.email   || user?.email || '';
@@ -82,17 +86,38 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
   return (
     <Modal isOpen={true} onClose={onClose} title="" size="xl" className="invoice-modal">
       {/* ── Action bar (screen only, hidden on print) ── */}
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #e2e8f0' }}>
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: theme.light, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📄</div>
           <div>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{invoiceNumber}</p>
             <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>{customerName}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={handleExportInvoice} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(22,163,74,0.3)' }}>📥 Export CSV</button>
-          <button onClick={handlePrint} style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: '#881337', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(136,19,55,0.3)' }}>🖨️ Print / Save PDF</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Color:</span>
+            <select
+              value={selectedTheme}
+              onChange={(e) => setSelectedTheme(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 7,
+                border: '1.5px solid #cbd5e1',
+                fontSize: 12,
+                fontWeight: 600,
+                background: '#fff',
+                cursor: 'pointer',
+                color: '#0f172a'
+              }}
+            >
+              {THEME_OPTIONS.map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.name}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={handleExportInvoice} style={{ padding: '9px 18px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(22,163,74,0.3)' }}>📥 Export CSV</button>
+          <button onClick={handlePrint} style={{ padding: '9px 18px', borderRadius: 7, border: 'none', background: theme.dark, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 3px 10px rgba(0,0,0,0.15)' }}>🖨️ Print / Save PDF</button>
           <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Close</button>
         </div>
       </div>
@@ -115,7 +140,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
         <div style={{
           position: 'absolute', top: -80, right: -80,
           width: 260, height: 260, borderRadius: '50%',
-          background: 'rgba(190,18,60,0.06)', pointerEvents: 'none',
+          background: theme.watermark, pointerEvents: 'none',
         }} />
 
         {/* ── HEADER: logo/name + customer left · address right ── */}
@@ -130,7 +155,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
                 style={{ width: 68, height: 68, objectFit: 'contain', flexShrink: 0 }}
               />
               <div style={{ paddingTop: 2 }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: '#be123c', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: theme.primary, lineHeight: 1.1, letterSpacing: '-0.5px' }}>
                   {businessName}
                 </div>
               </div>
@@ -154,7 +179,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
               {businessEmail && <div>{businessEmail}</div>}
               <div>Kampala Uganda</div>
             </div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: '#be123c', letterSpacing: '-0.3px', textAlign: 'right' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: theme.primary, letterSpacing: '-0.3px', textAlign: 'right' }}>
               Invoice {invoiceNumber}
             </div>
           </div>
@@ -188,7 +213,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
         <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#881337', color: '#ffffff' }}>
+              <tr style={{ background: theme.dark, color: '#ffffff' }}>
                 <th style={{ padding: '11px 18px', textAlign: 'left',   fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Items</th>
                 <th style={{ padding: '11px 18px', textAlign: 'center', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 130 }}>Quantity</th>
                 <th style={{ padding: '11px 18px', textAlign: 'right',  fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', width: 150 }}>Unit Price</th>
@@ -252,11 +277,11 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
             <div style={{
               display: 'flex', justifyContent: 'space-between',
               padding: '12px 18px',
-              background: balance > 0 ? '#fff1f2' : '#f0fdf4',
+              background: balance > 0 ? theme.light : '#f0fdf4',
               fontSize: 14,
             }}>
-              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>Amount Due</span>
-              <span style={{ fontWeight: 800, color: balance > 0 ? '#9f1239' : '#166534' }}>
+              <span style={{ fontWeight: 800, color: balance > 0 ? theme.dark : '#166534' }}>Amount Due</span>
+              <span style={{ fontWeight: 800, color: balance > 0 ? theme.dark : '#166534' }}>
                 {balance.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
               </span>
             </div>

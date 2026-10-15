@@ -5,6 +5,7 @@ import Modal from '../components/ui/Modal';
 import AddProductForm from '../components/AddProductForm';
 import { ToastContainer, useToast } from '../components/ui/Toast';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
+import InstallPWA from '../components/InstallPWA';
 
 // Independent Page Modules
 import OverviewTab from './Overview';
@@ -510,6 +511,9 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         </div>
 
         <div style={styles.headerRight}>
+          <div className="resp-hide">
+            <InstallPWA variant="nav-item" />
+          </div>
           <div 
             className="resp-hide"
             style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
@@ -809,6 +813,9 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   </div>
                 );
               })}
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <InstallPWA variant="sidebar-banner" />
             </div>
           </div> 
         </nav>

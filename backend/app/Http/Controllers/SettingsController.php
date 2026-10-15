@@ -31,6 +31,7 @@ class SettingsController extends Controller
                 'phone' => $tenant->phone,
                 'contacts' => $tenant->contacts ?? [],
                 'address' => $tenant->address,
+                'receipt_color' => $tenant->receipt_color ?? 'rose',
                 'created_at' => $tenant->created_at,
                 'updated_at' => $tenant->updated_at,
             ]
@@ -59,6 +60,7 @@ class SettingsController extends Controller
             'contacts.*.type' => 'required|string|max:50',
             'contacts.*.number' => 'required|string|max:20',
             'address' => 'nullable|string',
+            'receipt_color' => 'nullable|string|max:30',
         ]);
 
         if ($validator->fails()) {
@@ -69,7 +71,7 @@ class SettingsController extends Controller
             ], 422);
         }
 
-        $updateData = $request->only(['name', 'email', 'phone', 'address']);
+        $updateData = $request->only(['name', 'email', 'phone', 'address', 'receipt_color']);
         
         // Handle contacts separately to ensure proper JSON encoding
         if ($request->has('contacts')) {
@@ -88,6 +90,7 @@ class SettingsController extends Controller
                 'phone' => $tenant->phone,
                 'contacts' => $tenant->contacts ?? [],
                 'address' => $tenant->address,
+                'receipt_color' => $tenant->receipt_color ?? 'rose',
                 'updated_at' => $tenant->updated_at,
             ]
         ]);

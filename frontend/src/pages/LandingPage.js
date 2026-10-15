@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import InstallPWA from '../components/InstallPWA';
 
 function LandingPage({ onGoToLogin, onGoToRegister }) {
   const [activeTab, setActiveTab] = useState('home');
@@ -46,7 +47,8 @@ function LandingPage({ onGoToLogin, onGoToRegister }) {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <InstallPWA variant="nav-item" />
           <button
             onClick={onGoToLogin}
             style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#f8fafc', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
