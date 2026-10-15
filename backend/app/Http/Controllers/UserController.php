@@ -31,7 +31,7 @@ class UserController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to view users.'], 403);
         }
 
-        $query = User::with('roles:id,name')->select('id', 'name', 'email', 'created_by', 'created_at');
+        $query = User::with('roles:id,name')->select('id', 'name', 'email', 'created_by', 'created_at', 'is_active');
 
         // Non-privileged users only see the users they personally created
         if (!$isPrivileged) {
@@ -418,5 +418,76 @@ class UserController extends Controller
                      ->get();
 
         return response()->json(['success' => true, 'data' => $users]);
+    }
+
+    /**
+     * Disable a user (set is_active = false and revoke their tokens).
+     * POST /api/users/{id}/disable  — requires owner role
+     */
+    public function disable(Request $request, $id): JsonResponse
+    {
+        $actor = Auth::user();
+
+        $target = User::where('id', $id)
+                      ->where('tenant_id', $actor->tenant_id)
+                      ->first();
+
+        if (!$target) {
+            return response()->json(['success' => false, 'message' => 'User not found.'], 404);
+        }
+
+        // Prevent owner from disabling themselves
+        if ($target->id === $actor->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot disable your own account.',
+            ], 422);
+        }
+
+        // Prevent disabling another owner
+        if ($target->hasRole('owner')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot disable another owner.',
+            ], 422);
+        }
+
+        $target->is_active = false;
+        $target->save();
+
+        // Revoke all existing Sanctum tokens for the disabled user
+        $target->tokens()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User disabled successfully.',
+            'data'    => $target,
+        ]);
+    }
+
+    /**
+     * Enable a user (set is_active = true).
+     * POST /api/users/{id}/enable  — requires owner role
+     */
+    public function enable(Request $request, $id): JsonResponse
+    {
+        $actor = Auth::user();
+
+        $target = User::where('id', $id)
+                      ->where('tenant_id', $actor->tenant_id)
+                      ->first();
+
+        if (!$target) {
+            return response()->json(['success' => false, 'message' => 'User not found.'], 404);
+        }
+
+        $target->is_active = true;
+        $target->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User enabled successfully.',
+            'data'    => $target,
+        ]);
     }
 }
