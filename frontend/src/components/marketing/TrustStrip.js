@@ -4,17 +4,17 @@ const CAPABILITIES = [
   {
     index: '01',
     title: 'Products',
-    desc: 'Stock Quantity, Low level reorder alerts and Product prices',
+    desc: 'Stock Quantity, Low level reorder alerts & Product prices',
   },
   {
     index: '02',
     title: 'Point of Sale',
-    desc: 'Cashier checkout & thermal receipts',
+    desc: 'Record every sale & Receipts',
   },
   {
     index: '03',
-    title: 'Purchases',
-    desc: 'Supplier orders & vendor cost tracking',
+    title: 'Categories',
+    desc: 'Organise your products into groups',
   },
   {
     index: '04',
