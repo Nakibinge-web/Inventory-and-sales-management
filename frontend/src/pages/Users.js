@@ -133,6 +133,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // holds user object pending deletion
   const [confirmDeleteRole, setConfirmDeleteRole] = useState(null); // holds role object pending deletion
   const [deletingRoleId, setDeletingRoleId] = useState(null);
@@ -348,6 +349,27 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
     finally { setDeletingRoleId(null); setConfirmDeleteRole(null); }
   };
 
+  const handleToggleStatus = async (userId, isCurrentlyActive) => {
+    setTogglingId(userId);
+    const endpoint = isCurrentlyActive
+      ? `${API_URL}/users/${userId}/disable`
+      : `${API_URL}/users/${userId}/enable`;
+    try {
+      const res = await fetch(endpoint, { method: 'POST', headers });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error('Action failed', json?.message || 'Could not update user status.');
+        return;
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: !isCurrentlyActive } : u));
+      toast.success(isCurrentlyActive ? 'User disabled' : 'User enabled', json?.message || `User has been ${isCurrentlyActive ? 'disabled' : 'enabled'}.`);
+    } catch {
+      toast.error('Action failed', 'Could not reach the server.');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const filtered = users.filter(u =>
     u.name?.toLowerCase().includes(search.toLowerCase()) ||
     u.email?.toLowerCase().includes(search.toLowerCase())
@@ -446,7 +468,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                     </td>
                     {/* Roles */}
                     <td style={{ padding: '14px 14px' }}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         {(u.roles || []).length > 0 ? u.roles.map(r => (
                           <span key={r.id} style={{
                             padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
@@ -477,6 +499,33 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                             }}>
                               {deletingId === u.id ? '…' : 'Delete'}
                             </button>
+                          )}
+                          {isOwner && u.id !== currentUser.id && !u.roles?.some(r => r.name === 'owner') && (
+                            u.is_active !== false ? (
+                              <button
+                                onClick={() => handleToggleStatus(u.id, true)}
+                                disabled={togglingId === u.id}
+                                style={{
+                                  padding: '5px 12px', borderRadius: 6, border: '1px solid #f59e0b',
+                                  background: '#fffbeb', color: '#b45309', cursor: togglingId === u.id ? 'not-allowed' : 'pointer',
+                                  fontSize: 13, fontWeight: 500, opacity: togglingId === u.id ? 0.6 : 1,
+                                }}
+                              >
+                                {togglingId === u.id ? '…' : 'Disable'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleStatus(u.id, false)}
+                                disabled={togglingId === u.id}
+                                style={{
+                                  padding: '5px 12px', borderRadius: 6, border: '1px solid #16a34a',
+                                  background: '#f0fdf4', color: '#15803d', cursor: togglingId === u.id ? 'not-allowed' : 'pointer',
+                                  fontSize: 13, fontWeight: 500, opacity: togglingId === u.id ? 0.6 : 1,
+                                }}
+                              >
+                                {togglingId === u.id ? '…' : 'Enable'}
+                              </button>
+                            )
                           )}
                         </div>
                       </td>

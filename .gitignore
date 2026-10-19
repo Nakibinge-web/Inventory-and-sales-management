@@ -1,3 +1,9 @@
 .kiro/
 frontend/.env
 .vscode/
+
+# Backup files
+*.bak
+
+# Kiro agent working files
+.agents/
