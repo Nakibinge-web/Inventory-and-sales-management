@@ -17,6 +17,7 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('branding');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
 
@@ -223,7 +224,27 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     setSearchOpen(false);
   };
 
-  const isOwnerOrAdmin = user.roles && user.roles.some(r => ['owner', 'admin'].includes(r.name));
+  const isOwner = Boolean(
+    (user.roles && user.roles.some(r => r.name === 'owner')) ||
+    user.role === 'owner' ||
+    user.is_owner
+  );
+  const isOwnerOrAdmin = isOwner || Boolean(user.roles && user.roles.some(r => ['admin'].includes(r.name)));
+
+  // Tenant enabled modules check
+  const enabledModules = user?.tenant?.enabled_modules || {};
+  const isModuleEnabled = (modId) => {
+    if (modId === 'overview' || modId === 'settings' || modId === 'users') return true;
+    return enabledModules[modId] !== false; // default to true if unconfigured
+  };
+
+  // Redirect to overview if current tab is toggled off
+  useEffect(() => {
+    if (!isModuleEnabled(activeTab)) {
+      setActiveTab('overview');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user?.tenant?.enabled_modules]);
 
   // Returns true if the user has a given permission (via any role) OR is owner/admin
   const hasPermission = (perm) => {
@@ -235,17 +256,17 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
 
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: '📊', color: 'primary' },
-    ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS', icon: '🖥️', color: 'success' }] : []),
-    ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products', icon: '📦', color: 'success' }] : []),
-    ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️', color: 'warning' }] : []),
-    ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' }] : []),
-    ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers', icon: '👥', color: 'primary' }] : []),
-    ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales', icon: '💰', color: 'success' }] : []),
-    ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄', color: 'primary' }] : []),
-    ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' }] : []),
-    ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
-    ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
-    { id: 'ai', label: 'AI Assistant', icon: '🤖', color: 'primary' },
+    ...(isModuleEnabled('pos') && hasPermission('sales.create') ? [{ id: 'pos', label: 'POS', icon: '🖥️', color: 'success' }] : []),
+    ...(isModuleEnabled('products') && hasPermission('products.view') ? [{ id: 'products', label: 'Products', icon: '📦', color: 'success' }] : []),
+    ...(isModuleEnabled('categories') && hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️', color: 'warning' }] : []),
+    ...(isModuleEnabled('suppliers') && hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭', color: 'neutral' }] : []),
+    ...(isModuleEnabled('customers') && hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers', icon: '👥', color: 'primary' }] : []),
+    ...(isModuleEnabled('sales') && hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales', icon: '💰', color: 'success' }] : []),
+    ...(isModuleEnabled('invoices') && hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄', color: 'primary' }] : []),
+    ...(isModuleEnabled('purchases') && hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒', color: 'primary' }] : []),
+    ...(isModuleEnabled('stock-movements') && hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄', color: 'neutral' }] : []),
+    ...(isModuleEnabled('reports') && (hasPermission('sales.report') || hasPermission('purchases.report')) ? [{ id: 'reports', label: 'Reports', icon: '📈', color: 'danger' }] : []),
+    ...(isModuleEnabled('ai') ? [{ id: 'ai', label: 'AI Assistant', icon: '🤖', color: 'primary' }] : []),
     ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
 
@@ -732,20 +753,53 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   <span style={styles.menuLabel}>Users</span>
                   {activeTab === 'users' && <div style={styles.activeIndicator} />}
                 </button>
+                {isOwner && (
+                  <button
+                    style={{
+                      ...styles.menuItem,
+                      ...(activeTab === 'settings' && settingsInitialTab === 'modules' ? styles.menuItemActive : {})
+                    }}
+                    onClick={() => {
+                      setSettingsInitialTab('modules');
+                      setActiveTab('settings');
+                      setMobileNavOpen(false);
+                    }}
+                    onMouseEnter={e => {
+                      if (!(activeTab === 'settings' && settingsInitialTab === 'modules')) {
+                        e.currentTarget.style.background = '#f8fafc';
+                        e.currentTarget.style.color = '#0f172a';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!(activeTab === 'settings' && settingsInitialTab === 'modules')) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#475569';
+                      }
+                    }}
+                  >
+                    <span style={styles.menuIcon}>🧩</span>
+                    <span style={styles.menuLabel}>Modules</span>
+                    {activeTab === 'settings' && settingsInitialTab === 'modules' && <div style={styles.activeIndicator} />}
+                  </button>
+                )}
                 <button
                   style={{
                     ...styles.menuItem,
-                    ...(activeTab === 'settings' ? styles.menuItemActive : {})
+                    ...(activeTab === 'settings' && settingsInitialTab !== 'modules' ? styles.menuItemActive : {})
                   }}
-                  onClick={() => { setActiveTab('settings'); setMobileNavOpen(false); }}
+                  onClick={() => {
+                    setSettingsInitialTab('branding');
+                    setActiveTab('settings');
+                    setMobileNavOpen(false);
+                  }}
                   onMouseEnter={e => {
-                    if (activeTab !== 'settings') {
+                    if (!(activeTab === 'settings' && settingsInitialTab !== 'modules')) {
                       e.currentTarget.style.background = '#f8fafc';
                       e.currentTarget.style.color = '#0f172a';
                     }
                   }}
                   onMouseLeave={e => {
-                    if (activeTab !== 'settings') {
+                    if (!(activeTab === 'settings' && settingsInitialTab !== 'modules')) {
                       e.currentTarget.style.background = 'transparent';
                       e.currentTarget.style.color = '#475569';
                     }
@@ -753,7 +807,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                 >
                   <span style={styles.menuIcon}>⚙️</span>
                   <span style={styles.menuLabel}>Settings</span>
-                  {activeTab === 'settings' && <div style={styles.activeIndicator} />}
+                  {activeTab === 'settings' && settingsInitialTab !== 'modules' && <div style={styles.activeIndicator} />}
                 </button>
                 <div style={{ height: 16 }} />
               </div>
@@ -966,7 +1020,15 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
           )}
           {activeTab === 'settings' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
-            <Settings user={user} token={token} toast={toast} onBusinessInfoUpdate={onUserUpdate} />
+            <Settings
+              user={user}
+              token={token}
+              toast={toast}
+              onBusinessInfoUpdate={onUserUpdate}
+              initialTab={settingsInitialTab}
+              onTabChange={setSettingsInitialTab}
+              isOwner={isOwner}
+            />
           )}
         </main>
       </div>
@@ -1003,7 +1065,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
             <span>📊</span>
             <span>Home</span>
           </button>
-          {hasPermission('sales.create') && (
+          {isModuleEnabled('pos') && hasPermission('sales.create') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'pos' ? ' active' : ''}`}
               onClick={() => setActiveTab('pos')}
@@ -1013,7 +1075,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <span>POS</span>
             </button>
           )}
-          {hasPermission('products.view') && (
+          {isModuleEnabled('products') && hasPermission('products.view') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'products' ? ' active' : ''}`}
               onClick={() => setActiveTab('products')}
@@ -1023,7 +1085,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <span>Products</span>
             </button>
           )}
-          {hasPermission('sales.view') && (
+          {isModuleEnabled('sales') && hasPermission('sales.view') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'sales' ? ' active' : ''}`}
               onClick={() => setActiveTab('sales')}
@@ -9833,6 +9895,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
   const businessAddress = invoice.business_address || tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
   const businessTagline = tenant.tagline || 'Best Unboxing Xperience';
   const invoiceLogo     = invoice.logo_url || invoice.tenant?.logo_url || tenant.logo_url;
+  const invoiceSignature = invoice.signature_url || invoice.tenant?.signature_url || tenant.signature_url;
 
   const items    = invoice.items || invoice.sale_items || invoice.saleItems || [];
   const subtotal = invoice.subtotal != null
@@ -10084,6 +10147,27 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
                 {balance.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* ── AUTHORIZED SIGNATORY FOOTER ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 28, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: 11, color: '#64748b' }}>
+            <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>{businessName}</div>
+            <div>Computer generated document. Official and valid without physical seal.</div>
+          </div>
+          <div style={{ textAlign: 'right', minWidth: 180 }}>
+            {invoiceSignature && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                <img
+                  src={invoiceSignature}
+                  alt="Authorized Signature"
+                  style={{ maxHeight: 52, maxWidth: 160, objectFit: 'contain', display: 'block' }}
+                />
+              </div>
+            )}
+            <div style={{ borderBottom: '1px solid #94a3b8', width: 160, marginLeft: 'auto', marginBottom: 4 }}></div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#475569', fontWeight: 600 }}>Authorized Signatory</div>
           </div>
         </div>
 

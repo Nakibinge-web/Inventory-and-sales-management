@@ -227,6 +227,20 @@ export default function SaleReceipt({ sale, user, elementId = 'receipt-content' 
         </div>
       )}
 
+      {/* Authorized Signature (if available) */}
+      {tenant.signature_url && (
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <img
+            src={tenant.signature_url}
+            alt="Authorized Signature"
+            style={{ maxHeight: 42, maxWidth: 140, objectFit: 'contain' }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+          <div style={{ borderBottom: '1px solid #cbd5e1', width: 130, margin: '2px 0 3px' }}></div>
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', fontWeight: 700 }}>Authorized Signatory</div>
+        </div>
+      )}
+
       {/* ── Thank you footer ── */}
       <div style={{ marginTop: 24, paddingTop: 18, borderTop: '2px solid #be123c', textAlign: 'center', position: 'relative' }}>
         <div style={{ fontWeight: 800, fontSize: 17, color: '#881337', marginBottom: 6 }}>Thank you for your business!</div>

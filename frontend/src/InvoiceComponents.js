@@ -8,19 +8,20 @@ export function getStoredInvoiceSettings(user) {
   const tenant = user?.tenant || {};
   const defaults = {
     businessName: tenant.name || user?.name || 'SURE GADGETS',
-    tagline: 'Quality & Reliability | Inventory Management',
+    tagline: tenant.tagline || 'Quality & Reliability | Inventory Management',
     address: tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square, Kampala Uganda',
     phone: tenant.phone || user?.phone || '+256 754 723 743',
     email: tenant.email || user?.email || 'kategereian@gmail.com',
-    tin: '1002345678',
-    bankName: 'ABSA Bank Uganda',
-    accountName: tenant.name || 'SURE GADGETS',
-    accountNumber: '6008040719',
-    mobileMoneyNumber: '+256 754 723 743',
-    mobileMoneyName: tenant.name || 'SURE GADGETS',
-    paymentTerms: 'Due upon receipt',
-    notes: 'Please quote the invoice number as the payment reference. Thank you for your business!',
-    logoUrl: tenant.logo_url || ''
+    tin: tenant.tin || '1002345678',
+    bankName: tenant.bank_name || 'ABSA Bank Uganda',
+    accountName: tenant.account_name || tenant.name || 'SURE GADGETS',
+    accountNumber: tenant.account_number || '6008040719',
+    mobileMoneyNumber: tenant.mobile_money_number || '+256 754 723 743',
+    mobileMoneyName: tenant.mobile_money_name || tenant.name || 'SURE GADGETS',
+    paymentTerms: tenant.payment_terms || 'Due upon receipt',
+    notes: tenant.invoice_notes || 'Please quote the invoice number as the payment reference. Thank you for your business!',
+    logoUrl: tenant.logo_url || '',
+    signatureUrl: tenant.signature_url || ''
   };
 
   try {
@@ -31,7 +32,8 @@ export function getStoredInvoiceSettings(user) {
       return { 
         ...defaults, 
         ...parsed,
-        logoUrl: parsed.logoUrl || tenant.logo_url || defaults.logoUrl 
+        logoUrl: parsed.logoUrl || tenant.logo_url || defaults.logoUrl,
+        signatureUrl: parsed.signatureUrl || tenant.signature_url || defaults.signatureUrl
       };
     }
   } catch (e) {
@@ -316,6 +318,7 @@ export function PrintableInvoiceModal({ invoice, user, onClose }) {
   const businessAddress = invoice.business_address || storedSettings.address || tenant.address;
   const businessTin = invoice.business_tin || storedSettings.tin;
   const logoUrl = invoice.logo_url || invoice.tenant?.logo_url || tenant.logo_url || storedSettings.logoUrl;
+  const signatureUrl = invoice.signature_url || invoice.tenant?.signature_url || tenant.signature_url || storedSettings.signatureUrl;
 
   const bankName = invoice.bank_name || storedSettings.bankName;
   const accountNumber = invoice.account_number || storedSettings.accountNumber;
@@ -675,8 +678,17 @@ export function PrintableInvoiceModal({ invoice, user, onClose }) {
               <div>Computer generated document. Official and valid without physical seal.</div>
             </div>
             <div style={{ textAlign: 'right', minWidth: 180 }}>
-              <div style={{ borderBottom: '1px solid #94a3b8', width: 160, marginBottom: 4 }}></div>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#475569' }}>Authorized Signatory</div>
+              {signatureUrl && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                  <img
+                    src={signatureUrl}
+                    alt="Authorized Signature"
+                    style={{ maxHeight: 54, maxWidth: 170, objectFit: 'contain', display: 'block' }}
+                  />
+                </div>
+              )}
+              <div style={{ borderBottom: '1px solid #94a3b8', width: 160, marginLeft: 'auto', marginBottom: 4 }}></div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#475569', fontWeight: 600 }}>Authorized Signatory</div>
             </div>
           </div>
         </div>

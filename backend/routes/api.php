@@ -202,6 +202,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Business Settings
     Route::prefix('settings')->group(function () {
         Route::get('/business', [\App\Http\Controllers\SettingsController::class, 'getBusinessInfo']);
-        Route::put('/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
+        Route::match(['put', 'post'], '/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
+        Route::match(['put', 'post'], '/modules', [\App\Http\Controllers\SettingsController::class, 'updateModules']);
     });
 });
