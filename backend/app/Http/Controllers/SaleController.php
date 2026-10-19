@@ -393,7 +393,7 @@ class SaleController extends Controller
         $validated = $request->validate(['date' => 'required|date']);
 
         $sales = Sale::whereDate('sale_date', $validated['date'])
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->get();
 
         ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
@@ -427,7 +427,7 @@ class SaleController extends Controller
         $weekEnd   = $date->copy()->endOfWeek(\Carbon\Carbon::SUNDAY);
 
         $sales = Sale::whereBetween('sale_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->orderBy('sale_date')
                      ->get();
 
@@ -479,7 +479,7 @@ class SaleController extends Controller
 
         $sales = Sale::whereYear('sale_date', $year)
                      ->whereMonth('sale_date', $month)
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->orderBy('sale_date')
                      ->get();
 

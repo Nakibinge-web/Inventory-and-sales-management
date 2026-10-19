@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { theme } from './styles/theme';
 import DashboardCard from './components/ui/DashboardCard';
 import DataTable from './components/ui/DataTable';
@@ -6779,7 +6779,102 @@ function ReportsTab({ data, loading, token }) {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState(null);
 
+  // Expandable sale transaction receipts
+  const [expandedSales, setExpandedSales] = useState({});
+  const toggleExpandSale = (saleId) => {
+    setExpandedSales(prev => ({ ...prev, [saleId]: !prev[saleId] }));
+  };
+
+  // Sub-view toggle in Daily / Weekly / Monthly reports: 'transactions' vs 'items'
+  const [reportSubView, setReportSubView] = useState('transactions');
+
+  // Dedicated Sold Items Details view states
+  const [soldItemRange, setSoldItemRange] = useState('all'); // 'all', 'today', 'week', 'month', 'custom'
+  const [soldItemCustomStart, setSoldItemCustomStart] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [soldItemCustomEnd, setSoldItemCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+  const [soldItemSearch, setSoldItemSearch] = useState('');
+  const [soldItemCategory, setSoldItemCategory] = useState('all');
+  const [soldItemSort, setSoldItemSort] = useState('revenue-desc');
+  const [expandedSoldProducts, setExpandedSoldProducts] = useState({});
+  const toggleExpandSoldProduct = (prodId) => {
+    setExpandedSoldProducts(prev => ({ ...prev, [prodId]: !prev[prodId] }));
+  };
+
+  // Search filter inside period items view
+  const [periodItemSearch, setPeriodItemSearch] = useState('');
+
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
+
+  // ── Helper: Aggregate sold items from any list of sales ────────────────────
+  const aggregateSoldItems = (salesList) => {
+    if (!salesList || !Array.isArray(salesList)) return [];
+    const map = {};
+    salesList.forEach(sale => {
+      const items = sale.sale_items || sale.saleItems || [];
+      const saleDate = sale.sale_date || sale.created_at;
+      const customerName = sale.customer?.name || 'Walk-in';
+      const cashierName = sale.user?.name || 'Staff';
+      const saleId = sale.id;
+
+      items.forEach(item => {
+        const prod = item.product || {};
+        const prodId = item.product_id || prod.id || `custom-${item.id || Math.random()}`;
+        const name = prod.name || item.name || `Product #${prodId}`;
+        const sku = prod.sku || '—';
+        const categoryName = prod.category?.name || 'Uncategorized';
+        const unit = prod.unit || 'pcs';
+        const qty = parseFloat(item.quantity || 0);
+        const unitPrice = parseFloat(item.price || 0);
+        const subtotal = parseFloat(item.subtotal || (qty * unitPrice) || 0);
+        const unitCost = parseFloat(prod.cost_price ?? item.cost_price ?? 0);
+        const totalCost = qty * unitCost;
+        const profit = subtotal - totalCost;
+
+        if (!map[prodId]) {
+          map[prodId] = {
+            id: prodId,
+            name,
+            sku,
+            category: categoryName,
+            unit,
+            cost_price: unitCost,
+            totalQty: 0,
+            totalRevenue: 0,
+            totalCost: 0,
+            totalProfit: 0,
+            salesCount: 0,
+            salesHistory: []
+          };
+        }
+        map[prodId].totalQty += qty;
+        map[prodId].totalRevenue += subtotal;
+        map[prodId].totalCost += totalCost;
+        map[prodId].totalProfit += profit;
+        map[prodId].salesCount += 1;
+        map[prodId].salesHistory.push({
+          saleId,
+          date: saleDate,
+          customer: customerName,
+          cashier: cashierName,
+          quantity: qty,
+          unitPrice,
+          subtotal,
+          unitCost,
+          profit
+        });
+      });
+    });
+
+    return Object.values(map).map(p => {
+      const avgSellingPrice = p.totalQty > 0 ? (p.totalRevenue / p.totalQty) : 0;
+      const marginPct = p.totalRevenue > 0 ? ((p.totalProfit / p.totalRevenue) * 100) : 0;
+      return {
+        ...p,
+        avgSellingPrice,
+        marginPct
+      };
+    });
+  };
 
   // ── Export Functions ──────────────────────────────────────────────────────
   const exportToCSV = (data, filename) => {
@@ -6792,9 +6887,8 @@ function ReportsTab({ data, loading, token }) {
     const csvContent = [
       headers.join(','),
       ...data.map(row => headers.map(header => {
-        const value = row[header] || '';
-        // Escape commas and quotes
-        return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+        const value = row[header] ?? '';
+        return typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n')) 
           ? `"${value.replace(/"/g, '""')}"` 
           : value;
       }).join(','))
@@ -6805,6 +6899,28 @@ function ReportsTab({ data, loading, token }) {
     link.href = URL.createObjectURL(blob);
     link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
+  };
+
+  const exportSoldItemsToCSV = (items, filename = 'sold_items_report') => {
+    if (!items || items.length === 0) {
+      alert('No sold items to export');
+      return;
+    }
+    const exportData = items.map(item => ({
+      product_name: item.name,
+      sku: item.sku || '—',
+      category: item.category || 'Uncategorized',
+      quantity_sold: item.totalQty,
+      unit: item.unit || 'pcs',
+      unit_cost_ugx: Math.round(item.cost_price || 0),
+      avg_selling_price_ugx: Math.round(item.avgSellingPrice || 0),
+      total_revenue_ugx: Math.round(item.totalRevenue || 0),
+      total_cost_ugx: Math.round(item.totalCost || 0),
+      gross_profit_ugx: Math.round(item.totalProfit || 0),
+      profit_margin_pct: `${(item.marginPct || 0).toFixed(1)}%`,
+      orders_count: item.salesCount || 0
+    }));
+    exportToCSV(exportData, filename);
   };
 
   const exportOverviewToCSV = () => {
@@ -6860,6 +6976,587 @@ function ReportsTab({ data, loading, token }) {
       status: product.stock <= (product.reorder_level || 10) ? 'Low Stock' : 'In Stock'
     }));
     exportToCSV(productsData, 'products_inventory');
+  };
+
+  // ── Derived Sold Items for Dedicated Tab ─────────────────────────────────
+  const filteredSalesForSoldItems = useMemo(() => {
+    const allSales = data.sales || [];
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    return allSales.filter(sale => {
+      const rawDate = sale.sale_date || sale.created_at;
+      if (!rawDate) return true;
+      const saleDateStr = rawDate.split('T')[0];
+
+      if (soldItemRange === 'today') {
+        return saleDateStr === todayStr;
+      }
+      if (soldItemRange === 'week') {
+        const saleTime = new Date(saleDateStr).getTime();
+        const weekAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+        return saleTime >= weekAgo;
+      }
+      if (soldItemRange === 'month') {
+        const thisMonthStr = now.toISOString().slice(0, 7);
+        return saleDateStr.startsWith(thisMonthStr);
+      }
+      if (soldItemRange === 'custom') {
+        if (soldItemCustomStart && saleDateStr < soldItemCustomStart) return false;
+        if (soldItemCustomEnd && saleDateStr > soldItemCustomEnd) return false;
+        return true;
+      }
+      return true;
+    });
+  }, [data.sales, soldItemRange, soldItemCustomStart, soldItemCustomEnd]);
+
+  const aggregatedSoldItemsList = useMemo(() => {
+    let items = aggregateSoldItems(filteredSalesForSoldItems);
+
+    if (soldItemCategory !== 'all') {
+      items = items.filter(it => it.category?.toLowerCase() === soldItemCategory.toLowerCase());
+    }
+
+    if (soldItemSearch.trim()) {
+      const q = soldItemSearch.toLowerCase();
+      items = items.filter(it =>
+        it.name.toLowerCase().includes(q) ||
+        (it.sku && it.sku.toLowerCase().includes(q)) ||
+        (it.category && it.category.toLowerCase().includes(q))
+      );
+    }
+
+    items.sort((a, b) => {
+      if (soldItemSort === 'revenue-desc') return b.totalRevenue - a.totalRevenue;
+      if (soldItemSort === 'qty-desc') return b.totalQty - a.totalQty;
+      if (soldItemSort === 'profit-desc') return b.totalProfit - a.totalProfit;
+      if (soldItemSort === 'name-asc') return a.name.localeCompare(b.name);
+      return 0;
+    });
+
+    return items;
+  }, [filteredSalesForSoldItems, soldItemCategory, soldItemSearch, soldItemSort]);
+
+  const soldItemsTotals = useMemo(() => {
+    return aggregatedSoldItemsList.reduce((acc, item) => {
+      acc.totalQty += item.totalQty;
+      acc.totalRevenue += item.totalRevenue;
+      acc.totalCost += item.totalCost;
+      acc.totalProfit += item.totalProfit;
+      return acc;
+    }, { totalQty: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0 });
+  }, [aggregatedSoldItemsList]);
+
+  // ── Render Nested Receipt Breakdown Table ────────────────────────────────
+  const renderSaleItemsDetailTable = (sale) => {
+    const items = sale.sale_items || sale.saleItems || [];
+    if (!items || items.length === 0) {
+      return (
+        <div style={{ padding: '14px 20px', background: '#f8fafc', color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>
+          No item breakdown recorded for this transaction.
+        </div>
+      );
+    }
+    const totalCost = items.reduce((sum, item) => {
+      const c = parseFloat(item.product?.cost_price ?? item.cost_price ?? 0);
+      return sum + (item.quantity * c);
+    }, 0);
+    const totalRev = items.reduce((sum, item) => sum + parseFloat(item.subtotal || (item.quantity * item.price) || 0), 0);
+    const totalProfit = totalRev - totalCost;
+
+    return (
+      <div style={{ background: '#f8fafc', padding: '16px 20px', borderTop: '1px dashed #cbd5e1', borderBottom: '2px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>📦</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+              Items in Transaction #{sale.id}
+            </span>
+            <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+              {items.length} {items.length === 1 ? 'item' : 'items'}
+            </span>
+            {sale.customer?.name && (
+              <span style={{ fontSize: 12, color: '#64748b' }}>
+                • Customer: <strong style={{ color: '#0f172a' }}>{sale.customer.name}</strong>
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 14, fontSize: 12, alignItems: 'center' }}>
+            <span style={{ color: '#64748b' }}>Revenue: <strong style={{ color: '#0f172a' }}>UGX {Math.round(totalRev).toLocaleString()}</strong></span>
+            <span style={{ color: '#64748b' }}>Cost: <strong style={{ color: '#475569' }}>UGX {Math.round(totalCost).toLocaleString()}</strong></span>
+            <span style={{ color: totalProfit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+              Profit: UGX {Math.round(totalProfit).toLocaleString()}
+            </span>
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: '#f1f5f9', color: '#475569', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>#</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product Name & SKU</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Category</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'center' }}>Qty</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Unit Cost</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Unit Price</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Subtotal</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Profit</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => {
+                const prod = item.product || {};
+                const name = prod.name || item.name || `Product #${item.product_id}`;
+                const sku = prod.sku || '—';
+                const catName = prod.category?.name || '—';
+                const qty = parseFloat(item.quantity || 0);
+                const unit = prod.unit || 'pcs';
+                const unitPrice = parseFloat(item.price || 0);
+                const subtotal = parseFloat(item.subtotal || (qty * unitPrice) || 0);
+                const unitCost = parseFloat(prod.cost_price ?? item.cost_price ?? 0);
+                const cost = qty * unitCost;
+                const profit = subtotal - cost;
+                const margin = subtotal > 0 ? ((profit / subtotal) * 100).toFixed(1) : '0';
+
+                return (
+                  <tr key={idx} style={{ borderBottom: idx < items.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <td style={{ padding: '8px 12px', color: '#94a3b8' }}>{idx + 1}</td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{name}</div>
+                      {sku !== '—' && <div style={{ fontSize: 11, color: '#64748b' }}>SKU: {sku}</div>}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                      <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>
+                        {catName}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>
+                      {qty} <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{unit}</span>
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>
+                      UGX {Math.round(unitCost).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
+                      UGX {Math.round(unitPrice).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                      UGX {Math.round(subtotal).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#16a34a' : '#dc2626' }}>
+                      UGX {Math.round(profit).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                      <span style={{
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        background: profit >= 0 ? '#dcfce7' : '#fee2e2',
+                        color: profit >= 0 ? '#15803d' : '#b91c1c'
+                      }}>
+                        {profit >= 0 ? '+' : ''}{margin}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render Sold Items Summary View for Daily/Weekly/Monthly ──────────────
+  const renderSoldItemsSummaryView = (sales, periodLabel, exportFilename) => {
+    const rawItems = aggregateSoldItems(sales);
+    const filteredItems = rawItems.filter(it => {
+      if (!periodItemSearch.trim()) return true;
+      const q = periodItemSearch.toLowerCase();
+      return it.name.toLowerCase().includes(q) ||
+        (it.sku && it.sku.toLowerCase().includes(q)) ||
+        (it.category && it.category.toLowerCase().includes(q));
+    });
+
+    const totalUnits = filteredItems.reduce((s, it) => s + it.totalQty, 0);
+    const totalRev = filteredItems.reduce((s, it) => s + it.totalRevenue, 0);
+    const totalCost = filteredItems.reduce((s, it) => s + it.totalCost, 0);
+    const totalProfit = totalRev - totalCost;
+    const overallMargin = totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : '0';
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '18px 20px' }}>
+        {/* Summary mini cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Distinct Items</span>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{filteredItems.length} products</div>
+          </div>
+          <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Units Sold</span>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>{totalUnits.toLocaleString()} units</div>
+          </div>
+          <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Items Revenue</span>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>UGX {Math.round(totalRev).toLocaleString()}</div>
+          </div>
+          <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Items Profit & Margin</span>
+            <div style={{ fontSize: 18, fontWeight: 700, color: totalProfit >= 0 ? '#16a34a' : '#dc2626', marginTop: 4 }}>
+              UGX {Math.round(totalProfit).toLocaleString()} <span style={{ fontSize: 12, fontWeight: 600 }}>({overallMargin}%)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter input & export button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: 280 }}>
+            <input
+              type="text"
+              placeholder="Filter sold items by name or SKU..."
+              value={periodItemSearch}
+              onChange={e => setPeriodItemSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px 8px 32px',
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                fontSize: 13,
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 13 }}>🔍</span>
+          </div>
+          <button
+            onClick={() => exportSoldItemsToCSV(filteredItems, exportFilename || `sold_items_${periodLabel.toLowerCase()}`)}
+            style={{
+              padding: '8px 14px',
+              background: '#0891b2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            📥 Export Items CSV
+          </button>
+        </div>
+
+        {/* Sold items table */}
+        {filteredItems.length === 0 ? (
+          <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13, background: '#f8fafc', borderRadius: 8 }}>
+            No sold items found matching query.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  {['Product & SKU', 'Category', 'Units Sold', 'Avg Price', 'Unit Cost', 'Revenue', 'Cost', 'Gross Profit', 'Margin', 'Orders', ''].map((h, i) => (
+                    <th key={i} style={{ padding: '10px 14px', textAlign: i >= 2 && i <= 8 ? 'right' : 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map(item => {
+                  const isExp = !!expandedSoldProducts[item.id];
+                  return (
+                    <React.Fragment key={item.id}>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9', background: isExp ? '#fafbff' : '#fff' }}>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.name}</div>
+                          {item.sku && item.sku !== '—' && (
+                            <span style={{ fontSize: 11, color: '#64748b' }}>SKU: {item.sku}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#475569' }}>
+                          <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: 6, fontSize: 11 }}>
+                            {item.category}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                          {item.totalQty} <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{item.unit}</span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#334155' }}>
+                          UGX {Math.round(item.avgSellingPrice).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
+                          UGX {Math.round(item.cost_price).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                          UGX {Math.round(item.totalRevenue).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
+                          UGX {Math.round(item.totalCost).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: item.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                          UGX {Math.round(item.totalProfit).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: 12,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: item.totalProfit >= 0 ? '#dcfce7' : '#fee2e2',
+                            color: item.totalProfit >= 0 ? '#15803d' : '#b91c1c'
+                          }}>
+                            {item.totalProfit >= 0 ? '+' : ''}{item.marginPct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b' }}>
+                          <span style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 10, fontSize: 11, border: '1px solid #e2e8f0' }}>
+                            {item.salesCount} txn{item.salesCount !== 1 ? 's' : ''}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandSoldProduct(item.id)}
+                            style={{
+                              background: isExp ? '#4f46e5' : '#f1f5f9',
+                              color: isExp ? '#fff' : '#475569',
+                              border: 'none',
+                              borderRadius: 6,
+                              padding: '5px 10px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                          >
+                            <span>Receipts</span>
+                            <span>{isExp ? '▲' : '▼'}</span>
+                          </button>
+                        </td>
+                      </tr>
+                      {isExp && (
+                        <tr>
+                          <td colSpan={11} style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                            <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                              <div style={{ padding: '10px 14px', background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0' }}>
+                                🧾 Transactions containing "{item.name}" ({item.salesHistory.length})
+                              </div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                  <tr style={{ background: '#f8fafc', color: '#64748b' }}>
+                                    <th style={{ padding: '6px 12px', textAlign: 'left' }}>Date</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'left' }}>Order #</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'left' }}>Customer</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'left' }}>Cashier</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'right' }}>Qty</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'right' }}>Sold At</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'right' }}>Subtotal</th>
+                                    <th style={{ padding: '6px 12px', textAlign: 'right' }}>Profit</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {item.salesHistory.map((h, hi) => (
+                                    <tr key={hi} style={{ borderTop: '1px solid #f1f5f9' }}>
+                                      <td style={{ padding: '6px 12px', color: '#475569' }}>{new Date(h.date).toLocaleDateString()}</td>
+                                      <td style={{ padding: '6px 12px', fontWeight: 600, color: '#4f46e5' }}>#{h.saleId}</td>
+                                      <td style={{ padding: '6px 12px', color: '#334155' }}>{h.customer}</td>
+                                      <td style={{ padding: '6px 12px', color: '#64748b' }}>{h.cashier}</td>
+                                      <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600 }}>{h.quantity}</td>
+                                      <td style={{ padding: '6px 12px', textAlign: 'right' }}>UGX {Math.round(h.unitPrice).toLocaleString()}</td>
+                                      <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 700 }}>UGX {Math.round(h.subtotal).toLocaleString()}</td>
+                                      <td style={{ padding: '6px 12px', textAlign: 'right', color: h.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                                        UGX {Math.round(h.profit).toLocaleString()}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Render Sales Transactions with Expandable Item Receipts ──────────────
+  const renderSalesTransactionsSection = (sales, periodLabel, exportFilename, showCustomer = false) => {
+    const soldItems = aggregateSoldItems(sales);
+
+    return (
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+        {/* Header toolbar */}
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid #f1f5f9',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+              {reportSubView === 'transactions' ? `${periodLabel} Transactions` : `${periodLabel} Sold Items Breakdown`}
+            </h3>
+            <span style={{ fontSize: 11, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 20, padding: '3px 10px', fontWeight: 600 }}>
+              {sales?.length || 0} transaction{sales?.length !== 1 ? 's' : ''} · {soldItems.length} item{soldItems.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
+              <button
+                type="button"
+                onClick={() => setReportSubView('transactions')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: reportSubView === 'transactions' ? '#fff' : 'transparent',
+                  color: reportSubView === 'transactions' ? '#0f172a' : '#64748b',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  boxShadow: reportSubView === 'transactions' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s'
+                }}
+              >
+                🧾 Transactions ({sales?.length || 0})
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportSubView('items')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: reportSubView === 'items' ? '#fff' : 'transparent',
+                  color: reportSubView === 'items' ? '#0f172a' : '#64748b',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  boxShadow: reportSubView === 'items' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s'
+                }}
+              >
+                📦 Sold Items Details ({soldItems.length})
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* View Mode Switching */}
+        {reportSubView === 'items' ? (
+          renderSoldItemsSummaryView(sales, periodLabel, exportFilename)
+        ) : (
+          sales?.length === 0 ? (
+            <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales recorded for this period.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  {(showCustomer
+                    ? ['Date', 'Cashier', 'Customer', 'Payment', 'Sold Items Breakdown', 'Amount', 'Cost', 'Profit']
+                    : ['Time', 'Cashier', 'Payment', 'Sold Items Breakdown', 'Amount', 'Cost', 'Profit']
+                  ).map(h => (
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sales?.map(s => {
+                  const itemsCount = (s.sale_items || s.saleItems || []).length;
+                  const isExp = !!expandedSales[s.id];
+                  const colSpanCount = showCustomer ? 8 : 7;
+                  return (
+                    <React.Fragment key={s.id}>
+                      <tr style={{ borderTop: '1px solid #f1f5f9', background: isExp ? '#fafbff' : '#fff' }}>
+                        <td style={{ padding: '12px 16px', fontSize: 13, color: '#475569' }}>
+                          {showCustomer
+                            ? new Date(s.sale_date).toLocaleDateString()
+                            : new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
+                        {showCustomer && (
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
+                        )}
+                        <td style={{ padding: '12px 16px' }}>
+                          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
+                            {s.payment_method?.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandSale(s.id)}
+                            style={{
+                              background: isExp ? '#4f46e5' : '#eef2ff',
+                              color: isExp ? '#fff' : '#4f46e5',
+                              border: `1px solid ${isExp ? '#4f46e5' : '#c7d2fe'}`,
+                              borderRadius: 6,
+                              padding: '5px 12px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <span>📦 {itemsCount} {itemsCount === 1 ? 'item' : 'items'}</span>
+                            <span style={{ fontSize: 10 }}>{isExp ? '▲ Hide' : '▼ Details'}</span>
+                          </button>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                          UGX {parseFloat(s.total_amount || 0).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>
+                          UGX {parseFloat(s.cost || 0).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                          UGX {parseFloat(s.profit || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      {isExp && (
+                        <tr>
+                          <td colSpan={colSpanCount} style={{ padding: 0 }}>
+                            {renderSaleItemsDetailTable(s)}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          )
+        )}
+      </div>
+    );
   };
 
   // ── Derived analytics from existing data ──────────────────────────────────
@@ -6921,6 +7618,7 @@ function ReportsTab({ data, loading, token }) {
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
+    { id: 'sold-items', label: '📦 Sold Items Details' },
     { id: 'daily', label: 'Daily Sales' },
     { id: 'weekly', label: 'Weekly Sales' },
     { id: 'monthly-sales', label: 'Monthly Sales' },
@@ -6948,6 +7646,27 @@ function ReportsTab({ data, loading, token }) {
         
         {/* Export Buttons */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => exportSoldItemsToCSV(aggregateSoldItems(data.sales), 'all_sold_items_report')}
+            style={{
+              padding: '10px 16px',
+              background: '#0891b2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#0e7490'}
+            onMouseLeave={e => e.currentTarget.style.background = '#0891b2'}
+          >
+            📦 Export Sold Items
+          </button>
           <button
             onClick={exportOverviewToCSV}
             style={{
@@ -7036,11 +7755,12 @@ function ReportsTab({ data, loading, token }) {
       </div>
 
       {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #f1f5f9', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #f1f5f9', paddingBottom: 0, overflowX: 'auto' }}>
         {tabs.map(t => (
-          <button key={t.id} onClick={() => { setActiveReport(t.id); setReportData(null); setReportError(null); }} style={{
+          <button key={t.id} onClick={() => { setActiveReport(t.id); setReportData(null); setReportError(null); setReportSubView('transactions'); }} style={{
             padding: '9px 18px', border: 'none', background: 'none', cursor: 'pointer',
             fontSize: 14, fontWeight: 600,
+            whiteSpace: 'nowrap',
             color: activeReport === t.id ? '#4f46e5' : '#64748b',
             borderBottom: activeReport === t.id ? '2px solid #4f46e5' : '2px solid transparent',
             marginBottom: -2, transition: 'all 0.15s',
@@ -7121,7 +7841,26 @@ function ReportsTab({ data, loading, token }) {
 
             {/* Top products */}
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
-              <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Top Products by Revenue</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Top Products by Revenue</h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveReport('sold-items')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#4f46e5',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}
+                >
+                  View Sold Items Details &rarr;
+                </button>
+              </div>
               {topProducts.length === 0 ? (
                 <p style={{ color: '#94a3b8', fontSize: 14 }}>No sales data yet.</p>
               ) : (
@@ -7162,6 +7901,362 @@ function ReportsTab({ data, loading, token }) {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DEDICATED SOLD ITEMS DETAILS REPORT ── */}
+      {activeReport === 'sold-items' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Controls Bar: Time Filter, Category, Search, Sort, Export */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Top row: Date Range Pills */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: 4, letterSpacing: '0.04em' }}>Period:</span>
+                {[
+                  { id: 'all', label: 'All Time' },
+                  { id: 'today', label: 'Today' },
+                  { id: 'week', label: 'This Week (7d)' },
+                  { id: 'month', label: 'This Month' },
+                  { id: 'custom', label: 'Custom Range' },
+                ].map(r => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setSoldItemRange(r.id)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 20,
+                      border: soldItemRange === r.id ? '1.5px solid #4f46e5' : '1px solid #cbd5e1',
+                      background: soldItemRange === r.id ? '#4f46e5' : '#fff',
+                      color: soldItemRange === r.id ? '#fff' : '#475569',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+
+              {soldItemRange === 'custom' && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="date"
+                    value={soldItemCustomStart}
+                    onChange={e => setSoldItemCustomStart(e.target.value)}
+                    style={{ ...supS.input, width: 140, padding: '5px 8px', fontSize: 12 }}
+                  />
+                  <span style={{ color: '#94a3b8', fontSize: 12 }}>to</span>
+                  <input
+                    type="date"
+                    value={soldItemCustomEnd}
+                    onChange={e => setSoldItemCustomEnd(e.target.value)}
+                    style={{ ...supS.input, width: 140, padding: '5px 8px', fontSize: 12 }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Bottom row: Search, Category, Sort, Export */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+                <div style={{ position: 'relative', minWidth: 260 }}>
+                  <input
+                    type="text"
+                    placeholder="Search by product, SKU, category..."
+                    value={soldItemSearch}
+                    onChange={e => setSoldItemSearch(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px 9px 34px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 14 }}>🔍</span>
+                </div>
+
+                <select
+                  value={soldItemCategory}
+                  onChange={e => setSoldItemCategory(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: '#334155',
+                    outline: 'none',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="all">All Categories</option>
+                  {(data.categories || []).map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={soldItemSort}
+                  onChange={e => setSoldItemSort(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: '#334155',
+                    outline: 'none',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="revenue-desc">Sort by Revenue (Highest)</option>
+                  <option value="qty-desc">Sort by Units Sold (Most)</option>
+                  <option value="profit-desc">Sort by Profit (Highest)</option>
+                  <option value="name-asc">Sort by Product Name (A-Z)</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => exportSoldItemsToCSV(aggregatedSoldItemsList, `sold_items_${soldItemRange}`)}
+                style={{
+                  padding: '9px 16px',
+                  background: '#0891b2',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                📥 Export Sold Items CSV
+              </button>
+            </div>
+          </div>
+
+          {/* KPI Stat Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Units Sold</p>
+                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#2563eb' }}>
+                  {soldItemsTotals.totalQty.toLocaleString()} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>units</span>
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94a3b8' }}>Across {aggregatedSoldItemsList.length} distinct products</p>
+              </div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📦</div>
+            </div>
+
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Sold Items Revenue</p>
+                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#16a34a' }}>
+                  UGX {Math.round(soldItemsTotals.totalRevenue).toLocaleString()}
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94a3b8' }}>Gross customer payments</p>
+              </div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>💰</div>
+            </div>
+
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cost of Goods Sold (COGS)</p>
+                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#d97706' }}>
+                  UGX {Math.round(soldItemsTotals.totalCost).toLocaleString()}
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94a3b8' }}>Wholesale acquisition cost</p>
+              </div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🛒</div>
+            </div>
+
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Gross Profit & Margin</p>
+                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: soldItemsTotals.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                  UGX {Math.round(soldItemsTotals.totalProfit).toLocaleString()}
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>
+                  Margin: <strong style={{ color: soldItemsTotals.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {soldItemsTotals.totalRevenue > 0 ? `${((soldItemsTotals.totalProfit / soldItemsTotals.totalRevenue) * 100).toFixed(1)}%` : '0%'}
+                  </strong>
+                </p>
+              </div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: soldItemsTotals.totalProfit >= 0 ? '#f0fdf4' : '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+                {soldItemsTotals.totalProfit >= 0 ? '📈' : '📉'}
+              </div>
+            </div>
+          </div>
+
+          {/* Sold Items Table Card */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sold Items Detailed Breakdown</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+                  Showing {aggregatedSoldItemsList.length} items sold across selected time frame
+                </p>
+              </div>
+              <span style={{ fontSize: 12, color: '#4f46e5', background: '#eef2ff', padding: '4px 10px', borderRadius: 12, fontWeight: 600 }}>
+                {soldItemsTotals.totalQty.toLocaleString()} Total Units Sold
+              </span>
+            </div>
+
+            {aggregatedSoldItemsList.length === 0 ? (
+              <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                <p style={{ fontSize: 32, margin: '0 0 10px' }}>📦</p>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#334155' }}>No sold items found</p>
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: '#94a3b8' }}>Try adjusting your date range or search filter.</p>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      {['#', 'Product & SKU', 'Category', 'Units Sold', 'Unit Cost', 'Avg Price', 'Total Revenue', 'Total Cost', 'Gross Profit', 'Margin', 'Orders', 'Actions'].map((h, i) => (
+                        <th key={i} style={{ padding: '12px 14px', textAlign: i >= 3 && i <= 9 ? 'right' : i === 10 ? 'center' : 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aggregatedSoldItemsList.map((item, index) => {
+                      const isExp = !!expandedSoldProducts[item.id];
+                      return (
+                        <React.Fragment key={item.id}>
+                          <tr style={{ borderBottom: '1px solid #f1f5f9', background: isExp ? '#fafbff' : '#fff' }}>
+                            <td style={{ padding: '12px 14px', color: '#94a3b8', fontSize: 12 }}>{index + 1}</td>
+                            <td style={{ padding: '12px 14px' }}>
+                              <div style={{ fontWeight: 700, color: '#0f172a' }}>{item.name}</div>
+                              {item.sku && item.sku !== '—' && (
+                                <span style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, marginTop: 2, display: 'inline-block' }}>
+                                  SKU: {item.sku}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '12px 14px', color: '#475569' }}>
+                              <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500 }}>
+                                {item.category}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                              {item.totalQty.toLocaleString()} <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{item.unit}</span>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
+                              UGX {Math.round(item.cost_price).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#334155' }}>
+                              UGX {Math.round(item.avgSellingPrice).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                              UGX {Math.round(item.totalRevenue).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
+                              UGX {Math.round(item.totalCost).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: item.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                              UGX {Math.round(item.totalProfit).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                              <span style={{
+                                padding: '3px 8px',
+                                borderRadius: 12,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: item.totalProfit >= 0 ? '#dcfce7' : '#fee2e2',
+                                color: item.totalProfit >= 0 ? '#15803d' : '#b91c1c'
+                              }}>
+                                {item.totalProfit >= 0 ? '+' : ''}{item.marginPct.toFixed(1)}%
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b' }}>
+                              <span style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 10, fontSize: 11, border: '1px solid #e2e8f0', fontWeight: 600 }}>
+                                {item.salesCount} txn{item.salesCount !== 1 ? 's' : ''}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandSoldProduct(item.id)}
+                                style={{
+                                  background: isExp ? '#4f46e5' : '#f1f5f9',
+                                  color: isExp ? '#fff' : '#475569',
+                                  border: 'none',
+                                  borderRadius: 6,
+                                  padding: '5px 10px',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                <span>Receipts</span>
+                                <span>{isExp ? '▲' : '▼'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                          {isExp && (
+                            <tr>
+                              <td colSpan={12} style={{ padding: '12px 18px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                  <div style={{ padding: '10px 16px', background: '#f1f5f9', fontSize: 12, fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>🧾 All Sales Containing "{item.name}"</span>
+                                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>{item.salesHistory.length} orders recorded</span>
+                                  </div>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                    <thead>
+                                      <tr style={{ background: '#f8fafc', color: '#64748b' }}>
+                                        <th style={{ padding: '7px 14px', textAlign: 'left' }}>Date</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'left' }}>Invoice #</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'left' }}>Customer</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'left' }}>Cashier</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'right' }}>Qty Sold</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'right' }}>Unit Price</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'right' }}>Line Subtotal</th>
+                                        <th style={{ padding: '7px 14px', textAlign: 'right' }}>Line Profit</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {item.salesHistory.map((h, hi) => (
+                                        <tr key={hi} style={{ borderTop: '1px solid #f1f5f9' }}>
+                                          <td style={{ padding: '7px 14px', color: '#475569' }}>{new Date(h.date).toLocaleDateString()}</td>
+                                          <td style={{ padding: '7px 14px', fontWeight: 600, color: '#4f46e5' }}>#{h.saleId}</td>
+                                          <td style={{ padding: '7px 14px', color: '#334155' }}>{h.customer}</td>
+                                          <td style={{ padding: '7px 14px', color: '#64748b' }}>{h.cashier}</td>
+                                          <td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 600 }}>{h.quantity} {item.unit}</td>
+                                          <td style={{ padding: '7px 14px', textAlign: 'right' }}>UGX {Math.round(h.unitPrice).toLocaleString()}</td>
+                                          <td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 700 }}>UGX {Math.round(h.subtotal).toLocaleString()}</td>
+                                          <td style={{ padding: '7px 14px', textAlign: 'right', color: h.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                                            UGX {Math.round(h.profit).toLocaleString()}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -7212,41 +8307,7 @@ function ReportsTab({ data, loading, token }) {
                   </p>
                 </div>
               </div>
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
-                </div>
-                {reportData.sales?.length === 0 ? (
-                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales on this date.</p>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc' }}>
-                        {['Time', 'Cashier', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
-                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.sales?.map(s => (
-                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.created_at).toLocaleTimeString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
-                          <td style={{ padding: '12px 16px' }}>
-                            <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
-                              {s.payment_method?.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              {renderSalesTransactionsSection(reportData.sales, 'Daily Sales', `daily_sales_${reportData.date}`, false)}
             </div>
           )}
         </div>
@@ -7341,43 +8402,7 @@ function ReportsTab({ data, loading, token }) {
                 </div>
               )}
 
-              {/* Transactions table */}
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
-                </div>
-                {reportData.sales?.length === 0 ? (
-                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales this week.</p>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc' }}>
-                        {['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
-                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.sales?.map(s => (
-                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
-                          <td style={{ padding: '12px 16px' }}>
-                            <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
-                              {s.payment_method?.replace(/_/g, ' ')}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              {renderSalesTransactionsSection(reportData.sales, 'Weekly Sales', `weekly_sales_${reportData.week_start}_to_${reportData.week_end}`, true)}
             </div>
           )}
         </div>
@@ -7496,43 +8521,7 @@ function ReportsTab({ data, loading, token }) {
                 )}
               </div>
 
-              {/* Transactions table */}
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
-                </div>
-                {reportData.sales?.length === 0 ? (
-                  <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales this month.</p>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc' }}>
-                        {['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
-                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.sales?.map(s => (
-                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
-                          <td style={{ padding: '12px 16px' }}>
-                            <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
-                              {s.payment_method?.replace(/_/g, ' ')}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              {renderSalesTransactionsSection(reportData.sales, 'Monthly Sales', `monthly_sales_${reportData.month}`, true)}
             </div>
           )}
         </div>
