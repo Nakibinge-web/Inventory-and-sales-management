@@ -37,6 +37,7 @@ return [
 
     'mistral' => [
         'key' => env('MISTRAL_API_KEY'),
+        'ca_bundle' => env('CURL_CA_BUNDLE'),
     ],
 
 ];

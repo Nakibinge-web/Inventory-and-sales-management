@@ -99,16 +99,14 @@ class ManagerDenialPropertyTest extends TestCase
     }
 
     /**
-     * Feature: role-based-policy-system, Property 4: Manager Sales Denial
+     * Feature: role-based-policy-system, Property 4: Manager Sales Access
      * 
-     * For any authenticated user with the manager role and any Sale resource,
-     * all policy methods (viewAny, view, create, update, delete) should return false.
-     * 
-     * Validates: Requirements 3.5, 3.6, 3.7, 3.8
+     * For any authenticated user with the manager role and any Sale resource within the tenant,
+     * all policy methods (viewAny, view, create, update, delete) should return true.
      * 
      * @test
      */
-    public function property_4_manager_cannot_manage_sales()
+    public function property_4_manager_can_manage_sales()
     {
         $policy = new SalePolicy();
         
@@ -127,30 +125,30 @@ class ManagerDenialPropertyTest extends TestCase
                 'sale_date' => now()->subDays(rand(0, 30)),
             ]);
             
-            // Assert all operations are denied
-            $this->assertFalse(
+            // Assert all operations are allowed
+            $this->assertTrue(
                 $policy->viewAny($manager),
-                "Iteration {$i}: Manager should not be able to view any sales"
+                "Iteration {$i}: Manager should be able to view any sales"
             );
             
-            $this->assertFalse(
+            $this->assertTrue(
                 $policy->view($manager, $sale),
-                "Iteration {$i}: Manager should not be able to view sale {$sale->id}"
+                "Iteration {$i}: Manager should be able to view sale {$sale->id}"
             );
             
-            $this->assertFalse(
+            $this->assertTrue(
                 $policy->create($manager),
-                "Iteration {$i}: Manager should not be able to create sales"
+                "Iteration {$i}: Manager should be able to create sales"
             );
             
-            $this->assertFalse(
+            $this->assertTrue(
                 $policy->update($manager, $sale),
-                "Iteration {$i}: Manager should not be able to update sale {$sale->id}"
+                "Iteration {$i}: Manager should be able to update sale {$sale->id}"
             );
             
-            $this->assertFalse(
+            $this->assertTrue(
                 $policy->delete($manager, $sale),
-                "Iteration {$i}: Manager should not be able to delete sale {$sale->id}"
+                "Iteration {$i}: Manager should be able to delete sale {$sale->id}"
             );
         }
     }

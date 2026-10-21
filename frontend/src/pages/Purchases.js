@@ -481,7 +481,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
       </div>
 
       {/* ── Purchases Query Filters Grid (Day & Week side-by-side) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
         
         {/* Card 1: Purchases by Specific Day */}
         <div style={{ 
@@ -814,7 +814,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
           </div>
 
           {/* Summary banner */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+          <div className="day-summary-grid" style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
             <div style={{ padding: '16px 22px', background: '#4f46e5', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 200 }}>
@@ -927,7 +927,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
             </div>
 
             {/* Summary banner */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 0, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+            <div className="day-summary-grid" style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
               <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Week</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{fmt(monday)}</div>
@@ -1063,7 +1063,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
 
                 {/* Existing product row */}
                 {line.mode === 'existing' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
+                  <div className="purchase-item-grid">
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product (Required)</span>
                       <select style={inp} value={line.product_id} onChange={e => setLine(i, 'product_id', e.target.value)}>
@@ -1089,7 +1089,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
                     {/* Row 1: Name + SKU + Barcode */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10 }}>
+                    <div className="purchase-item-grid">
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Product Name (Required)</span>
                         <input style={inp} placeholder="e.g., Memory Foam Mattress Queen Size" value={line.np_name}
@@ -1108,7 +1108,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </div>
 
                     {/* Row 2: Unit + Category */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="resp-grid-2">
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit of Measure</span>
                         <select style={inp} value={line.np_unit}
@@ -1156,7 +1156,7 @@ function PurchasesTab({ purchases, loading, token, user, suppliers, products, ca
                     </div>
 
                     {/* Row 3: Selling Price + Reorder + Qty + Cost Price */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                    <div className="purchase-np-row3">
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Retail Price (UGX) (Required)</span>
                         <input style={inp} type="text" inputMode="decimal" placeholder="0" value={line.np_price}

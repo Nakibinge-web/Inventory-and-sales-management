@@ -124,7 +124,7 @@ function OverviewTab({ data, loading, onNavigate, onAddProduct, canSell = true, 
           Quick Actions
         </h2>
         {quickActions.length > 0 ? (
-          <div className="quick-actions-grid" style={{ gridTemplateColumns: `repeat(${quickActions.length}, 1fr)` }}>
+          <div className="quick-actions-grid" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 200px), 1fr))` }}>
             {quickActions.map(q => (
               <button key={q.label} onClick={q.action} style={{
                 padding: '18px 20px', borderRadius: 12,

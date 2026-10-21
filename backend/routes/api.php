@@ -19,7 +19,7 @@ use App\Http\Controllers\ContactController;
 
 // Public routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->name('api.register');
 Route::post('/contact', [ContactController::class, 'submit']);
 
 // All other routes require a valid Sanctum token + tenant resolution
@@ -108,6 +108,8 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::middleware('role:owner')->group(function () {
             Route::post('/with-custom-role',                    [UserController::class, 'storeWithCustomRole']);
             Route::put('/{user}/custom-role-permissions',       [UserController::class, 'updateCustomRolePermissions']);
+            Route::post('/{id}/disable',                        [UserController::class, 'disable']);
+            Route::post('/{id}/enable',                         [UserController::class, 'enable']);
         });
     });
 
@@ -199,5 +201,14 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/by-type', [StockMovementController::class, 'getByType']);
         Route::get('/date-range', [StockMovementController::class, 'getByDateRange']);
         Route::get('/{stockMovement}', [StockMovementController::class, 'show']);
+    });
+
+    // Report Preferences
+    Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
+
+    // Business Settings
+    Route::prefix('settings')->group(function () {
+        Route::get('/business', [\App\Http\Controllers\SettingsController::class, 'getBusinessInfo']);
+        Route::put('/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
     });
 });

@@ -19,13 +19,28 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        // Accept 'login' (email or username) with backward-compat fallback to 'email'
+        $loginValue = $request->input('login') ?? $request->input('email');
+
         $request->validate([
-            'email'    => 'required|string', // Can be email OR username
             'password' => 'required|string',
         ]);
 
-        $key = 'login:' . $request->ip();
         $isApi = $request->wantsJson() || $request->isJson() || $request->expectsJson();
+
+        if (empty($loginValue)) {
+            if ($isApi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The email or username field is required.',
+                ], 422);
+            }
+            throw ValidationException::withMessages([
+                'login' => 'The email or username field is required.',
+            ]);
+        }
+
+        $key = 'login:' . $request->ip();
 
         // Max 5 attempts per minute
         if (RateLimiter::tooManyAttempts($key, 5)) {
@@ -37,57 +52,64 @@ class AuthController extends Controller
                 ], 429);
             }
             throw ValidationException::withMessages([
-                'email' => "Too many login attempts. Please try again in {$seconds} seconds.",
+                'login' => "Too many login attempts. Please try again in {$seconds} seconds.",
             ]);
         }
 
-        $loginInput = $request->input('email');
-        $password = $request->input('password');
+        // Normalize to lowercase for comparison
+        $loginNormalized = strtolower(trim($loginValue));
 
-        // Search user by email OR username
-        $user = User::where('email', $loginInput)
-            ->orWhere('username', $loginInput)
-            ->first();
+        // Branch on whether the input looks like an email address
+        if (str_contains($loginNormalized, '@')) {
+            $user = User::where('email', $loginNormalized)->first();
+        } else {
+            $user = User::where('username', $loginNormalized)->first();
+        }
 
-        if ($user && Hash::check($password, $user->password)) {
-            // Check if user account is active
-            if (isset($user->is_active) && !$user->is_active) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            RateLimiter::hit($key, 60);
+
+            if ($isApi) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Your account has been disabled. Please contact your system administrator.',
-                ], 403);
+                    'message' => 'The provided credentials do not match our records.',
+                ], 401);
             }
 
-            Auth::login($user);
-            RateLimiter::clear($key);
-
-            if (!$isApi) {
-                $request->session()->regenerate();
-                return redirect()->intended('/');
-            }
-
-            $user->load('roles.permissions:id,name', 'tenant');
-            $token = $user->createToken('api-token')->plainTextToken;
-
-            return response()->json([
-                'success' => true,
-                'user'    => $user,
-                'token'   => $token,
-                'message' => 'Login successful.',
+            return back()->withErrors([
+                'login' => 'The provided credentials do not match our records.',
             ]);
         }
 
-        RateLimiter::hit($key, 60);
-
-        if ($isApi) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The provided credentials do not match our records or your account is disabled.',
-            ], 401);
+        // Credentials matched — check account status before creating a session
+        if (!$user->is_active) {
+            RateLimiter::hit($key, 60);
+            if ($isApi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your account has been disabled. Please contact your administrator.',
+                ], 403);
+            }
+            return back()->withErrors(['login' => 'Your account has been disabled.']);
         }
 
-        return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
+        // Account is active — log the user in and clear the rate limiter
+        Auth::login($user);
+        RateLimiter::clear($key);
+
+        if (!$isApi) {
+            $request->session()->regenerate();
+            return redirect()->intended('/');
+        }
+
+        $user->load('roles.permissions:id,name', 'tenant');
+        $token = $user->createToken('api-token')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'user'    => $user,
+            'token'   => $token,
+            'message' => 'Login successful.',
         ]);
     }
 
@@ -98,27 +120,56 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        // Normalize username to lowercase before validation so the unique check
+        // fires on the lowercase value (handles case-insensitive duplicate detection)
+        if ($request->has('username')) {
+            $request->merge(['username' => strtolower(trim($request->username))]);
+        }
+
         $request->validate([
             'name'          => 'required|string|max:255',
             'email'         => 'required|string|email|max:255|unique:users',
+            'username'      => 'required|string|min:3|max:30|regex:/^[a-zA-Z0-9_]+$/|unique:users',
             'password'      => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()->uncompromised()],
             'business_name' => 'required|string|max:255',
             'phone'         => 'nullable|string|max:20',
             'address'       => 'nullable|string',
+            'logo'          => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
+
+        $logoPath = null;
+        if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
+            $logoPath = $request->file('logo')->store('logos', 'public');
+        } elseif ($request->filled('logo') && is_string($request->logo) && str_starts_with($request->logo, 'data:image/')) {
+            try {
+                preg_match('/^data:image\/(\w+);base64,/', $request->logo, $type);
+                $image = substr($request->logo, strpos($request->logo, ',') + 1);
+                $type = strtolower($type[1] ?? 'png');
+                $decoded = base64_decode($image);
+                if ($decoded !== false) {
+                    $fileName = 'logos/' . \Illuminate\Support\Str::random(40) . '.' . $type;
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($fileName, $decoded);
+                    $logoPath = $fileName;
+                }
+            } catch (\Throwable $e) {
+                // Ignore base64 parse errors
+            }
+        }
 
         // Create a new tenant for the user
         $tenant = \App\Models\Tenant::create([
-            'name' => $request->business_name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'address' => $request->address,
+            'name'      => $request->business_name,
+            'email'     => $request->email,
+            'phone'     => $request->phone,
+            'address'   => $request->address,
+            'logo_path' => $logoPath,
         ]);
 
         $user = User::create([
             'tenant_id' => $tenant->id,
             'name'      => $request->name,
             'email'     => $request->email,
+            'username'  => $request->username,
             'password'  => Hash::make($request->password),
         ]);
 

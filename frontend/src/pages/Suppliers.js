@@ -228,7 +228,7 @@ function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded,
             {fieldErrors.name && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500, marginTop: 4 }}>{fieldErrors.name}</span>}
           </div>
           {/* Row 2: Contact + Email side by side */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="supplier-form-grid resp-grid-2">
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <label style={supS.label}>Supplier Phone Number</label>
               <input style={{ ...supS.input, borderColor: fieldErrors.contact ? '#dc2626' : '#e2e8f0' }} placeholder="+256 700 000 000" value={form.contact}

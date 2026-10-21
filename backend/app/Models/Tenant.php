@@ -13,8 +13,31 @@ class Tenant extends Model
         'name',
         'email',
         'phone',
+        'contacts',
         'address',
+        'logo_path',
     ];
+
+    protected $casts = [
+        'contacts' => 'array',
+    ];
+
+    protected $appends = [
+        'logo_url',
+    ];
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (!$this->logo_path) {
+            return null;
+        }
+
+        if (filter_var($this->logo_path, FILTER_VALIDATE_URL) || str_starts_with($this->logo_path, 'data:image/')) {
+            return $this->logo_path;
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($this->logo_path);
+    }
 
     // Relationships
     public function users()

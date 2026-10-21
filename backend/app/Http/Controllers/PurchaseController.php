@@ -256,7 +256,7 @@ class PurchaseController extends Controller
         });
     }
 
-    public function getMonthlyReport(Request $request): JsonResponse
+    public function getMonthlyReport(Request $request, \App\Services\ReportService $reportService): JsonResponse
     {
         $user = Auth::user();
         $isPrivileged = $user->roles()->pluck('name')
@@ -269,22 +269,10 @@ class PurchaseController extends Controller
 
         $validated = $request->validate(['month' => 'required|date_format:Y-m']);
 
-        [$year, $month] = explode('-', $validated['month']);
-
-        $purchases = Purchase::whereYear('purchase_date', $year)
-                             ->whereMonth('purchase_date', $month)
-                             ->with(['supplier', 'purchaseItems.product'])
-                             ->get();
-
-        return response()->json(['success' => true, 'data' => [
-            'month'              => $validated['month'],
-            'total_purchases'    => $purchases->sum('total_amount'),
-            'total_transactions' => $purchases->count(),
-            'purchases'          => $purchases,
-        ]]);
+        return response()->json(['success' => true, 'data' => $reportService->getMonthlyPurchasesReport($validated['month'])]);
     }
 
-    public function getDailyReport(Request $request): JsonResponse
+    public function getDailyReport(Request $request, \App\Services\ReportService $reportService): JsonResponse
     {
         $user = Auth::user();
         $isPrivileged = $user->roles()->pluck('name')
@@ -297,30 +285,6 @@ class PurchaseController extends Controller
 
         $validated = $request->validate(['date' => 'required|date_format:Y-m-d']);
 
-        $purchases = Purchase::whereDate('purchase_date', $validated['date'])
-                             ->with(['supplier', 'purchaseItems.product'])
-                             ->orderBy('purchase_date', 'desc')
-                             ->get();
-
-        // Aggregate totals per supplier for a quick breakdown
-        $bySupplier = $purchases->groupBy(fn($p) => $p->supplier?->name ?? 'Unknown')
-            ->map(fn($group, $name) => [
-                'supplier'           => $name,
-                'transactions'       => $group->count(),
-                'total_amount'       => $group->sum('total_amount'),
-            ])
-            ->values();
-
-        // Total items purchased across all orders
-        $totalItems = $purchases->sum(fn($p) => $p->purchaseItems->count());
-
-        return response()->json(['success' => true, 'data' => [
-            'date'               => $validated['date'],
-            'total_amount'       => $purchases->sum('total_amount'),
-            'total_transactions' => $purchases->count(),
-            'total_items'        => $totalItems,
-            'by_supplier'        => $bySupplier,
-            'purchases'          => $purchases,
-        ]]);
+        return response()->json(['success' => true, 'data' => $reportService->getDailyPurchasesReport($validated['date'])]);
     }
 }
