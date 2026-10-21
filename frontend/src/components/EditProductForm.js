@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import Button from './ui/Button';
+import { formatCurrencyInput, cleanCurrency, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 const API_BASE = process.env.REACT_APP_API_URL
@@ -8,7 +9,7 @@ const API_BASE = process.env.REACT_APP_API_URL
 
 const UNITS = [
   'Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)',
-  'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)',
+  'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)', 'Inches (in)',
   'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans',
 ];
 
@@ -21,8 +22,8 @@ export default function EditProductForm({ token, product, categories, suppliers,
     category_id:      product.category_id || '',
     supplier_id:      product.supplier_id || '',
     stock:            product.stock ?? '',
-    cost_price:       product.cost_price ?? '',
-    price:            product.price ?? '',
+    cost_price:       product.cost_price ? formatCurrencyInput(product.cost_price) : '',
+    price:            product.price ? formatCurrencyInput(product.price) : '',
     reorder_level:    product.reorder_level ?? '',
     description:      product.description || '',
     track_expiry:     !!product.track_expiry,
@@ -39,8 +40,12 @@ export default function EditProductForm({ token, product, categories, suppliers,
   const fileRef               = useRef();
 
   const handle = e => {
-    const { name, value, type, checked } = e.target;
-    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    const { name, type, checked } = e.target;
+    let value = type === 'checkbox' ? checked : e.target.value;
+    if (name === 'cost_price' || name === 'price') {
+      value = formatCurrencyInput(value);
+    }
+    setForm(f => ({ ...f, [name]: value }));
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: null }));
     }
@@ -59,19 +64,19 @@ export default function EditProductForm({ token, product, categories, suppliers,
       errors.unit = 'Please select a unit of measure';
     }
     
-    if (!form.category_id) {
-      errors.category_id = 'Please select a category';
-    }
+
     
     if (!form.stock || form.stock < 0) {
       errors.stock = 'Quantity is required and must be 0 or greater';
     }
     
-    if (!form.price || form.price <= 0) {
+    const priceNum = parseCurrency(form.price);
+    if (!form.price || priceNum <= 0) {
       errors.price = 'Selling price is required and must be greater than 0';
     }
     
-    if (form.cost_price && form.price && parseFloat(form.cost_price) > parseFloat(form.price)) {
+    const costNum = parseCurrency(form.cost_price);
+    if (costNum > 0 && priceNum > 0 && costNum > priceNum) {
       errors.price = 'Selling price should not be less than cost price';
     }
     
@@ -115,8 +120,8 @@ export default function EditProductForm({ token, product, categories, suppliers,
     fd.append('category_id',   form.category_id);
     fd.append('supplier_id',   form.supplier_id);
     fd.append('stock',         form.stock);
-    fd.append('cost_price',    form.cost_price);
-    fd.append('price',         form.price);
+    fd.append('cost_price',    cleanCurrency(form.cost_price));
+    fd.append('price',         cleanCurrency(form.price));
     fd.append('reorder_level', form.reorder_level || 0);
     fd.append('description',   form.description);
     fd.append('track_expiry',  form.track_expiry ? 1 : 0);
@@ -172,9 +177,9 @@ export default function EditProductForm({ token, product, categories, suppliers,
       </div>
 
       {/* Category */}
-      <Field label="Product Category" error={fieldErrors.category_id}>
+      <Field label="Product Category (Optional)" error={fieldErrors.category_id}>
         <select style={{ ...s.input, borderColor: fieldErrors.category_id ? '#dc2626' : '#e2e8f0' }} name="category_id" value={form.category_id} onChange={handle}>
-          <option value="">— Choose from existing categories —</option>
+          <option value="">— No category (Optional) —</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field>
@@ -202,12 +207,12 @@ export default function EditProductForm({ token, product, categories, suppliers,
       {/* Row 4: Cost + Selling price */}
       <div className="product-form-row" style={s.row}>
         <Field label="Purchase Cost Price (UGX)">
-          <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
-            placeholder="What you paid to acquire it" value={form.cost_price} onChange={handle} />
+          <input style={s.input} name="cost_price" type="text" inputMode="decimal"
+            placeholder="e.g. 50,000" value={form.cost_price} onChange={handle} />
         </Field>
         <Field label="Selling Price (Required)" error={fieldErrors.price}>
-          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="number" step="0.01" min="0"
-            placeholder="Customer retail price in UGX" value={form.price} onChange={handle} />
+          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="text" inputMode="decimal"
+            placeholder="e.g. 75,000" value={form.price} onChange={handle} />
         </Field>
       </div>
 

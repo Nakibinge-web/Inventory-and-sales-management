@@ -22,12 +22,13 @@ class GenerateAutomatedReportJobTest extends TestCase
         Mail::fake();
         Log::shouldReceive('info')->once();
         
-        $tenant = Tenant::create(['name' => 'Test Tenant']);
+        $tenant = Tenant::create(['name' => 'Test Tenant', 'email' => 'tenant@example.com']);
         app()->instance('current_tenant', $tenant);
 
         $preference = ReportPreference::create([
             'tenant_id' => $tenant->id,
             'report_type' => 'daily_sales',
+            'frequency' => 'daily',
             'delivery_method' => 'dashboard',
             'is_enabled' => true,
         ]);
@@ -42,18 +43,19 @@ class GenerateAutomatedReportJobTest extends TestCase
         
         $preference->refresh();
         $this->assertNotNull($preference->last_sent_at);
-        $this->assertNull(app('current_tenant'), 'Tenant context should be cleared');
+        $this->assertFalse(app()->bound('current_tenant'), 'Tenant context should be cleared');
     }
 
     public function test_job_does_not_update_last_sent_at_on_failure()
     {
         // Force a failure by providing an invalid report type that causes generateReportData to throw
-        $tenant = Tenant::create(['name' => 'Test Tenant']);
+        $tenant = Tenant::create(['name' => 'Test Tenant', 'email' => 'failure@example.com']);
         app()->instance('current_tenant', $tenant);
 
         $preference = ReportPreference::create([
             'tenant_id' => $tenant->id,
             'report_type' => 'invalid_type', // This will trigger Exception
+            'frequency' => 'daily',
             'delivery_method' => 'dashboard',
             'is_enabled' => true,
         ]);
@@ -68,6 +70,6 @@ class GenerateAutomatedReportJobTest extends TestCase
 
         $preference->refresh();
         $this->assertNull($preference->last_sent_at);
-        $this->assertNull(app('current_tenant'), 'Tenant context should be cleared even on failure');
+        $this->assertFalse(app()->bound('current_tenant'), 'Tenant context should be cleared even on failure');
     }
 }

@@ -115,7 +115,8 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit = false, canDelete = false, canViewRoles = false }) {
   const EMPTY_FORM = {
-    name: '', email: '', password: '',
+    name: '', username: '', email: '', password: '',
+    is_active: true,
     role_ids: [],
     useCustomRole: false,
     customRoleName: '', customRoleDesc: '', customPermIds: [],
@@ -193,14 +194,16 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       setForm({
         ...EMPTY_FORM,
         name: fullUser.name,
+        username: fullUser.username || '',
         email: fullUser.email,
+        is_active: fullUser.is_active !== undefined ? fullUser.is_active : true,
         role_ids: (fullUser.roles || []).map(r => r.id),
         editCustomRoleId: customRole ? customRole.id : null,
         editCustomPermIds,
       });
     } catch {
       setEditTarget(u);
-      setForm({ ...EMPTY_FORM, name: u.name, email: u.email, role_ids: (u.roles || []).map(r => r.id) });
+      setForm({ ...EMPTY_FORM, name: u.name, username: u.username || '', email: u.email, is_active: u.is_active !== undefined ? u.is_active : true, role_ids: (u.roles || []).map(r => r.id) });
     } finally {
       setLoadingUserDetail(false);
     }
@@ -300,8 +303,8 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       }
 
       const body = isEdit
-        ? { name: form.name, email: form.email, role_ids: form.role_ids, ...(form.password ? { password: form.password } : {}) }
-        : { name: form.name, email: form.email, password: form.password, role_ids: form.role_ids };
+        ? { name: form.name, username: form.username.trim() || null, email: form.email, is_active: form.is_active, role_ids: form.role_ids, ...(form.password ? { password: form.password } : {}) }
+        : { name: form.name, username: form.username.trim() || null, email: form.email, is_active: form.is_active, password: form.password, role_ids: form.role_ids };
 
       const res = await fetch(`${API_URL}/users${isEdit ? `/${editTarget.id}` : ''}`, {
         method: isEdit ? 'PUT' : 'POST',
@@ -420,20 +423,20 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                  {['User', 'Email', 'Roles', 'Joined', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
+                  {['User', 'Username', 'Email', 'Status', 'Roles', 'Joined', ...(canEdit || canDelete ? ['Actions'] : [])].map(h => (
                     <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {pagedUsers.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc', opacity: u.is_active === false ? 0.6 : 1 }}>
+                  <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc', opacity: u.is_active === false ? 0.65 : 1 }}>
                     {/* Avatar + Name */}
                     <td style={{ padding: '14px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
-                          width: 36, height: 36, borderRadius: '50%', background: '#ede9fe',
-                          color: '#7c3aed', fontWeight: 700, fontSize: 15,
+                          width: 36, height: 36, borderRadius: '50%', background: u.is_active === false ? '#f1f5f9' : '#ede9fe',
+                          color: u.is_active === false ? '#64748b' : '#7c3aed', fontWeight: 700, fontSize: 15,
                           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                         }}>
                           {u.name?.charAt(0).toUpperCase()}
@@ -446,8 +449,23 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                         </div>
                       </div>
                     </td>
+                    {/* Username */}
+                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 13, fontFamily: 'monospace' }}>
+                      {u.username ? `@${u.username}` : <span style={{ color: '#cbd5e1' }}>—</span>}
+                    </td>
                     {/* Email */}
                     <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{u.email}</td>
+                    {/* Status */}
+                    <td style={{ padding: '14px 14px' }}>
+                      <span style={{
+                        padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                        background: u.is_active !== false ? '#dcfce7' : '#fee2e2',
+                        color: u.is_active !== false ? '#166534' : '#991b1b',
+                        border: `1px solid ${u.is_active !== false ? '#bbf7d0' : '#fecaca'}`,
+                      }}>
+                        {u.is_active !== false ? '● Active' : '○ Disabled'}
+                      </span>
+                    </td>
                     {/* Roles */}
                     <td style={{ padding: '14px 14px' }}>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -458,10 +476,6 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                             border: `1px solid ${getRoleColor(r.name)}40`,
                           }}>{r.name}</span>
                         )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>No role</span>}
-                        {u.is_active === false
-                          ? <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>Disabled</span>
-                          : <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>Active</span>
-                        }
                       </div>
                     </td>
                     {/* Joined */}
@@ -706,7 +720,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-            {/* Row 1: Name + Email */}
+            {/* Row 1: Name + Username */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <label style={supS.label}>Staff Full Name (Required)</label>
@@ -714,9 +728,47 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <label style={supS.label}>Username (Optional for login)</label>
+                <input style={supS.input} placeholder="e.g., jmukasa" value={form.username}
+                  onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Row 2: Email + Account Status */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <label style={supS.label}>Staff Email Address (Required)</label>
                 <input style={supS.input} type="email" placeholder="staff@zziwa.com" value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <label style={supS.label}>Account Access Status</label>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, is_active: true }))}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: `1.5px solid ${form.is_active ? '#16a34a' : '#cbd5e1'}`,
+                      background: form.is_active ? '#dcfce7' : '#fff',
+                      color: form.is_active ? '#166534' : '#64748b',
+                    }}
+                  >
+                    ● Enabled
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, is_active: false }))}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: `1.5px solid ${!form.is_active ? '#dc2626' : '#cbd5e1'}`,
+                      background: !form.is_active ? '#fee2e2' : '#fff',
+                      color: !form.is_active ? '#991b1b' : '#64748b',
+                    }}
+                  >
+                    ○ Disabled
+                  </button>
+                </div>
               </div>
             </div>
 

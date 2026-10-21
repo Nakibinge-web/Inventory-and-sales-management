@@ -70,6 +70,9 @@ class TenantController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|unique:tenants,email,' . $tenant->id,
             'phone' => 'nullable|string|max:20',
+            'contacts' => 'nullable|array',
+            'contacts.*.type' => 'required|string|max:50',
+            'contacts.*.number' => 'required|string|max:20',
             'address' => 'nullable|string',
             'logo' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120'
         ]);

@@ -3,6 +3,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
 import styles, { posS } from '../styles/dashboardStyles';
+import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -150,13 +151,13 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 
   const cartSubtotal = cart.reduce((sum, i) => sum + i.subtotal, 0);
   const discountAmount = (() => {
-    const v = parseFloat(discountValue) || 0;
+    const v = parseCurrency(discountValue);
     return Math.min(v, cartSubtotal);
   })();
-  const taxAmount = parseFloat(taxValue) || 0;
+  const taxAmount = parseCurrency(taxValue);
   const cartTotal = cartSubtotal - discountAmount + taxAmount;
   const changeAmount = paymentMethod === 'cash'
-    ? Math.max(0, (parseFloat(amountPaid) || 0) - cartTotal)
+    ? Math.max(0, parseCurrency(amountPaid) - cartTotal)
     : 0;
 
   const handleCheckout = async () => {
@@ -463,11 +464,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 <span style={{ fontSize: 13, color: '#64748b' }}>Discount:</span>
                 <input
                   style={posS.discountInput}
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0"
                   value={discountValue}
-                  onChange={e => setDiscountValue(e.target.value)}
+                  onChange={e => setDiscountValue(formatCurrencyInput(e.target.value))}
                 />
               </div>
 
@@ -476,11 +477,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 <span style={{ fontSize: 13, color: '#64748b' }}>Tax:</span>
                 <input
                   style={posS.discountInput}
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0"
                   value={taxValue}
-                  onChange={e => setTaxValue(e.target.value)}
+                  onChange={e => setTaxValue(formatCurrencyInput(e.target.value))}
                 />
               </div>
 
@@ -526,11 +527,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                     <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Amount Paid</label>
                     <input
                       style={{ ...posS.searchInput, textAlign: 'right', fontWeight: 700, fontSize: 16 }}
-                      type="number"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0"
                       value={amountPaid}
-                      onChange={e => setAmountPaid(e.target.value)}
+                      onChange={e => setAmountPaid(formatCurrencyInput(e.target.value))}
                     />
                   </div>
 
@@ -541,7 +542,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                       background: '#eff6ff', color: '#1d4ed8', fontWeight: 600, fontSize: 13,
                       cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}
-                    onClick={() => setAmountPaid(cartTotal.toString())}
+                    onClick={() => setAmountPaid(formatCurrencyInput(cartTotal.toString()))}
                   >
                     ≡ Exact Amount
                   </button>
@@ -552,15 +553,15 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                     background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '10px 14px',
                   }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Change:</span>
-                    <span style={{ fontWeight: 700, fontSize: 16, color: (parseFloat(amountPaid) || 0) < cartTotal ? '#dc2626' : '#16a34a' }}>
+                    <span style={{ fontWeight: 700, fontSize: 16, color: parseCurrency(amountPaid) < cartTotal ? '#dc2626' : '#16a34a' }}>
                       UGX {changeAmount.toLocaleString()}
                     </span>
                   </div>
 
                   {/* Underpayment warning */}
-                  {amountPaid !== '' && (parseFloat(amountPaid) || 0) < cartTotal && (
+                  {amountPaid !== '' && parseCurrency(amountPaid) < cartTotal && (
                     <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
-                      ⚠️ Amount paid is less than total by UGX {(cartTotal - (parseFloat(amountPaid) || 0)).toLocaleString()}
+                      ⚠️ Amount paid is less than total by UGX {(cartTotal - parseCurrency(amountPaid)).toLocaleString()}
                     </div>
                   )}
 

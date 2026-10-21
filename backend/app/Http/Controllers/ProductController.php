@@ -210,8 +210,8 @@ class ProductController extends Controller
             'sku'              => $validated['sku'] ?? $this->nextSku($this->skuPrefix($validated['name']), auth()->user()->tenant_id),
             'barcode'          => $validated['barcode'] ?? null,
             'unit'             => $validated['unit'] ?? null,
-            'category_id'      => $validated['category_id'] ?? null,
-            'supplier_id'      => $validated['supplier_id'] ?? null,
+            'category_id'      => !empty($validated['category_id']) ? $validated['category_id'] : null,
+            'supplier_id'      => !empty($validated['supplier_id']) ? $validated['supplier_id'] : null,
             'stock'            => $validated['stock'],
             'cost_price'       => $validated['cost_price'] ?? null,
             'price'            => $validated['price'],
@@ -263,6 +263,12 @@ class ProductController extends Controller
         }
 
         unset($validated['image']);
+        if (array_key_exists('category_id', $validated)) {
+            $validated['category_id'] = !empty($validated['category_id']) ? $validated['category_id'] : null;
+        }
+        if (array_key_exists('supplier_id', $validated)) {
+            $validated['supplier_id'] = !empty($validated['supplier_id']) ? $validated['supplier_id'] : null;
+        }
         $product->update($validated);
 
         return response()->json([

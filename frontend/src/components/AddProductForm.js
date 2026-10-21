@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback } from 'react';
 import Button from './ui/Button';
+import { formatCurrencyInput, cleanCurrency, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 const UNITS = [
   'Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)',
-  'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)',
+  'Millilitres (mL)', 'Metres (m)', 'Centimetres (cm)', 'Inches (in)',
   'Boxes', 'Cartons', 'Dozens', 'Pairs', 'Rolls', 'Bags', 'Bottles', 'Cans',
 ];
 
@@ -30,8 +31,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
   const fileRef                 = useRef();
 
   const handle = e => {
-    const { name, value, type, checked } = e.target;
-    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    const { name, type, checked } = e.target;
+    let value = type === 'checkbox' ? checked : e.target.value;
+    if (name === 'cost_price' || name === 'price') {
+      value = formatCurrencyInput(value);
+    }
+    setForm(f => ({ ...f, [name]: value }));
     // Clear field error when user types
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: null }));
@@ -53,23 +58,22 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       errors.unit = 'Please select a unit of measure';
     }
     
-    if (form.category_mode === 'existing' && !form.category_id) {
-      errors.category_id = 'Please select a category or create a new one';
-    }
-    
-    if (form.category_mode === 'new' && !form.new_category.trim()) {
-      errors.new_category = 'Please enter a category name';
+    // Category is optional. Validate only if a new category name was provided
+    if (form.category_mode === 'new' && form.new_category.trim() && form.new_category.trim().length < 2) {
+      errors.new_category = 'Category name must be at least 2 characters';
     }
     
     if (!form.stock || form.stock < 0) {
       errors.stock = 'Quantity is required and must be 0 or greater';
     }
     
-    if (!form.price || form.price <= 0) {
+    const priceNum = parseCurrency(form.price);
+    if (!form.price || priceNum <= 0) {
       errors.price = 'Selling price is required and must be greater than 0';
     }
     
-    if (form.cost_price && form.price && parseFloat(form.cost_price) > parseFloat(form.price)) {
+    const costNum = parseCurrency(form.cost_price);
+    if (costNum > 0 && priceNum > 0 && costNum > priceNum) {
       errors.price = 'Selling price should not be less than cost price';
     }
     
@@ -133,8 +137,8 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     fd.append('unit',          form.unit);
     fd.append('supplier_id',   form.supplier_id);
     fd.append('stock',         form.stock);
-    fd.append('cost_price',    form.cost_price);
-    fd.append('price',         form.price);
+    fd.append('cost_price',    cleanCurrency(form.cost_price));
+    fd.append('price',         cleanCurrency(form.price));
     fd.append('reorder_level', form.reorder_level || 0);
     fd.append('description',   form.description);
     fd.append('track_expiry',  form.track_expiry ? 1 : 0);
@@ -144,9 +148,11 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     }
 
     if (form.category_mode === 'existing') {
-      fd.append('category_id', form.category_id);
-    } else {
-      fd.append('new_category', form.new_category);
+      if (form.category_id) {
+        fd.append('category_id', form.category_id);
+      }
+    } else if (form.category_mode === 'new' && form.new_category.trim()) {
+      fd.append('new_category', form.new_category.trim());
     }
 
     if (image) fd.append('image', image);
@@ -213,7 +219,7 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       </div>
 
       {/* ── Category ── */}
-      <Field label="Product Category" error={fieldErrors.category_id || fieldErrors.new_category}>
+      <Field label="Product Category (Optional)" error={fieldErrors.category_id || fieldErrors.new_category}>
         <div style={s.segmented}>
           {['existing', 'new'].map(m => (
             <button key={m} type="button"
@@ -226,12 +232,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         {form.category_mode === 'existing' ? (
           <select style={{ ...s.input, marginTop: 8, borderColor: fieldErrors.category_id ? '#dc2626' : '#e2e8f0' }} name="category_id"
             value={form.category_id} onChange={handle}>
-            <option value="">— Choose from existing categories —</option>
+            <option value="">— No category (Optional) —</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         ) : (
           <input style={{ ...s.input, marginTop: 8, borderColor: fieldErrors.new_category ? '#dc2626' : '#e2e8f0' }} name="new_category"
-            placeholder="e.g., Spring Mattresses, Orthopedic, Premium Bedding" value={form.new_category} onChange={handle} />
+            placeholder="e.g., Spring Mattresses, Orthopedic, Premium Bedding (Optional)" value={form.new_category} onChange={handle} />
         )}
       </Field>
 
@@ -258,12 +264,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       {/* ── Row 4: Cost + Selling price ── */}
       <div className="product-form-row" style={s.row}>
         <Field label="Purchase Cost Price (UGX)">
-          <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
-            placeholder="What you paid to acquire it" value={form.cost_price} onChange={handle} />
+          <input style={s.input} name="cost_price" type="text" inputMode="decimal"
+            placeholder="e.g. 50,000" value={form.cost_price} onChange={handle} />
         </Field>
         <Field label="Selling Price (Required)" error={fieldErrors.price}>
-          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="number" step="0.01" min="0"
-            placeholder="Customer retail price in UGX" value={form.price} onChange={handle} />
+          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="text" inputMode="decimal"
+            placeholder="e.g. 75,000" value={form.price} onChange={handle} />
         </Field>
       </div>
 
