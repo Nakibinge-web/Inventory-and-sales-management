@@ -676,6 +676,38 @@ textarea.field-input {
   }
 }
 
+/* Modal Content Scrollbar & Form Input States */
+.modal-content-responsive {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.modal-content-responsive::-webkit-scrollbar {
+  width: 7px;
+}
+.modal-content-responsive::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-content-responsive::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.modal-content-responsive::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.product-modal-input {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
+}
+.product-modal-input:hover:not(:focus):not(:disabled) {
+  border-color: #94a3b8 !important;
+}
+.product-modal-input:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14) !important;
+  background-color: #ffffff !important;
+  outline: none !important;
+}
+
 /* ════════════════════════════════════════════════
    TOAST
    ════════════════════════════════════════════════ */

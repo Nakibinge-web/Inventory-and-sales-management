@@ -8,6 +8,7 @@ export default function Modal({
   footer,
   size = 'md',
   maxWidth,
+  contentStyle,
   className = '' 
 }) {
   if (!isOpen) return null;
@@ -15,7 +16,7 @@ export default function Modal({
   const sizes = {
     sm: { maxWidth: '400px' },
     md: { maxWidth: '600px' },
-    lg: { maxWidth: '800px' },
+    lg: { maxWidth: '860px' },
     xl: { maxWidth: '1100px' }
   };
 
@@ -85,11 +86,12 @@ export default function Modal({
   };
 
   const contentStyles = {
-    padding: '24px',
+    padding: '24px 28px',
     flex: 1,
     overflow: 'auto',
     WebkitOverflowScrolling: 'touch',
     overscrollBehavior: 'contain',
+    ...(contentStyle || {}),
   };
 
   const footerStyles = {
