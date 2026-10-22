@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import Button from './ui/Button';
+import { formatCurrencyInput, cleanCurrency, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -30,8 +31,12 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
   const fileRef                 = useRef();
 
   const handle = e => {
-    const { name, value, type, checked } = e.target;
-    setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    const { name, type, checked } = e.target;
+    let value = type === 'checkbox' ? checked : e.target.value;
+    if (name === 'cost_price' || name === 'price') {
+      value = formatCurrencyInput(value);
+    }
+    setForm(f => ({ ...f, [name]: value }));
     // Clear field error when user types
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: null }));
@@ -53,23 +58,22 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
       errors.unit = 'Please select a unit of measure';
     }
     
-    if (form.category_mode === 'existing' && !form.category_id) {
-      errors.category_id = 'Please select a category or create a new one';
-    }
-    
-    if (form.category_mode === 'new' && !form.new_category.trim()) {
-      errors.new_category = 'Please enter a category name';
+    // Category is optional. Validate only if a new category name was provided
+    if (form.category_mode === 'new' && form.new_category.trim() && form.new_category.trim().length < 2) {
+      errors.new_category = 'Category name must be at least 2 characters';
     }
     
     if (!form.stock || form.stock < 0) {
       errors.stock = 'Quantity is required and must be 0 or greater';
     }
     
-    if (!form.price || form.price <= 0) {
+    const priceNum = parseCurrency(form.price);
+    if (!form.price || priceNum <= 0) {
       errors.price = 'Selling price is required and must be greater than 0';
     }
     
-    if (form.cost_price && form.price && parseFloat(form.cost_price) > parseFloat(form.price)) {
+    const costNum = parseCurrency(form.cost_price);
+    if (costNum > 0 && priceNum > 0 && costNum > priceNum) {
       errors.price = 'Selling price should not be less than cost price';
     }
     
@@ -133,8 +137,8 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     fd.append('unit',          form.unit);
     fd.append('supplier_id',   form.supplier_id);
     fd.append('stock',         form.stock);
-    fd.append('cost_price',    form.cost_price);
-    fd.append('price',         form.price);
+    fd.append('cost_price',    cleanCurrency(form.cost_price));
+    fd.append('price',         cleanCurrency(form.price));
     fd.append('reorder_level', form.reorder_level || 0);
     fd.append('description',   form.description);
     fd.append('track_expiry',  form.track_expiry ? 1 : 0);
@@ -144,9 +148,11 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
     }
 
     if (form.category_mode === 'existing') {
-      fd.append('category_id', form.category_id);
-    } else {
-      fd.append('new_category', form.new_category);
+      if (form.category_id) {
+        fd.append('category_id', form.category_id);
+      }
+    } else if (form.category_mode === 'new' && form.new_category.trim()) {
+      fd.append('new_category', form.new_category.trim());
     }
 
     if (image) fd.append('image', image);
@@ -170,25 +176,40 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
   return (
     <form onSubmit={submit} style={s.form}>
 
-      {/* ── Row 1: Name + SKU ── */}
+      {/* ── Section 1: Basic Information ── */}
+      <SectionHeader
+        icon="🏷️"
+        title="Basic Information"
+        subtitle="Primary identification, naming and measurement unit"
+      />
+
+      {/* Row 1: Name + SKU */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Product Name (Required)" error={fieldErrors.name}>
-          <input style={{ ...s.input, borderColor: fieldErrors.name ? '#dc2626' : '#e2e8f0' }} name="name" placeholder="e.g., Memory Foam Mattress Queen, Bedding Sheet King Size"
-            value={form.name} onChange={handle} onBlur={handleNameBlur} />
-        </Field>
-        <Field label={
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            SKU Code
-            {skuLoading && (
-              <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>generating…</span>
-            )}
-            {skuAuto && !skuLoading && (
-              <span style={{ fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#7c3aed', padding: '1px 7px', borderRadius: 20, letterSpacing: '0.04em' }}>AUTO</span>
-            )}
-          </span>
-        }>
+        <Field label="Product Name" required error={fieldErrors.name}>
           <input
-            style={{ ...s.input, background: skuAuto ? '#fafbff' : '#fff', borderColor: skuAuto ? '#c4b5fd' : '#e2e8f0' }}
+            className="product-modal-input"
+            style={{ ...s.input, borderColor: fieldErrors.name ? '#dc2626' : '#cbd5e1' }}
+            name="name"
+            placeholder="e.g., Memory Foam Mattress Queen, Bedding Sheet King Size"
+            value={form.name}
+            onChange={handle}
+            onBlur={handleNameBlur}
+          />
+        </Field>
+        <Field
+          label="SKU Code"
+          optional
+          hint={
+            skuLoading ? (
+              <span style={s.skuLoading}>generating…</span>
+            ) : skuAuto ? (
+              <span style={s.skuAutoBadge}>AUTO</span>
+            ) : null
+          }
+        >
+          <input
+            className="product-modal-input"
+            style={{ ...s.input, background: skuAuto ? '#fafbff' : '#fff', borderColor: skuAuto ? '#c4b5fd' : '#cbd5e1' }}
             name="sku"
             placeholder={skuLoading ? 'Generating…' : 'e.g., MAT-QN-001, BED-KG-050'}
             value={form.sku}
@@ -198,129 +219,255 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
         </Field>
       </div>
 
-      {/* ── Row 2: Barcode + Unit ── */}
+      {/* Row 2: Barcode + Unit */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Product Barcode (Optional)">
-          <input style={s.input} name="barcode" placeholder="Scan or manually enter barcode"
-            value={form.barcode} onChange={handle} />
+        <Field label="Product Barcode" optional>
+          <input
+            className="product-modal-input"
+            style={s.input}
+            name="barcode"
+            placeholder="Scan or manually enter barcode"
+            value={form.barcode}
+            onChange={handle}
+          />
         </Field>
-        <Field label="Unit of Measure" error={fieldErrors.unit}>
-          <select style={{ ...s.input, borderColor: fieldErrors.unit ? '#dc2626' : '#e2e8f0' }} name="unit" value={form.unit} onChange={handle}>
+        <Field label="Unit of Measure" required error={fieldErrors.unit}>
+          <select
+            className="product-modal-input"
+            style={{ ...s.input, borderColor: fieldErrors.unit ? '#dc2626' : '#cbd5e1' }}
+            name="unit"
+            value={form.unit}
+            onChange={handle}
+          >
             <option value="">— Select measurement unit —</option>
             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
         </Field>
       </div>
 
-      {/* ── Category ── */}
-      <Field label="Product Category" error={fieldErrors.category_id || fieldErrors.new_category}>
-        <div style={s.segmented}>
-          {['existing', 'new'].map(m => (
-            <button key={m} type="button"
-              style={{ ...s.seg, ...(form.category_mode === m ? s.segActive : {}) }}
-              onClick={() => setForm(f => ({ ...f, category_mode: m }))}>
-              {m === 'existing' ? '📂 Existing Category' : '➕ Create New Category'}
-            </button>
-          ))}
-        </div>
-        {form.category_mode === 'existing' ? (
-          <select style={{ ...s.input, marginTop: 8, borderColor: fieldErrors.category_id ? '#dc2626' : '#e2e8f0' }} name="category_id"
-            value={form.category_id} onChange={handle}>
-            <option value="">— Choose from existing categories —</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      {/* ── Section 2: Category & Supplier ── */}
+      <SectionHeader
+        icon="📂"
+        title="Category & Supplier"
+        subtitle="Organize in store catalog and assign preferred supplier"
+      />
+
+      <div style={s.categorySupplierBox}>
+        {/* Category */}
+        <Field label="Product Category" optional error={fieldErrors.category_id || fieldErrors.new_category}>
+          <div style={s.segmented}>
+            {['existing', 'new'].map(m => (
+              <button
+                key={m}
+                type="button"
+                style={{ ...s.seg, ...(form.category_mode === m ? s.segActive : {}) }}
+                onClick={() => setForm(f => ({ ...f, category_mode: m }))}
+              >
+                {m === 'existing' ? '📂 Existing Category' : '➕ Create New Category'}
+              </button>
+            ))}
+          </div>
+          {form.category_mode === 'existing' ? (
+            <select
+              className="product-modal-input"
+              style={{ ...s.input, marginTop: 10, borderColor: fieldErrors.category_id ? '#dc2626' : '#cbd5e1' }}
+              name="category_id"
+              value={form.category_id}
+              onChange={handle}
+            >
+              <option value="">— No category (Optional) —</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          ) : (
+            <input
+              className="product-modal-input"
+              style={{ ...s.input, marginTop: 10, borderColor: fieldErrors.new_category ? '#dc2626' : '#cbd5e1' }}
+              name="new_category"
+              placeholder="e.g., Spring Mattresses, Orthopedic, Premium Bedding"
+              value={form.new_category}
+              onChange={handle}
+            />
+          )}
+        </Field>
+
+        {/* Supplier */}
+        <Field label="Product Supplier" optional>
+          <select
+            className="product-modal-input"
+            style={s.input}
+            name="supplier_id"
+            value={form.supplier_id}
+            onChange={handle}
+          >
+            <option value="">— No supplier assigned —</option>
+            {suppliers.map(sup => <option key={sup.id} value={sup.id}>{sup.name}</option>)}
           </select>
-        ) : (
-          <input style={{ ...s.input, marginTop: 8, borderColor: fieldErrors.new_category ? '#dc2626' : '#e2e8f0' }} name="new_category"
-            placeholder="e.g., Spring Mattresses, Orthopedic, Premium Bedding" value={form.new_category} onChange={handle} />
-        )}
-      </Field>
-
-      {/* ── Supplier (optional) ── */}
-      <Field label="Product Supplier (Optional)">
-        <select style={s.input} name="supplier_id" value={form.supplier_id} onChange={handle}>
-          <option value="">— No supplier assigned —</option>
-          {suppliers.map(sup => <option key={sup.id} value={sup.id}>{sup.name}</option>)}
-        </select>
-      </Field>
-
-      {/* ── Row 3: Qty + Reorder ── */}
-      <div className="product-form-row" style={s.row}>
-        <Field label="Initial Stock Quantity (Required)" error={fieldErrors.stock}>
-          <input style={{ ...s.input, borderColor: fieldErrors.stock ? '#dc2626' : '#e2e8f0' }} name="stock" type="number" min="0"
-            placeholder="Enter current stock quantity" value={form.stock} onChange={handle} />
-        </Field>
-        <Field label="Low Stock Alert Level">
-          <input style={s.input} name="reorder_level" type="number" min="0"
-            placeholder="e.g., 5 (alert when stock is below this)" value={form.reorder_level} onChange={handle} />
         </Field>
       </div>
 
-      {/* ── Row 4: Cost + Selling price ── */}
+      {/* ── Section 3: Inventory & Pricing ── */}
+      <SectionHeader
+        icon="💰"
+        title="Inventory & Pricing"
+        subtitle="Stock levels, alert thresholds, cost and selling prices"
+      />
+
+      {/* Row 3: Qty + Reorder */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Purchase Cost Price (UGX)">
-          <input style={s.input} name="cost_price" type="number" step="0.01" min="0"
-            placeholder="What you paid to acquire it" value={form.cost_price} onChange={handle} />
+        <Field label="Initial Stock Quantity" required error={fieldErrors.stock}>
+          <input
+            className="product-modal-input"
+            style={{ ...s.input, borderColor: fieldErrors.stock ? '#dc2626' : '#cbd5e1' }}
+            name="stock"
+            type="number"
+            min="0"
+            placeholder="Enter current stock quantity"
+            value={form.stock}
+            onChange={handle}
+          />
         </Field>
-        <Field label="Selling Price (Required)" error={fieldErrors.price}>
-          <input style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#e2e8f0' }} name="price" type="number" step="0.01" min="0"
-            placeholder="Customer retail price in UGX" value={form.price} onChange={handle} />
+        <Field label="Low Stock Alert Level" optional>
+          <input
+            className="product-modal-input"
+            style={s.input}
+            name="reorder_level"
+            type="number"
+            min="0"
+            placeholder="e.g., 5 (alert when stock is below this)"
+            value={form.reorder_level}
+            onChange={handle}
+          />
         </Field>
       </div>
 
-      {/* ── Description ── */}
-      <Field label="Product Description (Optional)">
-        <textarea style={{ ...s.input, minHeight: 72, resize: 'vertical' }}
-          name="description" placeholder="e.g., 12-inch memory foam with cooling gel, hypoallergenic cover"
-          value={form.description} onChange={handle} />
+      {/* Row 4: Cost + Selling price */}
+      <div className="product-form-row" style={s.row}>
+        <Field label="Purchase Cost Price (UGX)" optional>
+          <input
+            className="product-modal-input"
+            style={s.input}
+            name="cost_price"
+            type="text"
+            inputMode="decimal"
+            placeholder="e.g. 50,000"
+            value={form.cost_price}
+            onChange={handle}
+          />
+        </Field>
+        <Field label="Selling Price (UGX)" required error={fieldErrors.price}>
+          <input
+            className="product-modal-input"
+            style={{ ...s.input, borderColor: fieldErrors.price ? '#dc2626' : '#cbd5e1' }}
+            name="price"
+            type="text"
+            inputMode="decimal"
+            placeholder="e.g. 75,000"
+            value={form.price}
+            onChange={handle}
+          />
+        </Field>
+      </div>
+
+      {/* ── Section 4: Details & Media ── */}
+      <SectionHeader
+        icon="📝"
+        title="Description & Media"
+        subtitle="Product photo, details and warranty/expiry tracking"
+      />
+
+      {/* Description */}
+      <Field label="Product Description" optional>
+        <textarea
+          className="product-modal-input"
+          style={{ ...s.input, minHeight: 84, resize: 'vertical', lineHeight: 1.5 }}
+          name="description"
+          placeholder="e.g., 12-inch memory foam with cooling gel, hypoallergenic cover"
+          value={form.description}
+          onChange={handle}
+        />
       </Field>
 
-      {/* ── Product image ── */}
-      <Field label="Product Photo (Optional)">
-        <div style={s.imageArea} onClick={() => fileRef.current.click()}>
-          {preview
-            ? <img src={preview} alt="preview" style={s.imagePreview} />
-            : <div style={s.imagePlaceholder}>
-                <span style={{ fontSize: '2rem' }}>🖼️</span>
-                <span style={s.imageHint}>Click to upload product photo</span>
-                <span style={s.imageHint2}>PNG, JPG format, maximum 2 MB</span>
-              </div>
-          }
+      {/* Product image */}
+      <Field label="Product Photo" optional>
+        <div
+          style={s.imageArea}
+          onClick={() => fileRef.current.click()}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.background = '#faf5ff'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
+        >
+          {preview ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <img src={preview} alt="preview" style={s.imagePreview} />
+              <span style={{ fontSize: 12, color: '#4f46e5', fontWeight: 600 }}>Click to change photo</span>
+            </div>
+          ) : (
+            <div style={s.imagePlaceholder}>
+              <div style={s.imageIconCircle}>🖼️</div>
+              <span style={s.imageHint}>Click to upload product photo</span>
+              <span style={s.imageHint2}>PNG, JPG or WEBP format, maximum 2 MB</span>
+            </div>
+          )}
         </div>
-        <input ref={fileRef} type="file" accept="image/*"
-          style={{ display: 'none' }} onChange={handleImage} />
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImage} />
         {preview && (
-          <button type="button" style={s.removeImg}
-            onClick={() => { setImage(null); setPreview(null); }}>
+          <button
+            type="button"
+            style={s.removeImg}
+            onClick={() => { setImage(null); setPreview(null); }}
+          >
             ✕ Remove photo
           </button>
         )}
       </Field>
 
-      {/* ── Track expiry toggle ── */}
+      {/* Track expiry toggle */}
       <label style={s.toggle}>
-        <div style={{ ...s.toggleTrack, background: form.track_expiry ? '#4f46e5' : '#e2e8f0' }}>
+        <div style={{ ...s.toggleTrack, background: form.track_expiry ? '#4f46e5' : '#cbd5e1' }}>
           <div style={{ ...s.toggleThumb, transform: form.track_expiry ? 'translateX(20px)' : 'translateX(2px)' }} />
         </div>
-        <input type="checkbox" name="track_expiry" checked={form.track_expiry}
-          onChange={handle} style={{ display: 'none' }} />
-        <div>
-          <div style={s.toggleLabel}>Track Warranty/Expiry Date for this Product</div>
-          <div style={s.toggleSub}>Enable if product has warranty period or expiration date</div>
+        <input
+          type="checkbox"
+          name="track_expiry"
+          checked={form.track_expiry}
+          onChange={handle}
+          style={{ display: 'none' }}
+        />
+        <div style={{ flex: 1 }}>
+          <div style={s.toggleLabel}>Track Warranty / Expiry Date for this Product</div>
+          <div style={s.toggleSub}>Enable if this product has a warranty period or expiration date</div>
         </div>
       </label>
 
-      {/* ── Expiry date fields (shown when track_expiry is on) ── */}
+      {/* Expiry date fields (shown when track_expiry is on) */}
       {form.track_expiry && (
         <div style={s.expiryBox}>
+          <div style={s.expiryHeader}>
+            <span style={{ fontSize: 14 }}>📅</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Warranty &amp; Expiry Configuration
+            </span>
+          </div>
           <div className="product-form-row" style={s.row}>
-            <Field label="Manufacture Date (Optional)">
-              <input style={s.input} name="manufacture_date" type="date"
-                value={form.manufacture_date} onChange={handle} />
+            <Field label="Manufacture Date" optional>
+              <input
+                className="product-modal-input"
+                style={s.input}
+                name="manufacture_date"
+                type="date"
+                value={form.manufacture_date}
+                onChange={handle}
+              />
             </Field>
-            <Field label="Warranty/Expiry Date (Required)" error={fieldErrors.expiry_date}>
-              <input style={{ ...s.input, borderColor: fieldErrors.expiry_date ? '#dc2626' : '#e2e8f0' }} name="expiry_date" type="date"
-                value={form.expiry_date} onChange={handle}
-                min={form.manufacture_date || undefined} />
+            <Field label="Warranty / Expiry Date" required error={fieldErrors.expiry_date}>
+              <input
+                className="product-modal-input"
+                style={{ ...s.input, borderColor: fieldErrors.expiry_date ? '#dc2626' : '#cbd5e1' }}
+                name="expiry_date"
+                type="date"
+                value={form.expiry_date}
+                onChange={handle}
+                min={form.manufacture_date || undefined}
+              />
             </Field>
           </div>
         </div>
@@ -330,23 +477,41 @@ export default function AddProductForm({ token, categories, suppliers, onSuccess
 
       {/* ── Footer ── */}
       <div style={s.footer}>
-        <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1 }}>
+        <Button type="button" variant="secondary" onClick={onCancel} style={{ flex: 1, padding: '12px' }}>
           Cancel
         </Button>
-        <Button type="submit" variant="success" loading={loading} style={{ flex: 1 }}>
-          {loading ? 'Saving…' : 'Add Product'}
+        <Button type="submit" variant="success" loading={loading} style={{ flex: 1.4, padding: '12px' }}>
+          {loading ? 'Saving Product…' : '✓ Add Product to Inventory'}
         </Button>
       </div>
     </form>
   );
 }
 
-function Field({ label, children, error }) {
+function SectionHeader({ icon, title, subtitle }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+    <div style={s.sectionHeader}>
+      <div style={s.sectionTitleWrap}>
+        <span style={s.sectionIcon}>{icon}</span>
+        <div>
+          <h3 style={s.sectionTitle}>{title}</h3>
+          {subtitle && <p style={s.sectionSubtitle}>{subtitle}</p>}
+        </div>
+      </div>
+      <div style={s.sectionDivider} />
+    </div>
+  );
+}
+
+function Field({ label, required, optional, hint, children, error }) {
+  return (
+    <div style={s.field}>
       {label && (
         <label style={s.label}>
-          {label}
+          <span style={s.labelText}>{label}</span>
+          {required && <span style={s.requiredBadge}>Required</span>}
+          {optional && <span style={s.optionalTag}>(Optional)</span>}
+          {hint && <span style={s.fieldHint}>{hint}</span>}
         </label>
       )}
       {children}
@@ -360,14 +525,129 @@ function Field({ label, children, error }) {
 }
 
 const s = {
-  form:  { display: 'flex', flexDirection: 'column', gap: 16 },
-  row:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  label: { fontSize: 12, fontWeight: 600, color: '#374151', letterSpacing: '0.03em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 20,
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  sectionTitleWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    flexShrink: 0,
+  },
+  sectionIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    background: '#f1f5f9',
+    fontSize: 14,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#0f172a',
+    letterSpacing: '-0.01em',
+    margin: 0,
+    lineHeight: 1.2,
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    margin: '2px 0 0 0',
+    fontWeight: 400,
+  },
+  sectionDivider: {
+    flex: 1,
+    height: 1,
+    background: 'linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 100%)',
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '16px 20px',
+  },
+  categorySupplierBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#1e293b',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  labelText: {
+    color: '#0f172a',
+    fontWeight: 600,
+  },
+  requiredBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#e11d48',
+    background: '#ffe4e6',
+    border: '1px solid #fecdd3',
+    padding: '1px 6px',
+    borderRadius: 4,
+    letterSpacing: '0.02em',
+    textTransform: 'uppercase',
+  },
+  optionalTag: {
+    fontSize: 11,
+    fontWeight: 400,
+    color: '#94a3b8',
+  },
+  fieldHint: {
+    marginLeft: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  skuLoading: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: 500,
+  },
+  skuAutoBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    background: '#ede9fe',
+    color: '#7c3aed',
+    padding: '1px 7px',
+    borderRadius: 20,
+    letterSpacing: '0.04em',
+  },
   input: {
-    padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8,
-    fontSize: 14, fontFamily: 'inherit', outline: 'none', width: '100%',
-    boxSizing: 'border-box', background: '#fff', color: '#0f172a',
-    transition: 'border-color 0.2s',
+    padding: '10px 14px',
+    border: '1.5px solid #cbd5e1',
+    borderRadius: 9,
+    fontSize: 14,
+    fontFamily: 'inherit',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    background: '#fff',
+    color: '#0f172a',
   },
   fieldError: {
     fontSize: 12,
@@ -377,50 +657,146 @@ const s = {
     display: 'block',
   },
   // Category segmented control
-  segmented: { display: 'flex', gap: 6 },
-  seg: {
-    flex: 1, padding: '7px 10px', border: '1.5px solid #e2e8f0', borderRadius: 8,
-    background: '#f8fafc', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-    transition: 'all 0.15s', color: '#64748b',
+  segmented: {
+    display: 'flex',
+    gap: 8,
   },
-  segActive: { background: '#ede9fe', borderColor: '#7c3aed', color: '#4f46e5', fontWeight: 600 },
+  seg: {
+    flex: 1,
+    padding: '9px 14px',
+    border: '1.5px solid #e2e8f0',
+    borderRadius: 9,
+    background: '#f8fafc',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    color: '#64748b',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  segActive: {
+    background: '#ede9fe',
+    borderColor: '#7c3aed',
+    color: '#4f46e5',
+    fontWeight: 600,
+    boxShadow: '0 1px 3px rgba(124, 58, 237, 0.12)',
+  },
   // Image upload
   imageArea: {
-    border: '2px dashed #e2e8f0', borderRadius: 10, padding: 16,
-    cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.2s',
-    background: '#f8fafc', minHeight: 100, display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
+    border: '2px dashed #cbd5e1',
+    borderRadius: 12,
+    padding: '20px 16px',
+    cursor: 'pointer',
+    textAlign: 'center',
+    transition: 'all 0.2s ease',
+    background: '#f8fafc',
+    minHeight: 110,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  imagePlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
-  imageHint:  { fontSize: 13, color: '#64748b', fontWeight: 500 },
-  imageHint2: { fontSize: 11, color: '#94a3b8' },
-  imagePreview: { maxHeight: 120, maxWidth: '100%', borderRadius: 8, objectFit: 'contain' },
+  imagePlaceholder: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
+  },
+  imageIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    background: '#ede9fe',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 22,
+    marginBottom: 2,
+  },
+  imageHint:  { fontSize: 13, color: '#1e293b', fontWeight: 600 },
+  imageHint2: { fontSize: 12, color: '#94a3b8' },
+  imagePreview: {
+    maxHeight: 130,
+    maxWidth: '100%',
+    borderRadius: 8,
+    objectFit: 'contain',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+  },
   removeImg: {
-    marginTop: 6, background: 'none', border: 'none', color: '#ef4444',
-    fontSize: 12, cursor: 'pointer', fontWeight: 500,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: 6,
+    color: '#dc2626',
+    padding: '4px 10px',
+    fontSize: 12,
+    cursor: 'pointer',
+    fontWeight: 600,
   },
   // Expiry toggle
   toggle: {
-    display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
-    padding: '12px 14px', background: '#f8fafc', borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    cursor: 'pointer',
+    padding: '14px 16px',
+    background: '#f8fafc',
+    borderRadius: 11,
     border: '1.5px solid #e2e8f0',
+    transition: 'all 0.15s ease',
   },
   toggleTrack: {
-    width: 44, height: 24, borderRadius: 12, position: 'relative',
-    flexShrink: 0, transition: 'background 0.25s',
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    position: 'relative',
+    flexShrink: 0,
+    transition: 'background 0.25s ease',
   },
   toggleThumb: {
-    position: 'absolute', top: 2, width: 20, height: 20,
-    background: '#fff', borderRadius: '50%', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-    transition: 'transform 0.25s',
+    position: 'absolute',
+    top: 2,
+    width: 20,
+    height: 20,
+    background: '#fff',
+    borderRadius: '50%',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+    transition: 'transform 0.25s ease',
   },
   toggleLabel: { fontSize: 13, fontWeight: 600, color: '#0f172a' },
-  toggleSub:   { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  // Error + footer
-  error:  { padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 },
+  toggleSub:   { fontSize: 12, color: '#64748b', marginTop: 2 },
   expiryBox: {
-    padding: '14px', background: '#f0fdf4', border: '1.5px solid #bbf7d0',
-    borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 12,
+    padding: '16px',
+    background: '#f0fdf4',
+    border: '1.5px solid #bbf7d0',
+    borderRadius: 12,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
   },
-  footer: { display: 'flex', gap: 10, paddingTop: 4 },
+  expiryHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: -2,
+  },
+  error: {
+    padding: '12px 16px',
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: 9,
+    color: '#b91c1c',
+    fontSize: 13,
+    fontWeight: 500,
+  },
+  footer: {
+    display: 'flex',
+    gap: 12,
+    paddingTop: 16,
+    marginTop: 6,
+    borderTop: '1px solid #e2e8f0',
+  },
 };

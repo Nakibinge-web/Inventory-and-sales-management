@@ -1,11 +1,98 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
 import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 import styles, { posS } from '../styles/dashboardStyles';
+import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+const isPriceInvalid = (item) => {
+  if (!item) return false;
+  if (item.isInvalid) return true;
+  if (item.price === null || item.price === undefined || typeof item.price !== 'number' || isNaN(item.price) || !isFinite(item.price) || item.price < 0) return true;
+  if (typeof item.priceInput === 'string') {
+    const t = item.priceInput.trim();
+    if (t === '' || t.endsWith('.')) return true;
+  }
+  return false;
+};
+
+function CartPriceInput({ item, updatePrice, resetPrice, onBlurPrice }) {
+  const inputRef = useRef(null);
+  const cursorPosRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (cursorPosRef.current !== null && inputRef.current === document.activeElement) {
+      inputRef.current.setSelectionRange(cursorPosRef.current, cursorPosRef.current);
+      cursorPosRef.current = null;
+    }
+  });
+
+  const handleChange = (e) => {
+    const input = e.target;
+    const raw = input.value;
+    const cursor = input.selectionStart ?? raw.length;
+
+    // Count how many price-significant characters (digits or dots) were before cursor
+    const beforeCursor = raw.slice(0, cursor);
+    const digitsBeforeCursor = beforeCursor.replace(/[^\d.]/g, '').length;
+
+    const formatted = formatCurrencyInput(raw);
+
+    // Map to position in newly formatted string
+    let newCursor = 0;
+    let digitsSeen = 0;
+    while (newCursor < formatted.length && digitsSeen < digitsBeforeCursor) {
+      if (/[\d.]/.test(formatted[newCursor])) {
+        digitsSeen++;
+      }
+      newCursor++;
+    }
+    cursorPosRef.current = newCursor;
+
+    updatePrice(item.product_id, raw, formatted);
+  };
+
+  const isInvalid = isPriceInvalid(item);
+  const isCustom = !isInvalid && item.price !== item.defaultPrice;
+
+  return (
+    <div style={posS.cartPriceRow}>
+      <span style={{ fontSize: 11, color: isInvalid ? '#dc2626' : '#64748b', fontWeight: 600 }}>UGX</span>
+      <input
+        ref={inputRef}
+        style={{
+          ...posS.cartPriceInput,
+          color: isInvalid ? '#b91c1c' : isCustom ? '#2563eb' : '#0f172a',
+          background: isInvalid ? '#fef2f2' : isCustom ? '#eff6ff' : '#f8fafc',
+          border: isInvalid ? '1.5px solid #ef4444' : isCustom ? '1px solid #93c5fd' : '1px solid #cbd5e1',
+        }}
+        type="text"
+        inputMode="decimal"
+        value={item.priceInput !== undefined ? item.priceInput : formatCurrencyInput(item.price)}
+        onChange={handleChange}
+        onBlur={() => onBlurPrice(item.product_id)}
+        title={isInvalid ? 'Please enter a valid price' : isCustom ? `Default: UGX ${Number(item.defaultPrice || 0).toLocaleString()}` : 'Custom unit price'}
+        placeholder="0"
+      />
+      <span style={{ fontSize: 11, color: isInvalid ? '#dc2626' : '#94a3b8' }}>
+        {isInvalid ? 'invalid' : 'each'}
+      </span>
+      {(isCustom || isInvalid) && (
+        <button
+          type="button"
+          style={posS.cartPriceResetBtn}
+          onClick={() => resetPrice(item.product_id)}
+          title={`Reset to default price (UGX ${Number(item.defaultPrice || 0).toLocaleString()})`}
+        >
+          reset
+        </button>
+      )}
+    </div>
+  );
+}
 
 function POSTab({ products, categories, customers, token, user, onSaleCompleted, canSell = true }) {
   const [search, setSearch] = useState('');
@@ -123,46 +210,107 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
       const existing = prev.find(i => i.product_id === product.id);
       if (existing) {
         if (existing.quantity >= product.stock) return prev; // cap at available stock
+        const effectivePrice = isPriceInvalid(existing) ? 0 : (existing.price ?? parseFloat(product.price) ?? 0);
         return prev.map(i => i.product_id === product.id
-          ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.price }
+          ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * effectivePrice }
           : i
         );
       }
+      const initialPrice = parseFloat(product.price) || 0;
       return [...prev, {
         product_id: product.id,
         name: product.name,
-        price: parseFloat(product.price),
+        price: initialPrice,
+        defaultPrice: initialPrice,
+        priceInput: formatCurrencyInput(initialPrice),
+        isInvalid: false,
         quantity: 1,
-        subtotal: parseFloat(product.price),
+        subtotal: initialPrice,
         maxStock: product.stock,
       }];
     });
   };
 
+  const updatePrice = (product_id, raw, formatted) => {
+    const trimmed = (raw || '').trim();
+    const isIncomplete = trimmed === '' || trimmed.endsWith('.');
+    const numeric = isIncomplete ? null : parseCurrency(formatted);
+    const isInvalid = isIncomplete || numeric === null || isNaN(numeric) || !isFinite(numeric) || numeric < 0;
+
+    setCart(prev => prev.map(i => {
+      if (i.product_id !== product_id) return i;
+      return {
+        ...i,
+        price: isInvalid ? null : numeric,
+        priceInput: formatted,
+        isInvalid,
+        subtotal: isInvalid ? 0 : i.quantity * numeric,
+      };
+    }));
+  };
+
+  const resetPrice = (product_id) => {
+    setCart(prev => prev.map(i => {
+      if (i.product_id !== product_id) return i;
+      const def = i.defaultPrice ?? (parseFloat(i.price) || 0);
+      return {
+        ...i,
+        price: def,
+        priceInput: formatCurrencyInput(def),
+        isInvalid: false,
+        subtotal: i.quantity * def,
+      };
+    }));
+  };
+
+  const handlePriceBlur = (product_id) => {
+    setCart(prev => prev.map(i => {
+      if (i.product_id !== product_id) return i;
+      if (!isPriceInvalid(i) && i.price !== null && !isNaN(i.price) && isFinite(i.price)) {
+        return {
+          ...i,
+          priceInput: formatCurrencyInput(i.price),
+        };
+      }
+      return i;
+    }));
+  };
+
   const updateQty = (product_id, qty) => {
     const n = parseInt(qty, 10);
     if (isNaN(n) || n < 1) return;
-    setCart(prev => prev.map(i => i.product_id === product_id
-      ? { ...i, quantity: Math.min(n, i.maxStock), subtotal: Math.min(n, i.maxStock) * i.price }
-      : i
-    ));
+    setCart(prev => prev.map(i => {
+      if (i.product_id !== product_id) return i;
+      const effectivePrice = isPriceInvalid(i) ? 0 : (i.price ?? 0);
+      return {
+        ...i,
+        quantity: Math.min(n, i.maxStock),
+        subtotal: Math.min(n, i.maxStock) * effectivePrice,
+      };
+    }));
   };
 
   const removeFromCart = (product_id) => setCart(prev => prev.filter(i => i.product_id !== product_id));
 
-  const cartSubtotal = cart.reduce((sum, i) => sum + i.subtotal, 0);
+  const hasInvalidPrice = cart.some(isPriceInvalid);
+  const cartSubtotal = cart.reduce((sum, i) => sum + (isPriceInvalid(i) ? 0 : i.subtotal), 0);
   const discountAmount = (() => {
-    const v = parseFloat(discountValue) || 0;
+    const v = parseCurrency(discountValue);
     return Math.min(v, cartSubtotal);
   })();
-  const taxAmount = parseFloat(taxValue) || 0;
+  const taxAmount = parseCurrency(taxValue);
   const cartTotal = cartSubtotal - discountAmount + taxAmount;
   const changeAmount = paymentMethod === 'cash'
-    ? Math.max(0, (parseFloat(amountPaid) || 0) - cartTotal)
+    ? Math.max(0, parseCurrency(amountPaid) - cartTotal)
     : 0;
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    const invalidItem = cart.find(isPriceInvalid);
+    if (invalidItem) {
+      setSaleError(`Please enter a valid price for "${invalidItem.name}" before completing the sale.`);
+      return;
+    }
     setSubmitting(true);
     setSaleError(null);
     try {
@@ -175,7 +323,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         },
         body: JSON.stringify({
           payment_method: paymentMethod,
-          items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, price: i.price })),
+          items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, price: parseFloat(i.price) })),
           customer_type: customerType,
           ...(customerType === 'existing' && selectedCustomerId ? { customer_id: parseInt(selectedCustomerId) } : {}),
           ...(customerType === 'new' ? { new_customer: newCustomer } : {}),
@@ -438,7 +586,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                   <div key={item.product_id} style={posS.cartItem}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={posS.cartItemName}>{item.name}</div>
-                      <div style={posS.cartItemPrice}>UGX {item.price.toLocaleString()} each</div>
+                      <CartPriceInput
+                        item={item}
+                        updatePrice={updatePrice}
+                        resetPrice={resetPrice}
+                        onBlurPrice={handlePriceBlur}
+                      />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity - 1)}>−</button>
@@ -447,7 +600,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                       <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity + 1)}>+</button>
                       <button style={posS.removeBtn} onClick={() => removeFromCart(item.product_id)}>✕</button>
                     </div>
-                    <div style={posS.cartItemSubtotal}>UGX {item.subtotal.toLocaleString()}</div>
+                    <div style={{
+                      ...posS.cartItemSubtotal,
+                      color: isPriceInvalid(item) ? '#ef4444' : '#0f172a',
+                    }}>
+                      {isPriceInvalid(item) ? 'UGX —' : `UGX ${item.subtotal.toLocaleString()}`}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -465,11 +623,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 <span style={{ fontSize: 13, color: '#64748b' }}>Discount:</span>
                 <input
                   style={posS.discountInput}
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0"
                   value={discountValue}
-                  onChange={e => setDiscountValue(e.target.value)}
+                  onChange={e => setDiscountValue(formatCurrencyInput(e.target.value))}
                 />
               </div>
 
@@ -478,11 +636,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 <span style={{ fontSize: 13, color: '#64748b' }}>Tax:</span>
                 <input
                   style={posS.discountInput}
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0"
                   value={taxValue}
-                  onChange={e => setTaxValue(e.target.value)}
+                  onChange={e => setTaxValue(formatCurrencyInput(e.target.value))}
                 />
               </div>
 
@@ -528,11 +686,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                     <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Amount Paid</label>
                     <input
                       style={{ ...posS.searchInput, textAlign: 'right', fontWeight: 700, fontSize: 16 }}
-                      type="number"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0"
                       value={amountPaid}
-                      onChange={e => setAmountPaid(e.target.value)}
+                      onChange={e => setAmountPaid(formatCurrencyInput(e.target.value))}
                     />
                   </div>
 
@@ -543,7 +701,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                       background: '#eff6ff', color: '#1d4ed8', fontWeight: 600, fontSize: 13,
                       cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}
-                    onClick={() => setAmountPaid(cartTotal.toString())}
+                    onClick={() => setAmountPaid(formatCurrencyInput(cartTotal.toString()))}
                   >
                     ≡ Exact Amount
                   </button>
@@ -554,15 +712,15 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                     background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '10px 14px',
                   }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Change:</span>
-                    <span style={{ fontWeight: 700, fontSize: 16, color: (parseFloat(amountPaid) || 0) < cartTotal ? '#dc2626' : '#16a34a' }}>
+                    <span style={{ fontWeight: 700, fontSize: 16, color: parseCurrency(amountPaid) < cartTotal ? '#dc2626' : '#16a34a' }}>
                       UGX {changeAmount.toLocaleString()}
                     </span>
                   </div>
 
                   {/* Underpayment warning */}
-                  {amountPaid !== '' && (parseFloat(amountPaid) || 0) < cartTotal && (
+                  {amountPaid !== '' && parseCurrency(amountPaid) < cartTotal && (
                     <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
-                      ⚠️ Amount paid is less than total by UGX {(cartTotal - (parseFloat(amountPaid) || 0)).toLocaleString()}
+                      ⚠️ Amount paid is less than total by UGX {(cartTotal - parseCurrency(amountPaid)).toLocaleString()}
                     </div>
                   )}
 
@@ -587,18 +745,18 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 
               <button
                 onClick={handleCheckout}
-                disabled={cart.length === 0 || submitting || !canSell}
+                disabled={cart.length === 0 || submitting || !canSell || hasInvalidPrice}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: (cart.length === 0 || !canSell) ? '#e2e8f0' : '#be123c',
-                  color: (cart.length === 0 || !canSell) ? '#94a3b8' : '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell) ? 'not-allowed' : 'pointer',
+                  background: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#e2e8f0' : '#be123c',
+                  color: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#94a3b8' : '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell || hasInvalidPrice) ? 'not-allowed' : 'pointer',
                   transition: 'background 0.15s', letterSpacing: '0.02em',
                 }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#881337'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#be123c'; }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#881337'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#be123c'; }}
               >
-                {!canSell ? 'No permission to sell' : submitting ? 'Processing…' : 'Complete Sale'}
+                {!canSell ? 'No permission to sell' : hasInvalidPrice ? 'Fix invalid item price' : submitting ? 'Processing…' : 'Complete Sale'}
               </button>
             </div>
           </div>

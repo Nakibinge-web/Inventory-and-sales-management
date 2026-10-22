@@ -186,6 +186,17 @@ const posS = {
   },
   cartItemName: { fontSize: 13, fontWeight: 600, color: '#0f172a' },
   cartItemPrice: { fontSize: 11, color: '#94a3b8' },
+  cartPriceRow: { display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, flexWrap: 'wrap' },
+  cartPriceInput: {
+    width: 82, padding: '3px 6px', fontSize: 12, fontWeight: 600,
+    borderRadius: 5, outline: 'none', fontFamily: 'inherit',
+    boxSizing: 'border-box', textAlign: 'right',
+  },
+  cartPriceResetBtn: {
+    background: 'none', border: 'none', padding: '0 2px',
+    color: '#3b82f6', cursor: 'pointer', fontSize: 11,
+    fontWeight: 500, textDecoration: 'underline',
+  },
   cartItemSubtotal: { fontSize: 13, fontWeight: 700, color: '#0f172a', width: '100%', textAlign: 'right', marginTop: 2 },
   qtyBtn: {
     width: 28, height: 28, borderRadius: 6, border: '1px solid #e2e8f0',

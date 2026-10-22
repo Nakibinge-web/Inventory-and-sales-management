@@ -1038,6 +1038,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         onClose={() => setShowAddProduct(false)}
         title="Add New Product"
         size="lg"
+        maxWidth="860px"
       >
         <AddProductForm
           token={token}

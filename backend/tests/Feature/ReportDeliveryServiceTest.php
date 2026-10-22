@@ -18,12 +18,13 @@ class ReportDeliveryServiceTest extends TestCase
     public function test_dashboard_delivery_creates_generated_report()
     {
         Mail::fake();
-        $tenant = Tenant::create(['name' => 'Test Tenant']);
+        $tenant = Tenant::create(['name' => 'Test Tenant', 'email' => 'tenant1@example.com']);
         app()->instance('current_tenant', $tenant);
 
         $preference = ReportPreference::create([
             'tenant_id' => $tenant->id,
             'report_type' => 'daily_sales',
+            'frequency' => 'daily',
             'delivery_method' => 'dashboard',
             'is_enabled' => true,
         ]);
@@ -44,12 +45,13 @@ class ReportDeliveryServiceTest extends TestCase
     public function test_email_delivery_constructs_mailable()
     {
         Mail::fake();
-        $tenant = Tenant::create(['name' => 'Test Tenant']);
+        $tenant = Tenant::create(['name' => 'Test Tenant', 'email' => 'tenant2@example.com']);
         app()->instance('current_tenant', $tenant);
 
         $preference = ReportPreference::create([
             'tenant_id' => $tenant->id,
             'report_type' => 'daily_sales',
+            'frequency' => 'daily',
             'delivery_method' => 'email',
             'recipient_email' => 'test@example.com',
             'is_enabled' => true,

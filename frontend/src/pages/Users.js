@@ -430,7 +430,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
               </thead>
               <tbody>
                 {pagedUsers.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc', opacity: u.is_active === false ? 0.6 : 1 }}>
+                  <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc', opacity: u.is_active === false ? 0.65 : 1 }}>
                     {/* Avatar + Name */}
                     <td style={{ padding: '14px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -476,10 +476,6 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                             border: `1px solid ${getRoleColor(r.name)}40`,
                           }}>{r.name}</span>
                         )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>No role</span>}
-                        {u.is_active === false
-                          ? <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>Disabled</span>
-                          : <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>Active</span>
-                        }
                       </div>
                     </td>
                     {/* Joined */}

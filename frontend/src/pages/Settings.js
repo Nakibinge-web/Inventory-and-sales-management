@@ -531,9 +531,9 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
             <div style={styles.infoFooter}>
               <span style={styles.lastUpdated}>
                 Last updated: {businessInfo.updated_at
-                  ? new Date(businessInfo.updated_at).toLocaleDateString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
+                  ? new Date(businessInfo.updated_at).toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: 'short',
                       year: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit'

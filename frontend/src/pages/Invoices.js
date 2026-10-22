@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../components/ui/Modal';
 import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
+import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 
 
 function PrintableInvoiceModal({ invoice, user, onClose, colorTheme }) {
@@ -372,7 +373,8 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
   };
 
   const handleItemChange = (idx, field, val) => {
-    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+    const finalVal = field === 'price' ? formatCurrencyInput(val) : val;
+    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: finalVal } : item));
     // Clear field error when user types
     if (fieldErrors[`item_${idx}`]) {
       setFieldErrors(prev => ({ ...prev, [`item_${idx}`]: null }));
@@ -394,7 +396,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
         product_id: productId,
         mode: 'product',
         description: product.name,
-        price: String(product.price || 0)
+        price: formatCurrencyInput(String(product.price || 0))
       } : item));
       
       // Clear error
@@ -422,7 +424,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
   const calculateTotal = () => {
     return items.reduce((sum, item) => {
       const q = parseFloat(item.quantity) || 0;
-      const p = parseFloat(item.price) || 0;
+      const p = parseCurrency(item.price);
       return sum + (q * p);
     }, 0);
   };
@@ -447,11 +449,11 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
     setPaymentStatus(newStatus);
     const total = calculateTotal();
     if (newStatus === 'paid') {
-      setAmountPaid(String(total));
+      setAmountPaid(formatCurrencyInput(total));
       setAmountDue('0');
     } else if (newStatus === 'due') {
       setAmountPaid('0');
-      setAmountDue(String(total));
+      setAmountDue(formatCurrencyInput(total));
     } else {
       // partial — clear both so user fills in
       setAmountPaid('');
@@ -463,10 +465,11 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 
   // When partial amount paid changes, auto-calc amount due
   const handlePartialPaidChange = (val) => {
-    setAmountPaid(val);
+    const formatted = formatCurrencyInput(val);
+    setAmountPaid(formatted);
     const total = calculateTotal();
-    const paid = parseFloat(val) || 0;
-    setAmountDue(String(Math.max(0, total - paid)));
+    const paid = parseCurrency(formatted);
+    setAmountDue(formatCurrencyInput(Math.max(0, total - paid)));
     // Clear error
     if (fieldErrors.amountPaid) {
       setFieldErrors(prev => ({ ...prev, amountPaid: null }));
@@ -534,7 +537,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       }
       
       // Check price
-      const price = parseFloat(item.price);
+      const price = parseCurrency(item.price);
       if (!item.price || isNaN(price) || price < 0) {
         itemErrors.push('Valid price required (must be 0 or greater)');
       }
@@ -559,21 +562,21 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
     const total = calculateTotal();
     
     if (paymentStatus === 'paid') {
-      const paid = parseFloat(amountPaid);
+      const paid = parseCurrency(amountPaid);
       if (!amountPaid || isNaN(paid) || paid < 0) {
         errors.amountPaid = 'Amount paid is required and must be 0 or greater';
       } else if (paid > total) {
         errors.amountPaid = `Amount paid (${paid.toLocaleString()}) cannot exceed invoice total (${total.toLocaleString()})`;
       }
     } else if (paymentStatus === 'partial') {
-      const paid = parseFloat(amountPaid);
+      const paid = parseCurrency(amountPaid);
       if (!amountPaid || isNaN(paid) || paid <= 0) {
         errors.amountPaid = 'For partial payment, amount paid must be greater than 0';
       } else if (paid >= total) {
         errors.amountPaid = 'For partial payment, amount paid must be less than total. Use "Paid" status instead.';
       }
     } else if (paymentStatus === 'due') {
-      const due = parseFloat(amountDue);
+      const due = parseCurrency(amountDue);
       if (!amountDue || isNaN(due) || due <= 0) {
         errors.amountDue = 'Amount due is required and must be greater than 0';
       } else if (due > total) {
@@ -604,13 +607,13 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
       customer_phone: customerPhone.trim() || null,
       customer_email: customerEmail.trim() || null,
       payment_status: paymentStatus,
-      amount_paid: parseFloat(amountPaid) || 0,
+      amount_paid: parseCurrency(amountPaid),
       notes: paymentTerms.trim() || null,
       items: validItems.map(i => ({
         description: i.description.trim(),
         quantity: parseFloat(i.quantity) || 1,
-        price: parseFloat(i.price) || 0,
-        subtotal: (parseFloat(i.quantity) || 1) * (parseFloat(i.price) || 0)
+        price: parseCurrency(i.price),
+        subtotal: (parseFloat(i.quantity) || 1) * parseCurrency(i.price)
       }))
     };
 
@@ -842,10 +845,9 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>UNIT PRICE (UGX)</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
                         value={item.price}
                         onChange={e => handleItemChange(idx, 'price', e.target.value)}
                         style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right', background: '#f8fafc' }}
@@ -874,9 +876,8 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                       style={{ padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
                     />
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="Unit Price (UGX)"
                       value={item.price}
                       onChange={e => handleItemChange(idx, 'price', e.target.value)}
@@ -932,11 +933,14 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                 Amount Paid (UGX) (Required)
               </label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={amountPaid}
-                onChange={e => { setAmountPaid(e.target.value); if (fieldErrors.amountPaid) setFieldErrors(prev => ({ ...prev, amountPaid: null })); }}
+                onChange={e => {
+                  const val = formatCurrencyInput(e.target.value);
+                  setAmountPaid(val);
+                  if (fieldErrors.amountPaid) setFieldErrors(prev => ({ ...prev, amountPaid: null }));
+                }}
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountPaid ? '#dc2626' : '#86efac', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#f0fdf4', boxSizing: 'border-box' }}
               />
               {fieldErrors.amountPaid && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountPaid}</span>}
@@ -951,9 +955,8 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                   Amount Paid (UGX) (Required)
                 </label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="Enter partial amount paid"
                   value={amountPaid}
                   onChange={e => handlePartialPaidChange(e.target.value)}
@@ -966,7 +969,7 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                   Amount Due (UGX) — Auto-Calculated
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   readOnly
                   value={amountDue}
                   style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 700, background: '#fef2f2', color: '#b91c1c', boxSizing: 'border-box', cursor: 'not-allowed' }}
@@ -982,12 +985,15 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
                 Amount Due (UGX) (Required)
               </label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 placeholder="Enter full amount due"
                 value={amountDue}
-                onChange={e => { setAmountDue(e.target.value); if (fieldErrors.amountDue) setFieldErrors(prev => ({ ...prev, amountDue: null })); }}
+                onChange={e => {
+                  const val = formatCurrencyInput(e.target.value);
+                  setAmountDue(val);
+                  if (fieldErrors.amountDue) setFieldErrors(prev => ({ ...prev, amountDue: null }));
+                }}
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid', borderColor: fieldErrors.amountDue ? '#dc2626' : '#fca5a5', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#fef2f2', boxSizing: 'border-box' }}
               />
               {fieldErrors.amountDue && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 4, display: 'block' }}>{fieldErrors.amountDue}</span>}
@@ -1047,17 +1053,18 @@ function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }
 // ════════════════════════════════════════════════
 function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
   const [status, setStatus] = useState(invoice.payment_status || 'paid');
-  const [amountPaid, setAmountPaid] = useState(String(invoice.amount_paid ?? invoice.total_amount ?? ''));
+  const [amountPaid, setAmountPaid] = useState(formatCurrencyInput(String(invoice.amount_paid ?? invoice.total_amount ?? '')));
   const [saving, setSaving] = useState(false);
 
   const total = parseFloat(invoice.total_amount || 0);
-  const paid = parseFloat(amountPaid) || 0;
+  const paid = parseCurrency(amountPaid);
   const balance = Math.max(0, total - paid);
 
   // Auto-derive status from amount paid when user changes the amount
   const handleAmountChange = (val) => {
-    setAmountPaid(val);
-    const p = parseFloat(val) || 0;
+    const formatted = formatCurrencyInput(val);
+    setAmountPaid(formatted);
+    const p = parseCurrency(formatted);
     if (p >= total) setStatus('paid');
     else if (p > 0) setStatus('partial');
     else setStatus('due');
@@ -1065,7 +1072,7 @@ function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(invoice.id, status, parseFloat(amountPaid) || 0);
+    await onSave(invoice.id, status, parseCurrency(amountPaid));
     setSaving(false);
   };
 
@@ -1116,9 +1123,9 @@ function InvoiceEditStatusModal({ invoice, onClose, onSave }) {
             Amount Paid (UGX)
           </label>
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
             value={amountPaid}
             onChange={e => handleAmountChange(e.target.value)}
             style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: 8, fontSize: 14, fontWeight: 600, boxSizing: 'border-box' }}

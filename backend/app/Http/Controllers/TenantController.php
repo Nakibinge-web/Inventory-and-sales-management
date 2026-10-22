@@ -73,6 +73,8 @@ class TenantController extends Controller
             'email' => 'sometimes|required|email|unique:tenants,email,' . $tenant->id,
             'phone' => 'nullable|string|max:20',
             'contacts' => 'nullable|array',
+            'contacts.*.type' => 'required|string|max:50',
+            'contacts.*.number' => 'required|string|max:20',
             'address' => 'nullable|string',
             'receipt_color' => 'nullable|string|max:30',
             'logo' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120'

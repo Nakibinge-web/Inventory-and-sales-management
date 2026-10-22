@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
             $table->string('report_type');
-            $table->string('frequency');
+            $table->string('frequency')->default('daily');
             $table->boolean('is_enabled')->default(true);
             $table->string('delivery_method')->default('email');
             $table->string('recipient_email')->nullable();
