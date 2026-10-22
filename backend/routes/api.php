@@ -204,6 +204,15 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Report Preferences
     Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
 
+    // Report Exports
+    Route::prefix('reports')->group(function () {
+        Route::get('/generated', [\App\Http\Controllers\ReportExportController::class, 'listGeneratedReports']);
+        Route::get('/generated/{id}/export', [\App\Http\Controllers\ReportExportController::class, 'exportGeneratedReport'])->name('reports.export-generated');
+        Route::match(['get', 'post'], '/overview/export', [\App\Http\Controllers\ReportExportController::class, 'exportOverviewReport']);
+        Route::match(['get', 'post'], '/sales/export', [\App\Http\Controllers\ReportExportController::class, 'exportSalesReport']);
+        Route::match(['get', 'post'], '/purchases/export', [\App\Http\Controllers\ReportExportController::class, 'exportPurchasesReport']);
+    });
+
     // Business Settings
     Route::prefix('settings')->group(function () {
         Route::get('/business', [\App\Http\Controllers\SettingsController::class, 'getBusinessInfo']);

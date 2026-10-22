@@ -1015,7 +1015,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               }}
             />
           )}
-          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} user={user} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
