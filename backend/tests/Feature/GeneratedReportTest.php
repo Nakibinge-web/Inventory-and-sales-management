@@ -15,8 +15,8 @@ class GeneratedReportTest extends TestCase
     public function test_generated_report_persistence_and_isolation()
     {
         // Setup tenants
-        $tenantA = Tenant::create(['name' => 'Tenant A']);
-        $tenantB = Tenant::create(['name' => 'Tenant B']);
+        $tenantA = Tenant::create(['name' => 'Tenant A', 'email' => 'tenantA@example.com']);
+        $tenantB = Tenant::create(['name' => 'Tenant B', 'email' => 'tenantB@example.com']);
 
         // Setup tenant context A
         app()->instance('current_tenant', $tenantA);

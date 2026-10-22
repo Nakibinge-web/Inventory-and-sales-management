@@ -250,4 +250,79 @@ class ReportService
             'purchases'          => $purchases,
         ];
     }
+
+    public function getOverviewReport(): array
+    {
+        $sales = Sale::with(['saleItems.product', 'customer'])->get();
+        $purchases = Purchase::with(['purchaseItems.product', 'supplier'])->get();
+        $products = \App\Models\Product::with('category')->get();
+        $customersCount = \App\Models\Customer::count();
+        $suppliersCount = \App\Models\Supplier::count();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit] = $this->calcProfitForSales($sales);
+        $totalSales = $sales->sum('total_amount');
+        $totalPurchases = $purchases->sum('total_amount');
+
+        $lowStockCount = $products->filter(fn($p) => $p->stock <= ($p->reorder_level ?? 10))->count();
+
+        // Payment method breakdown
+        $byPayment = $sales->groupBy('payment_method')->map(fn($g) => [
+            'method' => $g->first()->payment_method ?? 'Unknown',
+            'total'  => $g->sum('total_amount'),
+            'count'  => $g->count(),
+        ])->values()->all();
+
+        // Top products by revenue
+        $productRev = [];
+        foreach ($sales as $s) {
+            foreach ($s->saleItems as $item) {
+                $pName = $item->product?->name ?? "Product #{$item->product_id}";
+                $productRev[$pName] = ($productRev[$pName] ?? 0) + floatval($item->subtotal ?? 0);
+            }
+        }
+        arsort($productRev);
+        $topProducts = [];
+        $rank = 1;
+        foreach (array_slice($productRev, 0, 5, true) as $pName => $rev) {
+            $topProducts[] = [
+                'rank' => $rank++,
+                'name' => $pName,
+                'revenue' => round($rev, 2),
+            ];
+        }
+
+        // Top suppliers by spend
+        $supplierSpend = [];
+        foreach ($purchases as $p) {
+            $sName = $p->supplier?->name ?? "Supplier #{$p->supplier_id}";
+            $supplierSpend[$sName] = ($supplierSpend[$sName] ?? 0) + floatval($p->total_amount ?? 0);
+        }
+        arsort($supplierSpend);
+        $topSuppliers = [];
+        $rank = 1;
+        foreach (array_slice($supplierSpend, 0, 5, true) as $sName => $spend) {
+            $topSuppliers[] = [
+                'rank' => $rank++,
+                'name' => $sName,
+                'spend' => round($spend, 2),
+            ];
+        }
+
+        return [
+            'total_sales' => $totalSales,
+            'total_cost' => $totalCost,
+            'total_profit' => $totalProfit,
+            'total_purchases' => $totalPurchases,
+            'net_profit' => $totalSales - $totalPurchases,
+            'total_products' => $products->count(),
+            'low_stock_count' => $lowStockCount,
+            'total_transactions' => $sales->count(),
+            'total_purchases_count' => $purchases->count(),
+            'customers_count' => $customersCount,
+            'suppliers_count' => $suppliersCount,
+            'by_payment' => $byPayment,
+            'top_products' => $topProducts,
+            'top_suppliers' => $topSuppliers,
+        ];
+    }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './components/ui/Modal';
+import { formatCurrencyInput, parseCurrency } from './utils/currency';
 
 // ════════════════════════════════════════════════
 // INVOICE SETTINGS & BRANDING STORAGE HELPERS
@@ -724,13 +725,14 @@ export function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }
   };
 
   const handleItemChange = (idx, field, val) => {
-    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+    const finalVal = field === 'price' ? formatCurrencyInput(val) : val;
+    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: finalVal } : item));
   };
 
   const calculateTotal = () => {
     return items.reduce((sum, item) => {
       const q = parseFloat(item.quantity) || 0;
-      const p = parseFloat(item.price) || 0;
+      const p = parseCurrency(item.price);
       return sum + (q * p);
     }, 0);
   };
@@ -754,7 +756,7 @@ export function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }
       alert('Please enter or select a customer name.');
       return;
     }
-    const validItems = items.filter(i => i.description.trim() && parseFloat(i.price) > 0);
+    const validItems = items.filter(i => i.description.trim() && parseCurrency(i.price) > 0);
     if (validItems.length === 0) {
       alert('Please add at least one valid item with a description and unit price.');
       return;
@@ -787,8 +789,8 @@ export function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }
       items: validItems.map(i => ({
         description: i.description,
         quantity: parseFloat(i.quantity) || 1,
-        price: parseFloat(i.price) || 0,
-        subtotal: (parseFloat(i.quantity) || 1) * (parseFloat(i.price) || 0)
+        price: parseCurrency(i.price),
+        subtotal: (parseFloat(i.quantity) || 1) * parseCurrency(i.price)
       }))
     };
 
@@ -926,7 +928,7 @@ export function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }
               <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 6px 6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff' }}>
                 {items.map((item, idx) => {
                   const q = parseFloat(item.quantity) || 0;
-                  const p = parseFloat(item.price) || 0;
+                  const p = parseCurrency(item.price);
                   const sub = q * p;
                   return (
                     <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -950,10 +952,9 @@ export function CustomInvoiceCreateModal({ user, customers, onClose, onCreated }
                         required
                       />
                       <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        placeholder="Price"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
                         value={item.price}
                         onChange={e => handleItemChange(idx, 'price', e.target.value)}
                         style={{ flex: 2, minWidth: 0, padding: '7px 10px', border: '1.5px solid #cbd5e1', borderRadius: 6, fontSize: 13, textAlign: 'right', boxSizing: 'border-box' }}

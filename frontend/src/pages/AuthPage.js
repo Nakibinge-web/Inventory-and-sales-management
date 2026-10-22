@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import Dashboard from './Dashboard';
-import LandingPage from './LandingPage';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -86,16 +85,15 @@ function PasswordField({ name, label, placeholder, value, onChange, showStrength
 
 /* ── Helper to determine mode from pathname ── */
 function getPathMode() {
-  if (typeof window === 'undefined') return 'landing';
+  if (typeof window === 'undefined') return 'login';
   const rawPath = window.location.pathname.replace(/[\\/]+/g, '/').toLowerCase();
   if (rawPath === '/register' || rawPath.startsWith('/register/')) return 'register';
-  if (rawPath === '/login' || rawPath.startsWith('/login/')) return 'login';
-  return 'landing';
+  return 'login';
 }
 
 /* ── Main Auth Page ── */
-export default function AuthPage() {
-  const [mode, setMode] = useState(getPathMode);
+export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
+  const [mode, setMode] = useState(() => initialMode || getPathMode());
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -239,9 +237,13 @@ export default function AuthPage() {
         setToken(data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('token', data.token);
+        if (onAuthSuccess) {
+          onAuthSuccess(data.user, data.token);
+        }
         const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/overview';
         sessionStorage.removeItem('redirect_after_login');
         window.history.pushState(null, '', savedRedirect);
+        window.dispatchEvent(new Event('popstate'));
       }
     } catch {
       setError('Could not reach the server. Please verify the backend is running.');
@@ -269,7 +271,9 @@ export default function AuthPage() {
     setLogoPreview(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    if (onLogout) onLogout();
     window.history.pushState(null, '', '/login');
+    window.dispatchEvent(new Event('popstate'));
     setMode('login');
   };
 
@@ -279,6 +283,7 @@ export default function AuthPage() {
     const target = newMode === 'register' ? '/register' : '/login';
     if (window.location.pathname !== target) {
       window.history.pushState(null, '', target);
+      window.dispatchEvent(new Event('popstate'));
     }
   };
 
@@ -297,7 +302,10 @@ export default function AuthPage() {
 
     if (user && token) {
       if (path === '/login' || path.startsWith('/login/') || path === '/register' || path.startsWith('/register/')) {
-        window.history.replaceState(null, '', '/overview');
+        const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/overview';
+        sessionStorage.removeItem('redirect_after_login');
+        window.history.replaceState(null, '', savedRedirect);
+        window.dispatchEvent(new Event('popstate'));
       }
       fetch(`${API}/users/me`, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
@@ -312,26 +320,14 @@ export default function AuthPage() {
         .catch(() => {});
     } else {
       if (path === '/register' || path.startsWith('/register/')) {
-        if (window.location.pathname !== '/register') {
-          window.history.replaceState(null, '', '/register');
-        }
         setMode('register');
       } else if (path === '/login' || path.startsWith('/login/')) {
-        if (window.location.pathname !== '/login') {
-          window.history.replaceState(null, '', '/login');
-        }
         setMode('login');
-      } else {
-        setMode('landing');
       }
     }
   }, [user, token]);
 
   if (user && token) return <Dashboard user={user} token={token} onLogout={logout} onUserUpdate={setUser} />;
-
-  if (mode === 'landing') {
-    return <LandingPage onGoToLogin={() => switchMode('login')} onGoToRegister={() => switchMode('register')} />;
-  }
 
   const isLogin = mode === 'login';
 
@@ -340,7 +336,17 @@ export default function AuthPage() {
       <div className={`auth-container ${!isLogin ? 'register-mode' : ''}`}>
         {/* Brand header */}
         <div className="auth-brand-header">
-          <div className="auth-brand-badge-wrap">
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', '/');
+              window.dispatchEvent(new Event('popstate'));
+            }}
+            className="auth-brand-badge-wrap"
+            style={{ textDecoration: 'none', cursor: 'pointer' }}
+            title="Return to StockPro Homepage"
+          >
             <div className="auth-brand-logo" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -350,7 +356,7 @@ export default function AuthPage() {
             </div>
             <span className="auth-brand-name">StockPro</span>
             <span className="auth-brand-tag">Inventory &amp; Sales</span>
-          </div>
+          </a>
         </div>
 
         {/* Card */}
@@ -621,6 +627,32 @@ export default function AuthPage() {
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
           <span>Multi-tenant data isolation &bull; 256-bit SSL session</span>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', '/');
+              window.dispatchEvent(new Event('popstate'));
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              color: '#64748b',
+              textDecoration: 'none',
+              fontWeight: 500,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#0b1f3a')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+          >
+            <span>&larr;</span>
+            <span>Return to StockPro Homepage</span>
+          </a>
         </div>
       </div>
     </div>

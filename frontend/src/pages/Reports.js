@@ -1,9 +1,97 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import styles, { supS } from '../styles/dashboardStyles';
 
+function ReportExportBar({ title, onExportPdf, onExportWord, isPdfLoading, isWordLoading, extraActions }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      background: '#ffffff',
+      border: '1px solid #e2e8f0',
+      borderRadius: 12,
+      padding: '12px 20px',
+      marginBottom: 20,
+      flexWrap: 'wrap',
+      gap: 12,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          background: '#eef2ff',
+          color: '#4f46e5',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 18
+        }}>
+          📊
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{title || 'Export Report'}</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>Download this report in professional PDF or Microsoft Word (.docx) format</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {extraActions}
+        <button
+          type="button"
+          onClick={onExportPdf}
+          disabled={isPdfLoading}
+          style={{
+            padding: '8px 16px',
+            background: isPdfLoading ? '#94a3b8' : '#dc2626',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: isPdfLoading ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'background 0.15s ease',
+            boxShadow: '0 1px 2px rgba(220,38,38,0.2)'
+          }}
+          onMouseEnter={e => { if (!isPdfLoading) e.currentTarget.style.background = '#b91c1c'; }}
+          onMouseLeave={e => { if (!isPdfLoading) e.currentTarget.style.background = '#dc2626'; }}
+        >
+          {isPdfLoading ? '⏳ Generating PDF...' : '📄 Export as PDF'}
+        </button>
+        <button
+          type="button"
+          onClick={onExportWord}
+          disabled={isWordLoading}
+          style={{
+            padding: '8px 16px',
+            background: isWordLoading ? '#94a3b8' : '#2563eb',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: isWordLoading ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'background 0.15s ease',
+            boxShadow: '0 1px 2px rgba(37,99,235,0.2)'
+          }}
+          onMouseEnter={e => { if (!isWordLoading) e.currentTarget.style.background = '#1d4ed8'; }}
+          onMouseLeave={e => { if (!isWordLoading) e.currentTarget.style.background = '#2563eb'; }}
+        >
+          {isWordLoading ? '⏳ Generating Word...' : '📝 Export as Word'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
-function ReportsTab({ data, loading, token }) {
+function ReportsTab({ data, loading, token, user }) {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
@@ -16,6 +104,135 @@ function ReportsTab({ data, loading, token }) {
   const [reportData, setReportData] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState(null);
+
+  const [exportingKey, setExportingKey] = useState(null);
+  const [savedReports, setSavedReports] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [savedError, setSavedError] = useState(null);
+
+  const formatReportTypeName = (type) => {
+    if (!type) return 'Report';
+    return type
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const fetchSavedReports = async () => {
+    setSavedLoading(true);
+    setSavedError(null);
+    try {
+      const res = await fetch(`${API_URL}/reports/generated`, { headers });
+      const json = await res.json();
+      if (!res.ok) {
+        setSavedError(json?.message || 'Failed to load saved reports.');
+        return;
+      }
+      setSavedReports(json.data || []);
+    } catch {
+      setSavedError('Could not reach the server to load saved reports.');
+    } finally {
+      setSavedLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeReport === 'saved-reports') {
+      fetchSavedReports();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReport]);
+
+  const handleExport = async (endpoint, payload, fallbackFileName, format = 'pdf') => {
+    const key = `${endpoint}_${format}`;
+    setExportingKey(key);
+    try {
+      const res = await fetch(`${API_URL}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...payload, format }),
+      });
+
+      if (!res.ok) {
+        let errMessage = 'Export failed.';
+        try {
+          const errData = await res.json();
+          errMessage = errData.message || (errData.errors ? Object.values(errData.errors).flat().join(', ') : errMessage);
+        } catch (_) {}
+        alert(`Export failed: ${errMessage}`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition');
+      let filename = `${fallbackFileName}.${format}`;
+      if (disposition && disposition.includes('filename=')) {
+        const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '').trim();
+        }
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Network error while exporting document. Please try again.');
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  const handleDownloadSaved = async (reportId, format, reportType) => {
+    const key = `saved_${reportId}_${format}`;
+    setExportingKey(key);
+    try {
+      const res = await fetch(`${API_URL}/reports/generated/${reportId}/export?format=${format}`, {
+        headers,
+      });
+      if (!res.ok) {
+        let errMessage = 'Download failed.';
+        try {
+          const errData = await res.json();
+          errMessage = errData.message || errMessage;
+        } catch (_) {}
+        alert(`Download failed: ${errMessage}`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition');
+      let filename = `${reportType}_#${reportId}.${format}`;
+      if (disposition && disposition.includes('filename=')) {
+        const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '').trim();
+        }
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('Network error while downloading report.');
+    } finally {
+      setExportingKey(null);
+    }
+  };
 
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
@@ -164,6 +381,7 @@ function ReportsTab({ data, loading, token }) {
     { id: 'monthly-sales', label: 'Monthly Sales' },
     { id: 'yearly', label: 'Yearly Report' },
     { id: 'daily-purchases', label: 'Daily Purchases' },
+    { id: 'saved-reports', label: 'Saved Reports' },
   ];
 
   return (
@@ -185,7 +403,53 @@ function ReportsTab({ data, loading, token }) {
         </div>
         
         {/* Export Buttons */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'pdf')}
+            disabled={exportingKey === 'reports/overview/export_pdf'}
+            style={{
+              padding: '10px 16px',
+              background: exportingKey === 'reports/overview/export_pdf' ? '#94a3b8' : '#dc2626',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: exportingKey === 'reports/overview/export_pdf' ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s',
+              boxShadow: '0 2px 6px rgba(220,38,38,0.2)'
+            }}
+            onMouseEnter={e => { if (exportingKey !== 'reports/overview/export_pdf') e.currentTarget.style.background = '#b91c1c'; }}
+            onMouseLeave={e => { if (exportingKey !== 'reports/overview/export_pdf') e.currentTarget.style.background = '#dc2626'; }}
+          >
+            {exportingKey === 'reports/overview/export_pdf' ? '⏳ Generating...' : '📄 Overview PDF'}
+          </button>
+          <button
+            onClick={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'docx')}
+            disabled={exportingKey === 'reports/overview/export_docx'}
+            style={{
+              padding: '10px 16px',
+              background: exportingKey === 'reports/overview/export_docx' ? '#94a3b8' : '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: exportingKey === 'reports/overview/export_docx' ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s',
+              boxShadow: '0 2px 6px rgba(37,99,235,0.2)'
+            }}
+            onMouseEnter={e => { if (exportingKey !== 'reports/overview/export_docx') e.currentTarget.style.background = '#1d4ed8'; }}
+            onMouseLeave={e => { if (exportingKey !== 'reports/overview/export_docx') e.currentTarget.style.background = '#2563eb'; }}
+          >
+            {exportingKey === 'reports/overview/export_docx' ? '⏳ Generating...' : '📝 Overview Word'}
+          </button>
           <button
             onClick={exportOverviewToCSV}
             style={{
@@ -289,6 +553,34 @@ function ReportsTab({ data, loading, token }) {
       {/* ── OVERVIEW ── */}
       {activeReport === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <ReportExportBar
+            title="Business Overview Report"
+            onExportPdf={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'pdf')}
+            onExportWord={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'docx')}
+            isPdfLoading={exportingKey === 'reports/overview/export_pdf'}
+            isWordLoading={exportingKey === 'reports/overview/export_docx'}
+            extraActions={
+              <button
+                type="button"
+                onClick={exportOverviewToCSV}
+                style={{
+                  padding: '8px 14px',
+                  background: '#f8fafc',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                📊 Export CSV
+              </button>
+            }
+          />
 
           {/* KPI row */}
           <div className="reports-kpi-grid">
@@ -419,6 +711,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Daily Sales Report (${reportData.date})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'daily', date: dailyDate }, `sales_daily_${dailyDate}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'daily', date: dailyDate }, `sales_daily_${dailyDate}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Date', value: reportData.date },
@@ -505,6 +804,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Weekly Sales Report (${reportData.week_start} to ${reportData.week_end})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'weekly', date: weeklyDate }, `sales_weekly_${weeklyDate}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'weekly', date: weeklyDate }, `sales_weekly_${weeklyDate}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
               {/* KPI cards */}
               <div className="reports-kpi-grid">
                 {[
@@ -636,6 +942,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Monthly Sales Report (${reportData.month})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'monthly', month: monthlyMonth }, `sales_monthly_${monthlyMonth}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'monthly', month: monthlyMonth }, `sales_monthly_${monthlyMonth}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
               {/* KPI cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {[
@@ -799,6 +1112,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Yearly Sales Report (${reportData.year})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'yearly', year: parseInt(yearlyYear, 10) }, `sales_yearly_${yearlyYear}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'yearly', year: parseInt(yearlyYear, 10) }, `sales_yearly_${yearlyYear}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
 
               {/* ── KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
@@ -982,6 +1302,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Daily Purchases Report (${reportData.date})`}
+                onExportPdf={() => handleExport('reports/purchases/export', { report_type: 'daily', date: dailyPurchasesDate }, `purchases_daily_${dailyPurchasesDate}`, 'pdf')}
+                onExportWord={() => handleExport('reports/purchases/export', { report_type: 'daily', date: dailyPurchasesDate }, `purchases_daily_${dailyPurchasesDate}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/purchases/export_pdf'}
+                isWordLoading={exportingKey === 'reports/purchases/export_docx'}
+              />
 
               {/* KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
@@ -1105,6 +1432,169 @@ function ReportsTab({ data, loading, token }) {
                   </div>
                 </>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SAVED / AUTOMATED REPORTS ── */}
+      {activeReport === 'saved-reports' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 12,
+            padding: '16px 20px',
+            flexWrap: 'wrap',
+            gap: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Saved &amp; Automated Reports</h3>
+              <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+                System-generated periodic reports archive. Download any report as PDF or Microsoft Word (.docx).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchSavedReports}
+              disabled={savedLoading}
+              style={{
+                padding: '8px 16px',
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#334155',
+                cursor: savedLoading ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              {savedLoading ? '🔄 Loading...' : '🔄 Refresh'}
+            </button>
+          </div>
+
+          {savedError && (
+            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+              ⚠️ {savedError}
+            </div>
+          )}
+
+          {savedLoading && (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+              <p style={{ margin: 0, fontSize: 14, color: '#64748b' }}>Loading saved reports...</p>
+            </div>
+          )}
+
+          {!savedLoading && savedReports.length === 0 && (
+            <div style={{ padding: '48px 24px', textAlign: 'center', background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📁</div>
+              <h4 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>No Saved Reports Yet</h4>
+              <p style={{ margin: 0, fontSize: 13, color: '#64748b', maxWidth: 480, marginInline: 'auto', lineHeight: 1.5 }}>
+                Automated periodic reports (daily, weekly, monthly) will appear here once generated by the scheduled background task. You can also generate and export reports on-demand directly using the other tabs above.
+              </p>
+            </div>
+          )}
+
+          {!savedLoading && savedReports.length > 0 && (
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Report ID</th>
+                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Type</th>
+                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Generated Date</th>
+                    <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Export Document</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedReports.map(report => {
+                    const isPdfLoading = exportingKey === `saved_${report.id}_pdf`;
+                    const isWordLoading = exportingKey === `saved_${report.id}_docx`;
+                    return (
+                      <tr key={report.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 20px', fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                          #{report.id}
+                        </td>
+                        <td style={{ padding: '14px 20px', fontSize: 14, color: '#334155' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            fontSize: 12,
+                            fontWeight: 600
+                          }}>
+                            📄 {formatReportTypeName(report.report_type)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 20px', fontSize: 13, color: '#64748b' }}>
+                          {new Date(report.generated_at).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSaved(report.id, 'pdf', report.report_type)}
+                              disabled={isPdfLoading}
+                              style={{
+                                padding: '6px 14px',
+                                background: isPdfLoading ? '#94a3b8' : '#dc2626',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: 6,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: isPdfLoading ? 'not-allowed' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={e => { if (!isPdfLoading) e.currentTarget.style.background = '#b91c1c'; }}
+                              onMouseLeave={e => { if (!isPdfLoading) e.currentTarget.style.background = '#dc2626'; }}
+                            >
+                              {isPdfLoading ? '⏳ PDF...' : '📄 Export PDF'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadSaved(report.id, 'docx', report.report_type)}
+                              disabled={isWordLoading}
+                              style={{
+                                padding: '6px 14px',
+                                background: isWordLoading ? '#94a3b8' : '#2563eb',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: 6,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: isWordLoading ? 'not-allowed' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={e => { if (!isWordLoading) e.currentTarget.style.background = '#1d4ed8'; }}
+                              onMouseLeave={e => { if (!isWordLoading) e.currentTarget.style.background = '#2563eb'; }}
+                            >
+                              {isWordLoading ? '⏳ Word...' : '📝 Export Word'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

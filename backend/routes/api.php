@@ -15,10 +15,12 @@ use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\ContactController;
 
-// Public auth routes — no token required
+// Public routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
+Route::post('/contact', [ContactController::class, 'submit']);
 
 // All other routes require a valid Sanctum token + tenant resolution
 Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
@@ -203,6 +205,15 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Report Preferences
     Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
+
+    // Report Exports
+    Route::prefix('reports')->group(function () {
+        Route::get('/generated', [\App\Http\Controllers\ReportExportController::class, 'listGeneratedReports']);
+        Route::get('/generated/{id}/export', [\App\Http\Controllers\ReportExportController::class, 'exportGeneratedReport'])->name('reports.export-generated');
+        Route::match(['get', 'post'], '/overview/export', [\App\Http\Controllers\ReportExportController::class, 'exportOverviewReport']);
+        Route::match(['get', 'post'], '/sales/export', [\App\Http\Controllers\ReportExportController::class, 'exportSalesReport']);
+        Route::match(['get', 'post'], '/purchases/export', [\App\Http\Controllers\ReportExportController::class, 'exportPurchasesReport']);
+    });
 
     // Business Settings
     Route::prefix('settings')->group(function () {

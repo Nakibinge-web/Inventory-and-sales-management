@@ -289,6 +289,7 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
         onClose={() => setEditingProduct(null)}
         title="Edit Product"
         size="lg"
+        maxWidth="860px"
       >
         {editingProduct && (
           <EditProductForm
