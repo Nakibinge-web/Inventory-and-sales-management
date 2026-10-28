@@ -93,28 +93,97 @@ function CartPriceInput({ item, updatePrice, resetPrice, onBlurPrice }) {
   );
 }
 
-function POSTab({ products, categories, customers, token, user, onSaleCompleted, canSell = true }) {
+const createEmptyDraft = (id, label) => ({
+  id,
+  label: label || `Sale ${id}`,
+  cart: [],
+  paymentMethod: 'cash',
+  customerType: 'walk_in',
+  selectedCustomerId: '',
+  customerSearch: '',
+  newCustomer: { name: '', phone: '', email: '' },
+  discountValue: '',
+  taxValue: '',
+  amountPaid: '',
+  cashNote: '',
+});
+
+function POSTab({ products = [], categories = [], customers = [], token, user, onSaleCompleted, canSell = true }) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+
+  // Multi-draft sale state
+  const [drafts, setDrafts] = useState([createEmptyDraft(1, 'Sale 1')]);
+  const [activeDraftId, setActiveDraftId] = useState(1);
+  const nextDraftIdRef = useRef(2);
+
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState(null);
-  const [viewingSale, setViewingSale] = useState(null);
 
-  // Customer selection state
-  const [customerType, setCustomerType] = useState('walk_in');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
+  // Receipt Modal state (supports single and batch)
+  const [viewingBatchSales, setViewingBatchSales] = useState(null); // Array of sales
+  const [batchReceiptIndex, setBatchReceiptIndex] = useState(0);
 
-  // Discount & tax state
-  const [discountValue, setDiscountValue] = useState('');
-  const [taxValue, setTaxValue] = useState('');
+  // Active draft resolution
+  const activeDraft = drafts.find(d => d.id === activeDraftId) || drafts[0] || createEmptyDraft(1, 'Sale 1');
 
-  // Cash payment state
-  const [amountPaid, setAmountPaid] = useState('');
-  const [cashNote, setCashNote] = useState('');
+  const updateActiveDraft = (updater) => {
+    setDrafts(prev => prev.map(d => {
+      if (d.id !== activeDraft.id) return d;
+      return typeof updater === 'function' ? updater(d) : { ...d, ...updater };
+    }));
+  };
+
+  // Active draft field getters & setters for existing UI compatibility
+  const cart = activeDraft.cart;
+  const paymentMethod = activeDraft.paymentMethod;
+  const customerType = activeDraft.customerType;
+  const selectedCustomerId = activeDraft.selectedCustomerId;
+  const customerSearch = activeDraft.customerSearch;
+  const newCustomer = activeDraft.newCustomer;
+  const discountValue = activeDraft.discountValue;
+  const taxValue = activeDraft.taxValue;
+  const amountPaid = activeDraft.amountPaid;
+  const cashNote = activeDraft.cashNote;
+
+  const setCart = (action) => {
+    updateActiveDraft(d => ({
+      ...d,
+      cart: typeof action === 'function' ? action(d.cart) : action
+    }));
+  };
+  const setPaymentMethod = (val) => updateActiveDraft({ paymentMethod: val });
+  const setCustomerType = (val) => updateActiveDraft({ customerType: val });
+  const setSelectedCustomerId = (val) => updateActiveDraft({ selectedCustomerId: val });
+  const setCustomerSearch = (val) => updateActiveDraft({ customerSearch: val });
+  const setNewCustomer = (action) => {
+    updateActiveDraft(d => ({
+      ...d,
+      newCustomer: typeof action === 'function' ? action(d.newCustomer) : action
+    }));
+  };
+  const setDiscountValue = (val) => updateActiveDraft({ discountValue: val });
+  const setTaxValue = (val) => updateActiveDraft({ taxValue: val });
+  const setAmountPaid = (val) => updateActiveDraft({ amountPaid: val });
+  const setCashNote = (val) => updateActiveDraft({ cashNote: val });
+
+  // ── Stock Reservation across drafts ────────────────────────
+  const getReservedInOtherDrafts = (productId) => {
+    let reserved = 0;
+    for (const d of drafts) {
+      if (d.id === activeDraft.id) continue;
+      const item = d.cart.find(i => i.product_id === productId);
+      if (item) {
+        reserved += (item.quantity || 0);
+      }
+    }
+    return reserved;
+  };
+
+  const getAvailableStockForActive = (product) => {
+    const reserved = getReservedInOtherDrafts(product.id);
+    return Math.max(0, Number(product.stock || 0) - reserved);
+  };
 
   // ── Barcode scanner state ────────────────────────────────
   const barcodeInputRef = useRef(null);
@@ -122,17 +191,14 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const [barcodeFlash, setBarcodeFlash] = useState(null); // 'success' | 'error' | null
   const [barcodeMsg, setBarcodeMsg] = useState('');
   const barcodeTimerRef = useRef(null);
-  // Tracks rapid keystrokes to distinguish scanner input from manual typing
   const barcodeLastKeyTime = useRef(0);
-  
+
   // Auto-focus barcode input when the POS mounts
   useEffect(() => {
     barcodeInputRef.current?.focus();
   }, []);
 
-  // ── Global keydown listener: redirect keystrokes to barcode field
-  // even if the user has clicked elsewhere on the page.
-  // Only redirects if the active element is not another input/textarea/select.
+  // Global keydown listener: redirect keystrokes to barcode field
   useEffect(() => {
     const handleGlobalKey = (e) => {
       const tag = document.activeElement?.tagName?.toLowerCase();
@@ -154,7 +220,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
       setBarcodeFlash(null);
       setBarcodeMsg('');
       setBarcodeValue('');
-    }, 1800);
+    }, 2200);
   };
 
   const handleBarcodeScan = (rawValue) => {
@@ -171,8 +237,21 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
       flashBarcode('error', `No product found for "${code}"`);
       return;
     }
-    if (Number(product.stock) <= 0) {
-      flashBarcode('error', `"${product.name}" is out of stock`);
+
+    const availableStock = getAvailableStockForActive(product);
+    if (availableStock <= 0) {
+      const reserved = getReservedInOtherDrafts(product.id);
+      if (reserved > 0) {
+        flashBarcode('error', `"${product.name}" out of stock (${reserved} reserved in other sales)`);
+      } else {
+        flashBarcode('error', `"${product.name}" is out of stock`);
+      }
+      return;
+    }
+
+    const inActiveCart = cart.find(i => i.product_id === product.id)?.quantity || 0;
+    if (inActiveCart >= availableStock) {
+      flashBarcode('error', `Cannot add more "${product.name}" (${availableStock} max available)`);
       return;
     }
 
@@ -180,16 +259,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     flashBarcode('success', `✓ Added: ${product.name}`);
   };
 
-  // Detect scanner input: scanners fire characters in <50ms bursts then send Enter.
-  // If Enter arrives after a rapid burst, treat as a scan (auto-submit).
-  // If Enter arrives after slow typing, also submit — keeps manual entry working.
   const handleBarcodeKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleBarcodeScan(barcodeValue);
       return;
     }
-    // Track timing so we know if input was fast (scanner) vs slow (keyboard)
     const now = Date.now();
     barcodeLastKeyTime.current = now;
   };
@@ -204,13 +279,16 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   });
 
   const addToCart = (product) => {
+    const availableStock = getAvailableStockForActive(product);
+    if (availableStock <= 0) return;
+
     setCart(prev => {
       const existing = prev.find(i => i.product_id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev; // cap at available stock
+        if (existing.quantity >= availableStock) return prev; // cap at available stock
         const effectivePrice = isPriceInvalid(existing) ? 0 : (existing.price ?? parseFloat(product.price) ?? 0);
         return prev.map(i => i.product_id === product.id
-          ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * effectivePrice }
+          ? { ...i, quantity: i.quantity + 1, maxStock: availableStock, subtotal: (i.quantity + 1) * effectivePrice }
           : i
         );
       }
@@ -224,7 +302,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         isInvalid: false,
         quantity: 1,
         subtotal: initialPrice,
-        maxStock: product.stock,
+        maxStock: availableStock,
       }];
     });
   };
@@ -277,19 +355,59 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const updateQty = (product_id, qty) => {
     const n = parseInt(qty, 10);
     if (isNaN(n) || n < 1) return;
+    const product = products.find(p => p.id === product_id);
+    const availableStock = product ? getAvailableStockForActive(product) : 999999;
     setCart(prev => prev.map(i => {
       if (i.product_id !== product_id) return i;
       const effectivePrice = isPriceInvalid(i) ? 0 : (i.price ?? 0);
+      const clampedQty = Math.min(n, availableStock);
       return {
         ...i,
-        quantity: Math.min(n, i.maxStock),
-        subtotal: Math.min(n, i.maxStock) * effectivePrice,
+        quantity: clampedQty,
+        maxStock: availableStock,
+        subtotal: clampedQty * effectivePrice,
       };
     }));
   };
 
   const removeFromCart = (product_id) => setCart(prev => prev.filter(i => i.product_id !== product_id));
 
+  // ── Draft management handlers ─────────────────────────────
+  const handleAddDraft = () => {
+    if (drafts.length >= 200) {
+      alert('Maximum 200 sales can be prepared in a batch.');
+      return;
+    }
+    const newId = nextDraftIdRef.current++;
+    const newDraft = createEmptyDraft(newId, `Sale ${drafts.length + 1}`);
+    setDrafts(prev => [...prev, newDraft]);
+    setActiveDraftId(newId);
+  };
+
+  const handleCloseDraft = (draftId, e) => {
+    if (e) e.stopPropagation();
+    if (drafts.length <= 1) {
+      if (activeDraft.cart.length > 0) {
+        if (window.confirm('Clear all items and details for this sale?')) {
+          updateActiveDraft(createEmptyDraft(draftId, activeDraft.label));
+        }
+      }
+      return;
+    }
+    const draftToClose = drafts.find(d => d.id === draftId);
+    if (draftToClose && draftToClose.cart.length > 0) {
+      if (!window.confirm(`"${draftToClose.label}" has ${draftToClose.cart.length} item(s). Are you sure you want to discard it?`)) {
+        return;
+      }
+    }
+    const remaining = drafts.filter(d => d.id !== draftId);
+    setDrafts(remaining);
+    if (activeDraftId === draftId) {
+      setActiveDraftId(remaining[0].id);
+    }
+  };
+
+  // ── Calculations for active draft ──────────────────────────
   const hasInvalidPrice = cart.some(isPriceInvalid);
   const cartSubtotal = cart.reduce((sum, i) => sum + (isPriceInvalid(i) ? 0 : i.subtotal), 0);
   const discountAmount = (() => {
@@ -302,7 +420,12 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     ? Math.max(0, parseCurrency(amountPaid) - cartTotal)
     : 0;
 
-  const handleCheckout = async () => {
+  // Multi-draft counts
+  const validDrafts = drafts.filter(d => d.cart.length > 0);
+  const totalDraftItems = drafts.reduce((sum, d) => sum + d.cart.reduce((s, i) => s + i.quantity, 0), 0);
+
+  // ── Single Checkout ───────────────────────────────────────
+  const handleCheckoutSingle = async () => {
     if (cart.length === 0) return;
     const invalidItem = cart.find(isPriceInvalid);
     if (invalidItem) {
@@ -328,26 +451,29 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           discount_type: discountAmount > 0 ? 'fixed' : null,
           discount_amount: discountAmount > 0 ? discountAmount : null,
           tax_amount: taxAmount > 0 ? taxAmount : null,
+          notes: cashNote || null,
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setSaleError(data?.message || 'Checkout failed.'); return; }
+      if (!res.ok) {
+        setSaleError(data?.message || 'Checkout failed.');
+        return;
+      }
       const saleWithDetails = data.data;
-      
-      // Auto-show receipt modal for printing with complete sale data
-      setViewingSale(saleWithDetails);
+
+      // Show receipt modal
+      setViewingBatchSales([saleWithDetails]);
+      setBatchReceiptIndex(0);
       onSaleCompleted(saleWithDetails);
-      
-      setCart([]);
-      setSearch('');
-      setCustomerType('walk_in');
-      setSelectedCustomerId('');
-      setNewCustomer({ name: '', phone: '', email: '' });
-      setCustomerSearch('');
-      setDiscountValue('');
-      setTaxValue('');
-      setAmountPaid('');
-      setCashNote('');
+
+      // Remove completed draft if other drafts exist; otherwise reset
+      if (drafts.length > 1) {
+        const remaining = drafts.filter(d => d.id !== activeDraft.id);
+        setDrafts(remaining);
+        setActiveDraftId(remaining[0].id);
+      } else {
+        setDrafts([createEmptyDraft(activeDraft.id, activeDraft.label)]);
+      }
     } catch {
       setSaleError('Network error. Check your connection.');
     } finally {
@@ -355,31 +481,211 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     }
   };
 
-  // No longer need the lastReceipt view - receipt shows in modal instead
+  // ── Batch Checkout (All Valid Drafts) ──────────────────────
+  const handleCheckoutBatch = async () => {
+    if (validDrafts.length === 0) {
+      setSaleError('No sales have items in their cart to submit.');
+      return;
+    }
+    if (validDrafts.length > 200) {
+      setSaleError('Cannot submit more than 200 sales in one batch.');
+      return;
+    }
+
+    // Verify all drafts have valid prices
+    for (const draft of validDrafts) {
+      const invalidItem = draft.cart.find(isPriceInvalid);
+      if (invalidItem) {
+        setSaleError(`Sale "${draft.label}": Please enter a valid price for "${invalidItem.name}".`);
+        setActiveDraftId(draft.id);
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    setSaleError(null);
+
+    // Generate Idempotency Key
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'bulk-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
+    const payload = {
+      idempotency_key: idempotencyKey,
+      sales: validDrafts.map(draft => {
+        const dSubtotal = draft.cart.reduce((sum, i) => sum + (isPriceInvalid(i) ? 0 : i.subtotal), 0);
+        const dDiscountAmount = Math.min(parseCurrency(draft.discountValue), dSubtotal);
+        const dTaxAmount = parseCurrency(draft.taxValue);
+        return {
+          payment_method: draft.paymentMethod,
+          items: draft.cart.map(i => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+            price: parseFloat(i.price),
+          })),
+          customer_type: draft.customerType,
+          ...(draft.customerType === 'existing' && draft.selectedCustomerId ? { customer_id: parseInt(draft.selectedCustomerId) } : {}),
+          ...(draft.customerType === 'new' ? { new_customer: draft.newCustomer } : {}),
+          discount_type: dDiscountAmount > 0 ? 'fixed' : null,
+          discount_amount: dDiscountAmount > 0 ? dDiscountAmount : null,
+          tax_amount: dTaxAmount > 0 ? dTaxAmount : null,
+          notes: draft.cashNote || null,
+        };
+      })
+    };
+
+    try {
+      const res = await fetch(`${API}/sales/bulk`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSaleError(data?.message || 'Batch checkout failed.');
+        return;
+      }
+
+      const returnedSales = data.data || [];
+      setViewingBatchSales(returnedSales);
+      setBatchReceiptIndex(0);
+      onSaleCompleted(returnedSales);
+
+      // Reset drafts to a single fresh draft
+      const freshDraft = createEmptyDraft(1, 'Sale 1');
+      setDrafts([freshDraft]);
+      setActiveDraftId(1);
+      nextDraftIdRef.current = 2;
+    } catch {
+      setSaleError('Network error during batch checkout. No changes were committed.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Print helper for batch receipts ────────────────────────
+  const printBatchReceipts = (salesToPrint) => {
+    if (!salesToPrint || salesToPrint.length === 0) return;
+    const container = document.getElementById('batch-all-receipts-container');
+    if (!container) {
+      alert('Receipts content not ready for printing.');
+      return;
+    }
+
+    const win = window.open('', '_blank', 'width=800,height=900');
+    if (!win) {
+      alert('Pop-up blocked. Please allow pop-ups for this site.');
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Batch Receipts (${salesToPrint.length})</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
+      background: #fff; 
+      color: #000; 
+      padding: 32px; 
+      font-size: 14px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; }
+    img { max-width: 100%; height: auto; }
+    
+    .batch-receipt-page {
+      page-break-after: always;
+      break-after: page;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 2px dashed #cbd5e1;
+    }
+    .batch-receipt-page:last-child {
+      page-break-after: avoid;
+      break-after: avoid;
+      margin-bottom: 0;
+      border-bottom: none;
+    }
+    
+    @media print {
+      body { padding: 20px; }
+      button { display: none !important; }
+      .batch-receipt-page {
+        page-break-after: always;
+        break-after: page;
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+      .batch-receipt-page:last-child {
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+      @page { 
+        margin: 0.5in;
+        size: A4;
+      }
+    }
+  </style>
+</head>
+<body>${container.innerHTML}</body>
+</html>`);
+    win.document.close();
+    win.addEventListener('load', () => {
+      setTimeout(() => {
+        win.focus();
+        win.print();
+      }, 500);
+    });
+  };
+
+  const currentModalSale = viewingBatchSales && viewingBatchSales[batchReceiptIndex];
 
   return (
     <div style={styles.pageContainer}>
       {/* Header */}
       <div className="section-hero" style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
-        borderRadius: 16, padding: '24px 32px', marginBottom: 24,
+        borderRadius: 16, padding: '24px 32px', marginBottom: 20,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         boxShadow: '0 4px 24px rgba(15,23,42,0.14)',
       }}>
         <div>
           <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sales</p>
           <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.3px' }}>Point of Sale</h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Search products, build a cart, and process payment</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            Build carts for one or multiple independent sales, and checkout individually or in an atomic batch (up to 200).
+          </p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Items in cart</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>{cart.reduce((s, i) => s + i.quantity, 0)}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+            {drafts.length > 1 ? `Active / Total Items (${drafts.length} Sales)` : 'Items in cart'}
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>
+            {cart.reduce((s, i) => s + i.quantity, 0)}
+            {drafts.length > 1 && (
+              <span style={{ fontSize: 16, fontWeight: 500, color: '#94a3b8', marginLeft: 8 }}>
+                / {totalDraftItems} total
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="pos-layout">
 
-        {/* Left — product search & grid */}
+        {/* Left column — product search & grid */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* ── Barcode scanner input ── */}
@@ -388,7 +694,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
               <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 📷 Barcode Scanner
               </span>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>— scan barcode to add instantly</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>— scan barcode to add directly to {activeDraft.label}</span>
             </div>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
@@ -412,13 +718,11 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                   letterSpacing: '0.03em',
                 }}
               />
-              {/* Barcode icon */}
               <svg style={{ position: 'absolute', left: 12, pointerEvents: 'none', opacity: 0.4 }}
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 5v14M7 5v14M11 5v14M15 5v10M19 5v14M15 18v1" />
               </svg>
             </div>
-            {/* Feedback message */}
             {barcodeFlash && (
               <div style={{
                 marginTop: 6, padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
@@ -437,7 +741,6 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
             placeholder="Search products by name or SKU…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onFocus={() => { /* don't steal focus from barcode field on click */ }}
           />
 
           {/* Category filter pills */}
@@ -486,36 +789,175 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
             </div>
           ) : (
             <div className="pos-product-grid">
-              {filtered.map(p => (
-                <button key={p.id} style={posS.productCard} onClick={() => addToCart(p)}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,70,229,0.12)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
-                >
-                  {/* Product initial avatar */}
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 15, fontWeight: 700, color: '#4f46e5' }}>
-                    {p.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={posS.productName}>{p.name}</div>
-                  {p.sku && <div style={posS.productSku}>SKU: {p.sku}</div>}
-                  <div style={posS.productPrice}>UGX {parseFloat(p.price).toLocaleString()}</div>
-                  <div style={{ marginTop: 6, fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontWeight: 600 }}>
-                    {p.stock} in stock
-                  </div>
-                </button>
-              ))}
+              {filtered.map(p => {
+                const reserved = getReservedInOtherDrafts(p.id);
+                const available = Math.max(0, Number(p.stock || 0) - reserved);
+                const isOutOfStock = available <= 0;
+
+                return (
+                  <button
+                    key={p.id}
+                    style={{
+                      ...posS.productCard,
+                      opacity: isOutOfStock ? 0.6 : 1,
+                      cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={() => !isOutOfStock && addToCart(p)}
+                    disabled={isOutOfStock}
+                    onMouseEnter={e => {
+                      if (!isOutOfStock) {
+                        e.currentTarget.style.borderColor = '#4f46e5';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79,70,229,0.12)';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isOutOfStock) {
+                        e.currentTarget.style.borderColor = '#e2e8f0';
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+                      }
+                    }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, fontSize: 15, fontWeight: 700, color: '#4f46e5' }}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={posS.productName}>{p.name}</div>
+                    {p.sku && <div style={posS.productSku}>SKU: {p.sku}</div>}
+                    <div style={posS.productPrice}>UGX {parseFloat(p.price).toLocaleString()}</div>
+                    <div style={{
+                      marginTop: 6, fontSize: 11, padding: '2px 8px', borderRadius: 20,
+                      background: isOutOfStock ? '#fef2f2' : reserved > 0 ? '#eff6ff' : '#f0fdf4',
+                      color: isOutOfStock ? '#dc2626' : reserved > 0 ? '#2563eb' : '#16a34a',
+                      fontWeight: 600,
+                      textAlign: 'center',
+                    }}>
+                      {isOutOfStock
+                        ? (reserved > 0 ? `0 available (${reserved} in other sales)` : 'Out of stock')
+                        : reserved > 0
+                          ? `${available} avail (${reserved} in other sales)`
+                          : `${available} in stock`}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Right column — customer + cart */}
-        <div className="pos-cart-sticky" style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20 }}>
+        {/* Right column — Drafts Tabs + Customer + Cart */}
+        <div className="pos-cart-sticky" style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'sticky', top: 20 }}>
+
+          {/* ── Multi-Sale Drafts Tabs ── */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            border: '1.5px solid #e2e8f0',
+            padding: '10px 12px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Sales Queue</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 12,
+                  background: '#f1f5f9', color: '#475569'
+                }}>
+                  {drafts.length} / 200
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddDraft}
+                disabled={drafts.length >= 200 || submitting}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #c7d2fe',
+                  background: drafts.length >= 200 ? '#f1f5f9' : '#eff6ff',
+                  color: drafts.length >= 200 ? '#94a3b8' : '#3730a3',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: drafts.length >= 200 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                + New Sale
+              </button>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: 6,
+              overflowX: 'auto',
+              paddingBottom: 4,
+              scrollbarWidth: 'thin',
+            }}>
+              {drafts.map((draft, idx) => {
+                const isActive = draft.id === activeDraft.id;
+                const draftItemCount = draft.cart.reduce((s, i) => s + i.quantity, 0);
+
+                return (
+                  <div
+                    key={draft.id}
+                    onClick={() => setActiveDraftId(draft.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      border: `1.5px solid ${isActive ? '#4f46e5' : '#e2e8f0'}`,
+                      background: isActive ? '#f5f3ff' : '#f8fafc',
+                      color: isActive ? '#4338ca' : '#475569',
+                      fontSize: 12,
+                      fontWeight: isActive ? 700 : 500,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span>{draft.label || `Sale ${idx + 1}`}</span>
+                    <span style={{
+                      padding: '1px 6px',
+                      borderRadius: 10,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: isActive ? '#4f46e5' : '#e2e8f0',
+                      color: isActive ? '#ffffff' : '#475569',
+                    }}>
+                      {draftItemCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleCloseDraft(draft.id, e)}
+                      title={drafts.length > 1 ? "Close and discard this sale" : "Clear this sale"}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: isActive ? '#6366f1' : '#94a3b8',
+                        cursor: 'pointer',
+                        padding: '0 2px',
+                        fontSize: 12,
+                        lineHeight: 1,
+                        marginLeft: 2,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Customer Card */}
           <div style={posS.cartPanel}>
             <div style={posS.cartHeader}>
               <div>
                 <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Customer</span>
-                <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>Optional</span>
+                <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>Optional ({activeDraft.label})</span>
               </div>
             </div>
             <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -531,7 +973,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                   background: customerType === type.value ? '#f5f3ff' : '#fff',
                   transition: 'all 0.15s',
                 }}>
-                  <input type="radio" name="customerType" value={type.value}
+                  <input type="radio" name={`customerType-${activeDraft.id}`} value={type.value}
                     checked={customerType === type.value}
                     onChange={() => { setCustomerType(type.value); setSelectedCustomerId(''); setCustomerSearch(''); setNewCustomer({ name: '', phone: '', email: '' }); }}
                     style={{ accentColor: '#4f46e5', width: 15, height: 15 }} />
@@ -564,7 +1006,9 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
           {/* Cart Card */}
           <div style={posS.cartPanel}>
             <div style={posS.cartHeader}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Cart {cart.length > 0 && <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 20, background: '#ede9fe', color: '#4f46e5', fontSize: 12 }}>{cart.length}</span>}</span>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
+                Cart: {activeDraft.label} {cart.length > 0 && <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 20, background: '#ede9fe', color: '#4f46e5', fontSize: 12 }}>{cart.length}</span>}
+              </span>
               {cart.length > 0 && <button style={posS.clearBtn} onClick={() => setCart([])}>Clear all</button>}
             </div>
 
@@ -576,7 +1020,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                   </svg>
                 </div>
-                <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Select products to add to cart</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Select products to add to {activeDraft.label}</div>
               </div>
             ) : (
               <div style={posS.cartItems}>
@@ -727,11 +1171,24 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                     <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Notes (Optional)</label>
                     <textarea
                       style={{ ...posS.searchInput, resize: 'vertical', minHeight: 64, fontFamily: 'inherit' }}
-                      placeholder="Add any notes…"
+                      placeholder="Add any notes for this sale…"
                       value={cashNote}
                       onChange={e => setCashNote(e.target.value)}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Notes for non-cash payment methods */}
+              {paymentMethod !== 'cash' && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Notes (Optional)</label>
+                  <textarea
+                    style={{ ...posS.searchInput, resize: 'vertical', minHeight: 60, fontFamily: 'inherit' }}
+                    placeholder="Add reference or transaction notes…"
+                    value={cashNote}
+                    onChange={e => setCashNote(e.target.value)}
+                  />
                 </div>
               )}
 
@@ -741,64 +1198,168 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                 </div>
               )}
 
-              <button
-                onClick={handleCheckout}
-                disabled={cart.length === 0 || submitting || !canSell || hasInvalidPrice}
-                style={{
-                  width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#e2e8f0' : '#be123c',
-                  color: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#94a3b8' : '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell || hasInvalidPrice) ? 'not-allowed' : 'pointer',
-                  transition: 'background 0.15s', letterSpacing: '0.02em',
-                }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#881337'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#be123c'; }}
-              >
-                {!canSell ? 'No permission to sell' : hasInvalidPrice ? 'Fix invalid item price' : submitting ? 'Processing…' : 'Complete Sale'}
-              </button>
+              {/* ── Dual Checkout Action Buttons ── */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Button 1: Complete Current Sale */}
+                <button
+                  type="button"
+                  onClick={handleCheckoutSingle}
+                  disabled={cart.length === 0 || submitting || !canSell || hasInvalidPrice}
+                  style={{
+                    width: '100%', padding: '13px', borderRadius: 10, border: 'none',
+                    background: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#e2e8f0' : '#be123c',
+                    color: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#94a3b8' : '#fff',
+                    fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell || hasInvalidPrice) ? 'not-allowed' : 'pointer',
+                    transition: 'background 0.15s', letterSpacing: '0.02em',
+                  }}
+                  onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#881337'; }}
+                  onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#be123c'; }}
+                >
+                  {!canSell
+                    ? 'No permission to sell'
+                    : hasInvalidPrice
+                      ? 'Fix invalid item price'
+                      : submitting
+                        ? 'Processing…'
+                        : drafts.length > 1
+                          ? `Complete Current Sale (${activeDraft.label})`
+                          : 'Complete Sale'}
+                </button>
+
+                {/* Button 2: Complete All Sales (Batch) - shown when multiple drafts exist */}
+                {drafts.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleCheckoutBatch}
+                    disabled={validDrafts.length === 0 || submitting || !canSell}
+                    style={{
+                      width: '100%', padding: '13px', borderRadius: 10, border: 'none',
+                      background: (validDrafts.length === 0 || submitting || !canSell) ? '#e2e8f0' : '#4f46e5',
+                      color: (validDrafts.length === 0 || submitting || !canSell) ? '#94a3b8' : '#fff',
+                      fontSize: 14, fontWeight: 700, cursor: (validDrafts.length === 0 || submitting || !canSell) ? 'not-allowed' : 'pointer',
+                      transition: 'background 0.15s', letterSpacing: '0.02em',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    }}
+                    onMouseEnter={e => { if (validDrafts.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#4338ca'; }}
+                    onMouseLeave={e => { if (validDrafts.length > 0 && !submitting && canSell) e.currentTarget.style.background = '#4f46e5'; }}
+                  >
+                    <span>⚡ Complete All Sales ({validDrafts.length} in 1 Batch)</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-      
-      {/* Receipt Modal - Auto-shown after sale completion */}
-      {viewingSale && (
+
+      {/* ── Hidden container for printing all batch receipts ── */}
+      {viewingBatchSales && viewingBatchSales.length > 0 && (
+        <div style={{ display: 'none' }}>
+          <div id="batch-all-receipts-container">
+            {viewingBatchSales.map((sale, idx) => (
+              <div key={sale.id || idx} className="batch-receipt-page">
+                <SaleReceipt sale={sale} user={user} elementId={`batch-receipt-item-${idx}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Receipt Modal (Single & Batch Carousel) ── */}
+      {currentModalSale && (
         <Modal
           isOpen={true}
-          onClose={() => setViewingSale(null)}
+          onClose={() => setViewingBatchSales(null)}
           title=""
           size="md"
           footer={
-            <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>✓</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>Sale Completed Successfully!</span>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <Button variant="secondary" onClick={() => setViewingSale(null)}>Close &amp; New Sale</Button>
-                <Button
-                  variant="success"
-                  style={{ background: '#be123c', borderColor: '#be123c' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#881337'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
-                  onClick={() => {
-                  const src = document.getElementById('pos-receipt-content');
-                  if (!src) {
-                    alert('Receipt content not found. Please try again.');
-                    return;
-                  }
-                  
-                  const win = window.open('', '_blank', 'width=800,height=900');
-                  if (!win) {
-                    alert('Pop-up blocked. Please allow pop-ups for this site.');
-                    return;
-                  }
-                  
-                  win.document.write(`<!DOCTYPE html>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+              {/* Stepper controls if multiple receipts exist */}
+              {viewingBatchSales.length > 1 && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#f8fafc',
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #e2e8f0',
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setBatchReceiptIndex(prev => Math.max(0, prev - 1))}
+                    disabled={batchReceiptIndex === 0}
+                    style={{
+                      padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1',
+                      background: batchReceiptIndex === 0 ? '#f1f5f9' : '#ffffff',
+                      color: batchReceiptIndex === 0 ? '#94a3b8' : '#0f172a',
+                      fontSize: 12, fontWeight: 600, cursor: batchReceiptIndex === 0 ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    ← Previous
+                  </button>
+
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                    Receipt {batchReceiptIndex + 1} of {viewingBatchSales.length}
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b', marginLeft: 6 }}>
+                      (Sale #{currentModalSale.id})
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setBatchReceiptIndex(prev => Math.min(viewingBatchSales.length - 1, prev + 1))}
+                    disabled={batchReceiptIndex === viewingBatchSales.length - 1}
+                    style={{
+                      padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1',
+                      background: batchReceiptIndex === viewingBatchSales.length - 1 ? '#f1f5f9' : '#ffffff',
+                      color: batchReceiptIndex === viewingBatchSales.length - 1 ? '#94a3b8' : '#0f172a',
+                      fontSize: 12, fontWeight: 600, cursor: batchReceiptIndex === viewingBatchSales.length - 1 ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 22 }}>✓</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>
+                    {viewingBatchSales.length > 1
+                      ? `Batch of ${viewingBatchSales.length} Sales Completed!`
+                      : 'Sale Completed Successfully!'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="secondary" onClick={() => setViewingBatchSales(null)}>
+                    Close
+                  </Button>
+
+                  {/* Print Active Receipt */}
+                  <Button
+                    variant="success"
+                    style={{ background: '#be123c', borderColor: '#be123c' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#881337'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
+                    onClick={() => {
+                      const src = document.getElementById('pos-receipt-content');
+                      if (!src) {
+                        alert('Receipt content not found. Please try again.');
+                        return;
+                      }
+                      const win = window.open('', '_blank', 'width=800,height=900');
+                      if (!win) {
+                        alert('Pop-up blocked. Please allow pop-ups for this site.');
+                        return;
+                      }
+                      win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Receipt - ${viewingSale?.id || 'RECEIPT'}</title>
+  <title>Receipt - ${currentModalSale?.id || 'RECEIPT'}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
@@ -822,7 +1383,6 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         size: A4;
       }
     }
-    
     @media screen {
       body {
         box-shadow: 0 0 20px rgba(0,0,0,0.1);
@@ -833,24 +1393,36 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 </head>
 <body>${src.innerHTML}</body>
 </html>`);
-                  win.document.close();
-                  
-                  // Wait for images to load
-                  win.addEventListener('load', () => {
-                    setTimeout(() => {
-                      win.focus();
-                      win.print();
-                    }, 500);
-                  });
-                }}
-              >
-                🖨️ Print / Save PDF
-              </Button>
+                      win.document.close();
+                      win.addEventListener('load', () => {
+                        setTimeout(() => {
+                          win.focus();
+                          win.print();
+                        }, 500);
+                      });
+                    }}
+                  >
+                    🖨️ {viewingBatchSales.length > 1 ? `Print This (#${currentModalSale.id})` : 'Print / Save PDF'}
+                  </Button>
+
+                  {/* Print All Receipts (when batch > 1) */}
+                  {viewingBatchSales.length > 1 && (
+                    <Button
+                      variant="primary"
+                      style={{ background: '#4f46e5', borderColor: '#4f46e5' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}
+                      onClick={() => printBatchReceipts(viewingBatchSales)}
+                    >
+                      📑 Print All ({viewingBatchSales.length})
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           }
         >
-          <SaleReceipt sale={viewingSale} user={user} elementId="pos-receipt-content" />
+          <SaleReceipt sale={currentModalSale} user={user} elementId="pos-receipt-content" />
         </Modal>
       )}
     </div>

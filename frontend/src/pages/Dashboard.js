@@ -842,36 +842,67 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               user={user}
               canSell={hasPermission('sales.create')}
               toast={toast}
-              onSaleCompleted={(sale) => {
+              onSaleCompleted={(saleOrSales) => {
+                const salesArray = Array.isArray(saleOrSales) ? saleOrSales : [saleOrSales];
+                if (salesArray.length === 0) return;
+
                 setData(prev => {
-                  // If the sale created a new customer, add them to the customers list
-                  const newCustomerEntry = sale.customer;
-                  const customerAlreadyExists = newCustomerEntry
-                    ? prev.customers.some(c => c.id === newCustomerEntry.id)
-                    : true;
-                  
-                  // Calculate new low stock count after sale
-                  const updatedProducts = prev.products.map(p => {
-                    const item = sale.sale_items?.find(i => i.product_id === p.id)
-                      || sale.saleItems?.find(i => i.product_id === p.id);
-                    return item ? { ...p, stock: p.stock - item.quantity } : p;
+                  // Collect new customers from salesArray
+                  const newCustomers = [];
+                  salesArray.forEach(sale => {
+                    const newCustomerEntry = sale.customer;
+                    if (
+                      newCustomerEntry &&
+                      !prev.customers.some(c => c.id === newCustomerEntry.id) &&
+                      !newCustomers.some(c => c.id === newCustomerEntry.id)
+                    ) {
+                      newCustomers.push(newCustomerEntry);
+                    }
                   });
-                  
+
+                  // Sum up quantities deducted per product_id across all sales in salesArray
+                  const qtyDeductions = {};
+                  salesArray.forEach(sale => {
+                    const items = sale.sale_items || sale.saleItems || [];
+                    items.forEach(item => {
+                      const pId = item.product_id;
+                      qtyDeductions[pId] = (qtyDeductions[pId] || 0) + Number(item.quantity || 0);
+                    });
+                  });
+
+                  // Calculate new stock and low stock count
+                  const updatedProducts = prev.products.map(p => {
+                    const deduction = qtyDeductions[p.id] || 0;
+                    return deduction > 0 ? { ...p, stock: Math.max(0, p.stock - deduction) } : p;
+                  });
+
+                  // Prepend new sales avoiding duplicate IDs
+                  const existingSaleIds = new Set(prev.sales.map(s => s.id));
+                  const newSales = salesArray.filter(s => !existingSaleIds.has(s.id));
+
+                  const batchTotal = salesArray.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+
                   return {
                     ...prev,
-                    sales: [sale, ...prev.sales],
+                    sales: [...newSales, ...prev.sales],
                     stats: { 
                       ...prev.stats, 
-                      totalSales: prev.stats.totalSales + parseFloat(sale.total_amount || 0),
+                      totalSales: prev.stats.totalSales + batchTotal,
                       lowStockCount: updatedProducts.filter(p => p.stock <= (p.reorder_level || 10)).length
                     },
                     products: updatedProducts,
-                    customers: (!customerAlreadyExists && newCustomerEntry)
-                      ? [...prev.customers, newCustomerEntry]
+                    customers: newCustomers.length > 0
+                      ? [...prev.customers, ...newCustomers]
                       : prev.customers,
                   };
                 });
-                toast.success('Sale completed!', `UGX ${parseFloat(sale.total_amount || 0).toLocaleString()} recorded.`);
+
+                const totalAmount = salesArray.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+                if (salesArray.length > 1) {
+                  toast.success('Batch sales completed!', `${salesArray.length} sales (UGX ${totalAmount.toLocaleString()}) recorded.`);
+                } else {
+                  toast.success('Sale completed!', `UGX ${totalAmount.toLocaleString()} recorded.`);
+                }
                 
                 // Refresh notifications to show updated stock levels
                 setTimeout(() => refreshNotifications(), 1000);

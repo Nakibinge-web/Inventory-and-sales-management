@@ -163,6 +163,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
         Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
 
+        Route::post('/bulk',   [SaleController::class, 'bulkStore']);
         Route::get('/',        [SaleController::class, 'index']);
         Route::post('/',       [SaleController::class, 'store']);
         Route::get('/{sale}',  [SaleController::class, 'show']);
