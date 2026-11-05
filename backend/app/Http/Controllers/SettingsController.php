@@ -57,6 +57,13 @@ class SettingsController extends Controller
             ], 404);
         }
 
+        $logoRule = 'nullable';
+        if ($request->hasFile('logo')) {
+            $logoRule = 'file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120';
+        } elseif ($request->filled('logo') && is_string($request->logo)) {
+            $logoRule = ['string', 'regex:/^data:image\/(jpeg|png|jpg|gif|svg\+xml|webp);base64,/i'];
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => 'sometimes|required|email|max:255|unique:tenants,email,' . $tenant->id,
@@ -65,7 +72,7 @@ class SettingsController extends Controller
             'contacts.*.type' => 'required|string|max:50',
             'contacts.*.number' => 'required|string|max:20',
             'address' => 'nullable|string',
-            'logo' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
+            'logo' => $logoRule,
         ]);
 
         if ($validator->fails()) {
@@ -88,21 +95,34 @@ class SettingsController extends Controller
                 Storage::disk('public')->delete($tenant->logo_path);
             }
             $updateData['logo_path'] = $request->file('logo')->store('logos', 'public');
-        } elseif ($request->filled('logo') && is_string($request->logo) && str_starts_with($request->logo, 'data:image/')) {
-            try {
-                preg_match('/^data:image\/(\w+);base64,/', $request->logo, $type);
-                $image = substr($request->logo, strpos($request->logo, ',') + 1);
-                $type = strtolower($type[1] ?? 'png');
-                $decoded = base64_decode($image);
-                if ($decoded !== false) {
-                    if ($tenant->logo_path && Storage::disk('public')->exists($tenant->logo_path)) {
-                        Storage::disk('public')->delete($tenant->logo_path);
+        } elseif ($request->filled('logo') && is_string($request->logo)) {
+            $allowedExtensions = [
+                'jpeg'    => 'jpg',
+                'jpg'     => 'jpg',
+                'png'     => 'png',
+                'gif'     => 'gif',
+                'webp'    => 'webp',
+                'svg+xml' => 'svg',
+                'svg'     => 'svg',
+            ];
+
+            if (preg_match('/^data:image\/([a-zA-Z0-9\+\-\.]+);base64,/', $request->logo, $matches)) {
+                $subtype = strtolower($matches[1]);
+                if (isset($allowedExtensions[$subtype])) {
+                    $ext = $allowedExtensions[$subtype];
+                    $base64Data = substr($request->logo, strpos($request->logo, ',') + 1);
+                    $decoded = base64_decode($base64Data, true);
+
+                    if ($decoded !== false && strlen($decoded) > 0 && strlen($decoded) <= 5242880) {
+                        if ($tenant->logo_path && Storage::disk('public')->exists($tenant->logo_path)) {
+                            Storage::disk('public')->delete($tenant->logo_path);
+                        }
+                        $fileName = 'logos/' . Str::random(40) . '.' . $ext;
+                        Storage::disk('public')->put($fileName, $decoded);
+                        $updateData['logo_path'] = $fileName;
                     }
-                    $fileName = 'logos/' . Str::random(40) . '.' . $type;
-                    Storage::disk('public')->put($fileName, $decoded);
-                    $updateData['logo_path'] = $fileName;
                 }
-            } catch (\Throwable $e) {}
+            }
         }
 
         $tenant->update($updateData);

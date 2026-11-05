@@ -13,8 +13,8 @@ export const PLANS = [
     id: 'starter',
     name: 'Starter',
     tagline: 'For single-store retailers and boutique shops getting organized.',
-    monthlyPrice: 'UGX 75,000',
-    annualPrice: 'UGX 64,000',
+    monthlyPrice: 'UGX 10,000',
+    annualPrice: 'UGX 100,000',
     period: '/ month',
     featured: false,
     ctaText: 'Start with Starter',
@@ -181,7 +181,7 @@ export default function PricingPage() {
 
                     <div className="sp-doc-cta-wrap">
                       <MarketingLink
-                        href={plan.ctaHref}
+                        href={plan.id === 'enterprise' ? '/contact' : `/checkout?plan=${plan.id}&cycle=${billingCycle}`}
                         className={`sp-btn ${plan.featured ? 'sp-btn-primary' : 'sp-btn-secondary'}`}
                         style={{ width: '100%' }}
                       >
@@ -189,6 +189,7 @@ export default function PricingPage() {
                         <ArrowRightIcon size={14} />
                       </MarketingLink>
                     </div>
+
                   </div>
                 );
               })}

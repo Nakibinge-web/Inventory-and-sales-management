@@ -1,0 +1,757 @@
+/**
+ * StockPro MTN MoMo Checkout Stylesheet
+ * Integrates StockPro Navy design system with MTN MoMo Yellow identity.
+ */
+
+/* ── Checkout Page Container ── */
+.sp-checkout-page {
+  background-color: var(--sp-surface-soft, #f8fafc);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-checkout-container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  width: 100%;
+}
+
+.sp-checkout-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sp-text-muted, #64748b);
+  text-decoration: none;
+  margin-bottom: 24px;
+  transition: color 0.15s ease;
+}
+
+.sp-checkout-back:hover {
+  color: var(--sp-navy-900, #0b1f3a);
+}
+
+.sp-checkout-header {
+  margin-bottom: 36px;
+}
+
+.sp-checkout-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sp-momo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ffcc00;
+  color: #0b1f3a;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sp-sandbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #e0f2fe;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #bae6fd;
+}
+
+.sp-checkout-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--sp-navy-950, #071629);
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+
+.sp-checkout-subtitle {
+  font-size: 16px;
+  color: var(--sp-text-muted, #64748b);
+  margin: 0;
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+/* ── Checkout Two-Column Grid ── */
+.sp-checkout-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+@media (max-width: 900px) {
+  .sp-checkout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Cards ── */
+.sp-checkout-card {
+  background: #ffffff;
+  border: 1px solid var(--sp-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(11, 31, 58, 0.04);
+}
+
+.sp-checkout-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--sp-border, #e2e8f0);
+}
+
+.sp-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sp-navy-900, #0b1f3a);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sp-checkout-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--sp-navy-900, #0b1f3a);
+  margin: 0;
+}
+
+/* ── Form Controls ── */
+.sp-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+  .sp-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sp-form-group {
+  margin-bottom: 16px;
+}
+
+.sp-form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sp-text, #0f172a);
+  margin-bottom: 6px;
+}
+
+.sp-form-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sp-border-strong, #cbd5e1);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--sp-text, #0f172a);
+  background: #ffffff;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.sp-form-input:focus {
+  border-color: var(--sp-navy-700, #1a3e61);
+  box-shadow: 0 0 0 3px rgba(11, 31, 58, 0.08);
+}
+
+.sp-phone-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--sp-border-strong, #cbd5e1);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: all 0.15s ease;
+}
+
+.sp-phone-input-wrap:focus-within {
+  border-color: var(--sp-navy-700, #1a3e61);
+  box-shadow: 0 0 0 3px rgba(11, 31, 58, 0.08);
+}
+
+.sp-phone-prefix {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  background: #f1f5f9;
+  border-right: 1px solid var(--sp-border-strong, #cbd5e1);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sp-navy-900, #0b1f3a);
+  height: 44px;
+  user-select: none;
+}
+
+.sp-phone-input-wrap input {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  flex: 1;
+}
+
+.sp-form-hint {
+  font-size: 12px;
+  color: var(--sp-text-muted, #64748b);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* ── MTN MoMo Selector Card ── */
+.sp-momo-card {
+  border: 2px solid #ffcc00;
+  background: #fffdf5;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sp-momo-card-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sp-momo-icon-bubble {
+  width: 44px;
+  height: 44px;
+  background: #ffcc00;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b1f3a;
+  font-weight: 900;
+  font-size: 16px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(255, 204, 0, 0.3);
+}
+
+.sp-momo-card-info h4 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0b1f3a;
+}
+
+.sp-momo-card-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.sp-momo-tag {
+  background: #0b1f3a;
+  color: #ffcc00;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+/* ── USSD Instruction Steps ── */
+.sp-ussd-steps {
+  background: #f8fafc;
+  border: 1px solid var(--sp-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 18px;
+}
+
+.sp-ussd-steps-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sp-navy-900, #0b1f3a);
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-ussd-list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 13px;
+  color: var(--sp-text, #0f172a);
+  line-height: 1.6;
+}
+
+.sp-ussd-list li {
+  margin-bottom: 4px;
+}
+
+/* ── Submit Pay Button ── */
+.sp-momo-submit-btn {
+  width: 100%;
+  height: 52px;
+  background: #ffcc00;
+  color: #0b1f3a;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(255, 204, 0, 0.3);
+  margin-top: 12px;
+}
+
+.sp-momo-submit-btn:hover:not(:disabled) {
+  background: #e5b800;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 204, 0, 0.4);
+}
+
+.sp-momo-submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.sp-security-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--sp-text-muted, #64748b);
+  margin-top: 14px;
+  text-align: center;
+}
+
+/* ── Sidebar: Order Summary ── */
+.sp-checkout-sidebar {
+  position: sticky;
+  top: 30px;
+}
+
+.sp-order-summary-card {
+  background: #ffffff;
+  border: 1px solid var(--sp-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(11, 31, 58, 0.04);
+}
+
+.sp-summary-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--sp-navy-900, #0b1f3a);
+  margin: 0 0 16px;
+}
+
+/* ── Plan Switcher Tabs ── */
+.sp-plan-switcher {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+
+.sp-plan-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sp-text-muted, #64748b);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-plan-tab.active {
+  background: #ffffff;
+  color: var(--sp-navy-900, #0b1f3a);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Billing Cycle Pills ── */
+.sp-cycle-toggle-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid var(--sp-border, #e2e8f0);
+}
+
+.sp-cycle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sp-text, #0f172a);
+}
+
+.sp-cycle-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.sp-cycle-btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--sp-border-strong, #cbd5e1);
+  background: #ffffff;
+  border-radius: 6px;
+  color: var(--sp-text-muted, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-cycle-btn.active {
+  background: var(--sp-navy-900, #0b1f3a);
+  border-color: var(--sp-navy-900, #0b1f3a);
+  color: #ffffff;
+}
+
+/* ── Price Breakdown Rows ── */
+.sp-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--sp-text-muted, #64748b);
+  margin-bottom: 10px;
+}
+
+.sp-breakdown-row.total {
+  border-top: 1px solid var(--sp-border, #e2e8f0);
+  padding-top: 14px;
+  margin-top: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--sp-navy-950, #071629);
+}
+
+.sp-total-amount {
+  color: var(--sp-navy-900, #0b1f3a);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+/* ── Features List in Summary ── */
+.sp-summary-features {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--sp-border, #e2e8f0);
+}
+
+.sp-summary-features-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--sp-navy-700, #1a3e61);
+  margin: 0 0 10px;
+}
+
+.sp-summary-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--sp-text, #0f172a);
+  margin-bottom: 8px;
+}
+
+.sp-summary-feature-item svg {
+  color: #059669;
+  flex-shrink: 0;
+}
+
+/* ── Live PIN Awaiting Modal Overlay ── */
+.sp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 31, 58, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.sp-modal-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 36px 32px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  animation: spModalSlideUp 0.25s ease-out;
+}
+
+@keyframes spModalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Pulse animation around phone icon */
+.sp-pulse-wrapper {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sp-pulse-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(255, 204, 0, 0.3);
+  animation: spPulseWave 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sp-pulse-circle-2 {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: rgba(255, 204, 0, 0.15);
+  animation: spPulseWave 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1) 0.4s;
+}
+
+@keyframes spPulseWave {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.sp-pulse-icon {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  background: #ffcc00;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b1f3a;
+  box-shadow: 0 4px 12px rgba(255, 204, 0, 0.4);
+}
+
+.sp-modal-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--sp-navy-950, #071629);
+  margin: 0 0 8px;
+}
+
+.sp-modal-desc {
+  font-size: 14px;
+  color: var(--sp-text-muted, #64748b);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.sp-modal-prompt-box {
+  background: #fffdf5;
+  border: 1px dashed #e5b800;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: #0b1f3a;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.sp-timer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sp-navy-700, #1a3e61);
+  background: #f1f5f9;
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+
+.sp-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sp-btn-cancel {
+  background: transparent;
+  border: 1px solid var(--sp-border-strong, #cbd5e1);
+  color: var(--sp-text-muted, #64748b);
+  height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-btn-cancel:hover {
+  background: #f1f5f9;
+  color: var(--sp-text, #0f172a);
+}
+
+/* ── Success Screen Card ── */
+.sp-success-card {
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.sp-success-icon-wrap {
+  width: 72px;
+  height: 72px;
+  background: #ecfdf5;
+  color: #059669;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  border: 2px solid #a7f3d0;
+}
+
+.sp-receipt-box {
+  background: #f8fafc;
+  border: 1px dashed var(--sp-border-strong, #cbd5e1);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 24px 0;
+  text-align: left;
+}
+
+.sp-receipt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sp-receipt-row:last-child {
+  border-bottom: none;
+}
+
+.sp-receipt-label {
+  color: var(--sp-text-muted, #64748b);
+}
+
+.sp-receipt-value {
+  font-weight: 600;
+  color: var(--sp-navy-900, #0b1f3a);
+}
+
+.sp-badge-success {
+  background: #ecfdf5;
+  color: #059669;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #a7f3d0;
+}
+
+/* ── Error / Alert Banner ── */
+.sp-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sp-alert-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+/* Spinner */
+.sp-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(11, 31, 58, 0.2);
+  border-top-color: #0b1f3a;
+  border-radius: 50%;
+  animation: spSpin 0.7s linear infinite;
+}
+
+@keyframes spSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

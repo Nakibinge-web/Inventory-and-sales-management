@@ -179,13 +179,20 @@ export default function PricingSection() {
                 {/* CTA Button */}
                 <div className="sp-plan-cta-wrap">
                   <MarketingLink
-                    href={plan.ctaHref}
+                    href={
+                      plan.id === 'trial'
+                        ? '/register'
+                        : plan.id === 'enterprise'
+                        ? '/contact'
+                        : `/checkout?plan=${plan.id}&cycle=${billingCycle}`
+                    }
                     className={`sp-btn ${plan.btnVariant} sp-plan-btn`}
                   >
                     <span>{plan.ctaText}</span>
                     <ArrowRightIcon size={14} />
                   </MarketingLink>
                 </div>
+
 
                 {/* Feature List */}
                 <div className="sp-plan-features-wrap">
