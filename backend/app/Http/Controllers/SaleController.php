@@ -7,10 +7,12 @@ use App\Models\SaleItem;
 use App\Models\Product;
 use App\Models\Customer;
 use App\Models\StockMovement;
+use App\Models\IdempotencyKey;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SaleController extends Controller
 {
@@ -68,23 +70,25 @@ class SaleController extends Controller
             'discount_type'          => 'nullable|in:percent,fixed',
             'discount_amount'        => 'nullable|numeric|min:0',
             'tax_amount'             => 'nullable|numeric|min:0',
+            'notes'                  => 'nullable|string|max:1000',
         ]);
 
         try {
-            return DB::transaction(function () use ($validated, $request) {
+            return DB::transaction(function () use ($validated, $request, $user) {
                 $customerId = null;
 
                 if (($validated['customer_type'] ?? null) === 'new' && !empty($validated['new_customer']['name'])) {
                     $customer = Customer::create([
-                        'tenant_id' => Auth::user()->tenant_id,
+                        'tenant_id' => $user->tenant_id,
                         'name'      => $validated['new_customer']['name'],
                         'phone'     => $validated['new_customer']['phone'] ?? null,
                         'email'     => $validated['new_customer']['email'] ?? null,
                         'status'    => 'active',
                     ]);
                     $customerId = $customer->id;
-                } elseif (($validated['customer_type'] ?? null) === 'existing') {
-                    $customerId = $validated['customer_id'] ?? null;
+                } elseif (($validated['customer_type'] ?? null) === 'existing' && !empty($validated['customer_id'])) {
+                    $customer = Customer::findOrFail($validated['customer_id']);
+                    $customerId = $customer->id;
                 }
 
                 $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $validated['items']));
@@ -94,19 +98,20 @@ class SaleController extends Controller
                 $finalTotal     = max(0, $totalAmount - $discountAmount + $taxAmount);
 
                 $sale = Sale::create([
-                    'user_id'         => Auth::id(),
+                    'user_id'         => $user->id,
                     'customer_id'     => $customerId,
                     'discount_type'   => $validated['discount_type'] ?? null,
                     'discount_amount' => $discountAmount ?: null,
                     'tax_amount'      => $taxAmount ?: null,
                     'total_amount'    => $finalTotal,
                     'payment_method'  => $validated['payment_method'],
+                    'notes'           => $validated['notes'] ?? null,
                     'sale_date'       => now(),
                 ]);
 
                 foreach ($validated['items'] as $item) {
-                    // findOrFail scoped by tenant via BelongsToTenant global scope
-                    $product = Product::findOrFail($item['product_id']);
+                    // findOrFail scoped by tenant via BelongsToTenant global scope with row lock
+                    $product = Product::lockForUpdate()->findOrFail($item['product_id']);
 
                     if ($product->stock < $item['quantity']) {
                         throw new \Exception("Insufficient stock for \"{$product->name}\". Available: {$product->stock}, requested: {$item['quantity']}.");
@@ -123,7 +128,7 @@ class SaleController extends Controller
                     $product->decrement('stock', $item['quantity']);
 
                     StockMovement::create([
-                        'tenant_id'      => Auth::user()->tenant_id,
+                        'tenant_id'      => $user->tenant_id,
                         'product_id'     => $item['product_id'],
                         'type'           => 'OUT',
                         'quantity'       => $item['quantity'],
@@ -138,6 +143,298 @@ class SaleController extends Controller
                 return response()->json(['success' => true, 'message' => 'Sale completed successfully.', 'data' => $sale], 201);
             });
         } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function bulkStore(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+
+        $isPrivileged = $user->roles()->pluck('name')
+                            ->intersect(['owner', 'admin', 'manager', 'cashier'])
+                            ->isNotEmpty();
+
+        if (!$isPrivileged && !$user->hasPermission('sales.create')) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to create sales.'], 403);
+        }
+
+        $idempotencyKey = $request->header('X-Idempotency-Key') ?? $request->input('idempotency_key');
+        if ($idempotencyKey && strlen($idempotencyKey) > 128) {
+            return response()->json(['success' => false, 'message' => 'The idempotency key must not be greater than 128 characters.'], 422);
+        }
+
+        $validated = $request->validate([
+            'sales'                      => 'required|array|min:1|max:200',
+            'sales.*.payment_method'     => 'required|in:cash,card,mobile_money,bank_transfer',
+            'sales.*.items'              => 'required|array|min:1',
+            'sales.*.items.*.product_id' => 'required|integer',
+            'sales.*.items.*.quantity'   => 'required|integer|min:1',
+            'sales.*.items.*.price'      => 'required|numeric|min:0',
+            'sales.*.customer_type'      => 'nullable|in:walk_in,existing,new',
+            'sales.*.customer_id'        => 'nullable|integer',
+            'sales.*.new_customer.name'  => 'required_if:sales.*.customer_type,new|nullable|string|max:255',
+            'sales.*.new_customer.phone' => 'nullable|string|max:20',
+            'sales.*.new_customer.email' => 'nullable|email|max:255',
+            'sales.*.discount_type'      => 'nullable|in:percent,fixed',
+            'sales.*.discount_amount'    => 'nullable|numeric|min:0',
+            'sales.*.tax_amount'         => 'nullable|numeric|min:0',
+            'sales.*.notes'              => 'nullable|string|max:1000',
+            'idempotency_key'            => 'nullable|string|max:128',
+        ]);
+
+        $tenantId = $user->tenant_id;
+        $claimToken = null;
+        $idempotencyRecord = null;
+
+        if ($idempotencyKey) {
+            $claimToken = Str::uuid()->toString();
+            $requestHash = hash('sha256', json_encode($validated['sales']));
+
+            $existing = IdempotencyKey::where('tenant_id', $tenantId)
+                ->where('key', $idempotencyKey)
+                ->first();
+
+            if ($existing) {
+                if ($existing->request_hash !== $requestHash) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Idempotency key has already been used with a different request payload.',
+                    ], 422);
+                }
+
+                if ($existing->status === 'completed' && $existing->response_body) {
+                    return response()->json(
+                        json_decode($existing->response_body, true),
+                        $existing->response_code ?: 201
+                    );
+                }
+
+                // Check if previous processing reservation is stale (> 2 minutes without progress)
+                $isStale = $existing->status === 'processing' && $existing->updated_at && $existing->updated_at->lt(now()->subMinutes(2));
+
+                if ($isStale) {
+                    // Atomic compare-and-swap on claim_token and status
+                    $claimed = IdempotencyKey::where('id', $existing->id)
+                        ->where('status', 'processing')
+                        ->where('claim_token', $existing->claim_token)
+                        ->update([
+                            'claim_token' => $claimToken,
+                            'user_id'     => $user->id,
+                            'updated_at'  => now(),
+                        ]);
+
+                    if (!$claimed) {
+                        // Lost the race to another concurrent claimant
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'A request with this idempotency key is currently processing. Please wait.',
+                        ], 409);
+                    }
+
+                    $idempotencyRecord = $existing->fresh();
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'A request with this idempotency key is currently processing. Please wait.',
+                    ], 409);
+                }
+            } else {
+                try {
+                    $idempotencyRecord = IdempotencyKey::create([
+                        'tenant_id'     => $tenantId,
+                        'user_id'       => $user->id,
+                        'key'           => $idempotencyKey,
+                        'claim_token'   => $claimToken,
+                        'request_hash'  => $requestHash,
+                        'status'        => 'processing',
+                        'response_code' => 201,
+                    ]);
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    $existing = IdempotencyKey::where('tenant_id', $tenantId)->where('key', $idempotencyKey)->first();
+                    if ($existing) {
+                        if ($existing->request_hash !== $requestHash) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Idempotency key has already been used with a different request payload.',
+                            ], 422);
+                        }
+                        if ($existing->status === 'completed' && $existing->response_body) {
+                            return response()->json(
+                                json_decode($existing->response_body, true),
+                                $existing->response_code ?: 201
+                            );
+                        }
+                    }
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'A request with this idempotency key is currently processing. Please wait.',
+                    ], 409);
+                }
+            }
+        }
+
+        try {
+            $responsePayload = DB::transaction(function () use ($validated, $user, $tenantId, $idempotencyRecord, $claimToken) {
+                // Collect and sort all distinct product IDs across all sales to eliminate deadlocks
+                $allProductIds = collect($validated['sales'])
+                    ->flatMap(fn($s) => collect($s['items'])->pluck('product_id'))
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+
+                // Acquire row locks in product ID order under tenant scope
+                $products = Product::whereIn('id', $allProductIds)->lockForUpdate()->get()->keyBy('id');
+
+                foreach ($allProductIds as $pid) {
+                    if (!$products->has($pid)) {
+                        throw new \Exception("Product ID {$pid} was not found or does not belong to this tenant.");
+                    }
+                }
+
+                // Verify all existing customer references belong to current tenant
+                $existingCustomerIds = collect($validated['sales'])
+                    ->filter(fn($s) => ($s['customer_type'] ?? null) === 'existing' && !empty($s['customer_id']))
+                    ->pluck('customer_id')
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if (!empty($existingCustomerIds)) {
+                    $customers = Customer::whereIn('id', $existingCustomerIds)->get()->keyBy('id');
+                    foreach ($existingCustomerIds as $cid) {
+                        if (!$customers->has($cid)) {
+                            throw new \Exception("Customer ID {$cid} was not found or does not belong to this tenant.");
+                        }
+                    }
+                }
+
+                $createdSales = [];
+
+                foreach ($validated['sales'] as $saleIndex => $saleData) {
+                    $saleNum = $saleIndex + 1;
+                    $customerId = null;
+
+                    if (($saleData['customer_type'] ?? null) === 'new' && !empty($saleData['new_customer']['name'])) {
+                        $customer = Customer::create([
+                            'tenant_id' => $tenantId,
+                            'name'      => $saleData['new_customer']['name'],
+                            'phone'     => $saleData['new_customer']['phone'] ?? null,
+                            'email'     => $saleData['new_customer']['email'] ?? null,
+                            'status'    => 'active',
+                        ]);
+                        $customerId = $customer->id;
+                    } elseif (($saleData['customer_type'] ?? null) === 'existing') {
+                        $customerId = $saleData['customer_id'] ?? null;
+                    }
+
+                    $totalAmount = array_sum(array_map(fn($i) => $i['quantity'] * $i['price'], $saleData['items']));
+                    $discountAmount = $saleData['discount_amount'] ?? 0;
+                    $taxAmount      = $saleData['tax_amount'] ?? 0;
+                    $finalTotal     = max(0, $totalAmount - $discountAmount + $taxAmount);
+
+                    $sale = Sale::create([
+                        'user_id'         => $user->id,
+                        'customer_id'     => $customerId,
+                        'discount_type'   => $saleData['discount_type'] ?? null,
+                        'discount_amount' => $discountAmount ?: null,
+                        'tax_amount'      => $taxAmount ?: null,
+                        'total_amount'    => $finalTotal,
+                        'payment_method'  => $saleData['payment_method'],
+                        'notes'           => $saleData['notes'] ?? null,
+                        'sale_date'       => now(),
+                    ]);
+
+                    foreach ($saleData['items'] as $item) {
+                        $product = $products[$item['product_id']];
+
+                        if ($product->stock < $item['quantity']) {
+                            throw new \Exception("Sale #{$saleNum}: Insufficient stock for \"{$product->name}\". Available: {$product->stock}, requested: {$item['quantity']}.");
+                        }
+
+                        SaleItem::create([
+                            'sale_id'    => $sale->id,
+                            'product_id' => $item['product_id'],
+                            'quantity'   => $item['quantity'],
+                            'price'      => $item['price'],
+                            'subtotal'   => $item['quantity'] * $item['price'],
+                        ]);
+
+                        // Decrement stock in database and in-memory model (decrement() updates both)
+                        $product->decrement('stock', $item['quantity']);
+
+                        StockMovement::create([
+                            'tenant_id'      => $tenantId,
+                            'product_id'     => $item['product_id'],
+                            'type'           => 'OUT',
+                            'quantity'       => $item['quantity'],
+                            'reference_id'   => $sale->id,
+                            'reference_type' => 'sale',
+                            'date'           => now(),
+                        ]);
+                    }
+
+                    $createdSales[] = $sale;
+                }
+
+                // Eager-load relations for all created sales in one batch
+                $createdSaleIds = collect($createdSales)->pluck('id')->all();
+                $salesWithRelations = Sale::with(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price', 'tenant'])
+                    ->whereIn('id', $createdSaleIds)
+                    ->orderBy('id', 'asc')
+                    ->get();
+
+                $payload = [
+                    'success' => true,
+                    'message' => count($salesWithRelations) . ' sales completed successfully.',
+                    'data'    => $salesWithRelations,
+                ];
+
+                // F-01: Atomically persist idempotency completion inside the transaction
+                if ($idempotencyRecord && $claimToken) {
+                    $completed = IdempotencyKey::where('id', $idempotencyRecord->id)
+                        ->where('status', 'processing')
+                        ->where('claim_token', $claimToken)
+                        ->update([
+                            'status'        => 'completed',
+                            'response_code' => 201,
+                            'response_body' => json_encode($payload),
+                        ]);
+
+                    if (!$completed) {
+                        // Claim was stolen or altered while processing; abort to prevent duplicate sales
+                        throw new \Exception('Idempotency claim was lost or expired during processing.');
+                    }
+                }
+
+                return $payload;
+            });
+
+            return response()->json($responsePayload, 201);
+        } catch (\Exception $e) {
+            // F-03: Ownership-safe failure cleanup
+            if ($idempotencyRecord && $claimToken) {
+                try {
+                    // Check if transaction actually committed despite exception (e.g. uncertain commit / disconnect during commit)
+                    $fresh = IdempotencyKey::where('id', $idempotencyRecord->id)->first();
+                    if ($fresh && $fresh->status === 'completed' && $fresh->response_body) {
+                        return response()->json(
+                            json_decode($fresh->response_body, true),
+                            $fresh->response_code ?: 201
+                        );
+                    }
+
+                    // Only delete reservation if we still own it and it remains in 'processing' status
+                    IdempotencyKey::where('id', $idempotencyRecord->id)
+                        ->where('status', 'processing')
+                        ->where('claim_token', $claimToken)
+                        ->delete();
+                } catch (\Throwable $ignored) {
+                    // Ignore cleanup deletion failure
+                }
+            }
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
