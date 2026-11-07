@@ -175,14 +175,59 @@ class AuthController extends Controller
             }
         }
 
-        // Create a new tenant for the user
-        $tenant = \App\Models\Tenant::create([
+        // Check if this email already completed a NexumPay subscription payment
+        $paidSub = null;
+        try {
+            $paidSub = \Illuminate\Support\Facades\Cache::get('nexumpay_paid_sub_' . strtolower(trim($request->email)));
+            if (!$paidSub) {
+                $paidTx = \App\Models\NexumPayTransaction::where('customer_email', $request->email)
+                    ->where('status', 'SUCCESSFUL')
+                    ->latest()
+                    ->first();
+                if ($paidTx) {
+                    $months = ($paidTx->billing_cycle === 'annual') ? 12 : 1;
+                    $paidSub = [
+                        'subscription_plan'       => $paidTx->plan_id,
+                        'subscription_status'     => 'active',
+                        'subscription_expires_at' => now()->addMonths($months),
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // Ignore if table/columns not migrated yet
+        }
+
+        $tenantAttributes = [
             'name'      => $request->business_name,
             'email'     => $request->email,
             'phone'     => $request->phone,
             'address'   => $request->address,
             'logo_path' => $logoPath,
-        ]);
+        ];
+
+        if ($paidSub) {
+            $tenantAttributes['subscription_plan']       = $paidSub['subscription_plan'];
+            $tenantAttributes['subscription_status']     = 'active';
+            $tenantAttributes['subscription_expires_at'] = $paidSub['subscription_expires_at'];
+        } elseif ($request->filled('subscription_plan')) {
+            $tenantAttributes['subscription_plan']       = $request->subscription_plan;
+            $tenantAttributes['subscription_status']     = $request->subscription_plan === 'trial' ? 'trial' : 'pending';
+            $tenantAttributes['subscription_expires_at'] = $request->subscription_plan === 'trial' ? now()->addDays(14) : null;
+        }
+
+        // Create a new tenant for the user
+        try {
+            $tenant = \App\Models\Tenant::create($tenantAttributes);
+        } catch (\Exception $e) {
+            // Fallback if subscription columns haven't been migrated yet
+            $tenant = \App\Models\Tenant::create([
+                'name'      => $request->business_name,
+                'email'     => $request->email,
+                'phone'     => $request->phone,
+                'address'   => $request->address,
+                'logo_path' => $logoPath,
+            ]);
+        }
 
         $user = User::create([
             'tenant_id' => $tenant->id,

@@ -1448,3 +1448,34 @@ textarea.field-input {
     margin: 0 !important;
   }
 }
+
+
+/* ── Topbar Subscription Days Left Badge ── */
+.sub-topbar-pill {
+  line-height: 1.2;
+}
+.sub-topbar-pill:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+.sub-topbar-pill:active {
+  transform: translateY(0);
+}
+.sub-pill-text-short {
+  display: none;
+}
+@media (max-width: 768px) {
+  .sub-pill-text-long {
+    display: none;
+  }
+  .sub-pill-text-short {
+    display: inline;
+  }
+}
+@media (max-width: 480px) {
+  .sub-topbar-pill {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
+}

@@ -17,11 +17,22 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\MomoPaymentController;
+use App\Http\Controllers\NexumPayController;
 
 // Public routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
 Route::post('/contact', [ContactController::class, 'submit']);
+
+// NexumPay Payment Gateway routes (Subscription & Mobile Money Collections)
+Route::prefix('nexumpay')->group(function () {
+    Route::get('/plans', [NexumPayController::class, 'plans']);
+    Route::get('/config-check', [NexumPayController::class, 'configCheck']);
+    Route::post('/initiate', [NexumPayController::class, 'initiate']);
+    Route::get('/status/{reference}', [NexumPayController::class, 'status']);
+    Route::post('/simulate/{reference}', [NexumPayController::class, 'simulate']);
+    Route::post('/webhook', [NexumPayController::class, 'webhook']);
+});
 
 // MTN MoMo Direct Payment Gateway routes
 Route::prefix('momo')->group(function () {

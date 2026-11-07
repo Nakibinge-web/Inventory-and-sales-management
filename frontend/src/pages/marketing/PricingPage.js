@@ -4,6 +4,7 @@ import MarketingFooter from '../../components/marketing/MarketingFooter';
 import SectionHeading from '../../components/marketing/SectionHeading';
 import FAQAccordion from '../../components/marketing/FAQAccordion';
 import CTASection from '../../components/marketing/CTASection';
+import NexumPayCheckoutModal from '../../components/marketing/NexumPayCheckoutModal';
 import { MarketingLink } from '../../utils/navigation';
 import { usePageMeta } from '../../utils/seo';
 import { CheckIcon, ArrowRightIcon } from '../../components/marketing/Icons';
@@ -13,12 +14,12 @@ export const PLANS = [
     id: 'starter',
     name: 'Starter',
     tagline: 'For single-store retailers and boutique shops getting organized.',
-    monthlyPrice: 'UGX 10,000',
-    annualPrice: 'UGX 100,000',
+    monthlyPrice: 'UGX 1,000',
+    annualPrice: 'UGX 1,000',
     period: '/ month',
     featured: false,
     ctaText: 'Start with Starter',
-    ctaHref: '/register',
+    ctaHref: '/checkout?plan=starter',
     features: [
       'Up to 500 catalog items',
       '1 active POS checkout terminal',
@@ -35,12 +36,12 @@ export const PLANS = [
     name: 'Business',
     badge: 'Recommended',
     tagline: 'For growing retail stores, supermarkets, and wholesale businesses.',
-    monthlyPrice: 'UGX 180,000',
-    annualPrice: 'UGX 150,000',
+    monthlyPrice: 'UGX 2,000',
+    annualPrice: 'UGX 2,000',
     period: '/ month',
     featured: true,
     ctaText: 'Get Started with Business',
-    ctaHref: '/register',
+    ctaHref: '/checkout?plan=business',
     features: [
       'Unlimited catalog items & categories',
       'Unlimited POS sales transactions',
@@ -78,10 +79,11 @@ export const PLANS = [
 export default function PricingPage() {
   usePageMeta(
     'StockPro Pricing & Plans — Transparent Business Tiers',
-    'Simple, predictable pricing for retail and wholesale businesses. Choose Starter, Business, or Enterprise tiers with zero hidden setup fees.'
+    'Simple, predictable pricing for retail and wholesale businesses. Subscribe with MTN Mobile Money or Airtel Money via NexumPay.'
   );
 
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'annual'
+  const [checkoutPlan, setCheckoutPlan] = useState(null);
 
   useEffect(() => {
     const scrollToFaq = () => {
@@ -119,7 +121,7 @@ export default function PricingPage() {
             <SectionHeading
               eyebrow="TRANSPARENT PLANS"
               title="Predictable pricing for every stage of your business."
-              subtitle="No hidden setup charges or surprise fees. Choose the tier that fits your catalog size and operational team."
+              subtitle="No hidden setup charges or surprise fees. Choose your tier and pay securely via NexumPay Mobile Money."
               align="center"
             />
 
@@ -148,6 +150,8 @@ export default function PricingPage() {
             <div className="sp-pricing-grid" role="list" aria-label="Subscription Plans">
               {PLANS.map((plan) => {
                 const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+                const isPayablePlan = plan.id === 'starter' || plan.id === 'business';
+
                 return (
                   <div
                     key={plan.id}
@@ -180,16 +184,27 @@ export default function PricingPage() {
                     </ul>
 
                     <div className="sp-doc-cta-wrap">
-                      <MarketingLink
-                        href={plan.id === 'enterprise' ? '/contact' : `/checkout?plan=${plan.id}&cycle=${billingCycle}`}
-                        className={`sp-btn ${plan.featured ? 'sp-btn-primary' : 'sp-btn-secondary'}`}
-                        style={{ width: '100%' }}
-                      >
-                        <span>{plan.ctaText}</span>
-                        <ArrowRightIcon size={14} />
-                      </MarketingLink>
+                      {isPayablePlan ? (
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutPlan(plan.id)}
+                          className={`sp-btn ${plan.featured ? 'sp-btn-primary' : 'sp-btn-secondary'}`}
+                          style={{ width: '100%' }}
+                        >
+                          <span>{plan.ctaText}</span>
+                          <ArrowRightIcon size={14} />
+                        </button>
+                      ) : (
+                        <MarketingLink
+                          href={plan.ctaHref}
+                          className={`sp-btn ${plan.featured ? 'sp-btn-primary' : 'sp-btn-secondary'}`}
+                          style={{ width: '100%' }}
+                        >
+                          <span>{plan.ctaText}</span>
+                          <ArrowRightIcon size={14} />
+                        </MarketingLink>
+                      )}
                     </div>
-
                   </div>
                 );
               })}
@@ -291,6 +306,15 @@ export default function PricingPage() {
           secondaryCtaHref="/contact"
         />
       </main>
+
+      {/* Custom NexumPay Subscription Checkout Modal */}
+      <NexumPayCheckoutModal
+        isOpen={Boolean(checkoutPlan)}
+        isModal={true}
+        initialPlanId={checkoutPlan || 'starter'}
+        initialBillingCycle={billingCycle}
+        onClose={() => setCheckoutPlan(null)}
+      />
 
       <MarketingFooter />
     </div>

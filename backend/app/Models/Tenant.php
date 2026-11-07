@@ -16,10 +16,14 @@ class Tenant extends Model
         'contacts',
         'address',
         'logo_path',
+        'subscription_plan',
+        'subscription_status',
+        'subscription_expires_at',
     ];
 
     protected $casts = [
-        'contacts' => 'array',
+        'contacts'                => 'array',
+        'subscription_expires_at' => 'datetime',
     ];
 
     protected $appends = [

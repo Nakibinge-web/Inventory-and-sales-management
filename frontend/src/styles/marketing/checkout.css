@@ -1,9 +1,9 @@
 /**
- * StockPro MTN MoMo Checkout Stylesheet
- * Integrates StockPro Navy design system with MTN MoMo Yellow identity.
+ * StockPro NexumPay Subscription Checkout Stylesheet
+ * Supports both popup Modal presentation (.nxp-modal-overlay) and Full-Page (/checkout) presentation.
  */
 
-/* ── Checkout Page Container ── */
+/* ── Full-Page Wrapper (/checkout) ── */
 .sp-checkout-page {
   background-color: var(--sp-surface-soft, #f8fafc);
   min-height: 100vh;
@@ -12,528 +12,57 @@
 }
 
 .sp-checkout-container {
-  max-width: 1140px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: 36px 24px 80px;
   width: 100%;
+  flex: 1;
 }
 
 .sp-checkout-back {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--sp-text-muted, #64748b);
   text-decoration: none;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   transition: color 0.15s ease;
 }
 
 .sp-checkout-back:hover {
-  color: var(--sp-navy-900, #0b1f3a);
-}
-
-.sp-checkout-header {
-  margin-bottom: 36px;
-}
-
-.sp-checkout-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
-.sp-momo-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #ffcc00;
-  color: #0b1f3a;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.sp-sandbox-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background-color: #e0f2fe;
-  color: #0369a1;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid #bae6fd;
-}
-
-.sp-checkout-title {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--sp-navy-950, #071629);
-  margin: 0 0 8px;
-  letter-spacing: -0.02em;
-}
-
-.sp-checkout-subtitle {
-  font-size: 16px;
-  color: var(--sp-text-muted, #64748b);
-  margin: 0;
-  max-width: 600px;
-  line-height: 1.5;
-}
-
-/* ── Checkout Two-Column Grid ── */
-.sp-checkout-grid {
-  display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 32px;
-  align-items: flex-start;
-}
-
-@media (max-width: 900px) {
-  .sp-checkout-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── Cards ── */
-.sp-checkout-card {
-  background: #ffffff;
-  border: 1px solid var(--sp-border, #e2e8f0);
-  border-radius: 12px;
-  padding: 28px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(11, 31, 58, 0.04);
-}
-
-.sp-checkout-section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--sp-border, #e2e8f0);
-}
-
-.sp-step-num {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--sp-navy-900, #0b1f3a);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.sp-checkout-section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--sp-navy-900, #0b1f3a);
-  margin: 0;
-}
-
-/* ── Form Controls ── */
-.sp-form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-@media (max-width: 600px) {
-  .sp-form-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-.sp-form-group {
-  margin-bottom: 16px;
-}
-
-.sp-form-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sp-text, #0f172a);
-  margin-bottom: 6px;
-}
-
-.sp-form-input {
-  width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--sp-border-strong, #cbd5e1);
-  border-radius: 8px;
-  font-size: 14px;
-  color: var(--sp-text, #0f172a);
-  background: #ffffff;
-  outline: none;
-  transition: all 0.15s ease;
-  box-sizing: border-box;
-}
-
-.sp-form-input:focus {
-  border-color: var(--sp-navy-700, #1a3e61);
-  box-shadow: 0 0 0 3px rgba(11, 31, 58, 0.08);
-}
-
-.sp-phone-input-wrap {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--sp-border-strong, #cbd5e1);
-  border-radius: 8px;
-  background: #ffffff;
-  overflow: hidden;
-  transition: all 0.15s ease;
-}
-
-.sp-phone-input-wrap:focus-within {
-  border-color: var(--sp-navy-700, #1a3e61);
-  box-shadow: 0 0 0 3px rgba(11, 31, 58, 0.08);
-}
-
-.sp-phone-prefix {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  background: #f1f5f9;
-  border-right: 1px solid var(--sp-border-strong, #cbd5e1);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--sp-navy-900, #0b1f3a);
-  height: 44px;
-  user-select: none;
-}
-
-.sp-phone-input-wrap input {
-  border: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  flex: 1;
-}
-
-.sp-form-hint {
-  font-size: 12px;
-  color: var(--sp-text-muted, #64748b);
-  margin-top: 5px;
-  line-height: 1.4;
-}
-
-/* ── MTN MoMo Selector Card ── */
-.sp-momo-card {
-  border: 2px solid #ffcc00;
-  background: #fffdf5;
-  border-radius: 10px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.sp-momo-card-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.sp-momo-icon-bubble {
-  width: 44px;
-  height: 44px;
-  background: #ffcc00;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #0b1f3a;
-  font-weight: 900;
-  font-size: 16px;
-  flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(255, 204, 0, 0.3);
-}
-
-.sp-momo-card-info h4 {
-  margin: 0 0 3px;
-  font-size: 15px;
-  font-weight: 700;
-  color: #0b1f3a;
-}
-
-.sp-momo-card-info p {
-  margin: 0;
-  font-size: 13px;
-  color: #475569;
-}
-
-.sp-momo-tag {
-  background: #0b1f3a;
-  color: #ffcc00;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-/* ── USSD Instruction Steps ── */
-.sp-ussd-steps {
-  background: #f8fafc;
-  border: 1px solid var(--sp-border, #e2e8f0);
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 18px;
-}
-
-.sp-ussd-steps-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--sp-navy-900, #0b1f3a);
-  margin: 0 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sp-ussd-list {
-  margin: 0;
-  padding: 0 0 0 18px;
-  font-size: 13px;
-  color: var(--sp-text, #0f172a);
-  line-height: 1.6;
-}
-
-.sp-ussd-list li {
-  margin-bottom: 4px;
-}
-
-/* ── Submit Pay Button ── */
-.sp-momo-submit-btn {
-  width: 100%;
-  height: 52px;
-  background: #ffcc00;
-  color: #0b1f3a;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(255, 204, 0, 0.3);
-  margin-top: 12px;
-}
-
-.sp-momo-submit-btn:hover:not(:disabled) {
-  background: #e5b800;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(255, 204, 0, 0.4);
-}
-
-.sp-momo-submit-btn:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.sp-security-note {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--sp-text-muted, #64748b);
-  margin-top: 14px;
-  text-align: center;
-}
-
-/* ── Sidebar: Order Summary ── */
-.sp-checkout-sidebar {
-  position: sticky;
-  top: 30px;
-}
-
-.sp-order-summary-card {
-  background: #ffffff;
-  border: 1px solid var(--sp-border, #e2e8f0);
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(11, 31, 58, 0.04);
-}
-
-.sp-summary-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--sp-navy-900, #0b1f3a);
-  margin: 0 0 16px;
-}
-
-/* ── Plan Switcher Tabs ── */
-.sp-plan-switcher {
-  display: flex;
-  background: #f1f5f9;
-  border-radius: 8px;
-  padding: 4px;
-  margin-bottom: 18px;
-}
-
-.sp-plan-tab {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sp-text-muted, #64748b);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.sp-plan-tab.active {
-  background: #ffffff;
-  color: var(--sp-navy-900, #0b1f3a);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-/* ── Billing Cycle Pills ── */
-.sp-cycle-toggle-wrap {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 10px 14px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid var(--sp-border, #e2e8f0);
-}
-
-.sp-cycle-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sp-text, #0f172a);
-}
-
-.sp-cycle-btns {
-  display: flex;
-  gap: 6px;
-}
-
-.sp-cycle-btn {
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--sp-border-strong, #cbd5e1);
-  background: #ffffff;
-  border-radius: 6px;
-  color: var(--sp-text-muted, #64748b);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.sp-cycle-btn.active {
-  background: var(--sp-navy-900, #0b1f3a);
-  border-color: var(--sp-navy-900, #0b1f3a);
-  color: #ffffff;
-}
-
-/* ── Price Breakdown Rows ── */
-.sp-breakdown-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-  color: var(--sp-text-muted, #64748b);
-  margin-bottom: 10px;
-}
-
-.sp-breakdown-row.total {
-  border-top: 1px solid var(--sp-border, #e2e8f0);
-  padding-top: 14px;
-  margin-top: 14px;
-  font-size: 18px;
-  font-weight: 700;
   color: var(--sp-navy-950, #071629);
 }
 
-.sp-total-amount {
-  color: var(--sp-navy-900, #0b1f3a);
-  font-size: 22px;
-  font-weight: 800;
-}
-
-/* ── Features List in Summary ── */
-.sp-summary-features {
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px dashed var(--sp-border, #e2e8f0);
-}
-
-.sp-summary-features-title {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--sp-navy-700, #1a3e61);
-  margin: 0 0 10px;
-}
-
-.sp-summary-feature-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--sp-text, #0f172a);
-  margin-bottom: 8px;
-}
-
-.sp-summary-feature-item svg {
-  color: #059669;
-  flex-shrink: 0;
-}
-
-/* ── Live PIN Awaiting Modal Overlay ── */
-.sp-modal-backdrop {
+/* ── Modal Overlay Backdrop ── */
+.nxp-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(11, 31, 58, 0.7);
-  backdrop-filter: blur(4px);
+  z-index: 9999;
+  background: rgba(7, 22, 41, 0.72);
+  backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
   padding: 20px;
+  overflow-y: auto;
+  animation: nxpFadeIn 0.2s ease-out;
 }
 
-.sp-modal-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 36px 32px;
-  max-width: 480px;
-  width: 100%;
-  text-align: center;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-  animation: spModalSlideUp 0.25s ease-out;
-}
-
-@keyframes spModalSlideUp {
+@keyframes nxpFadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes nxpSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -541,217 +70,1177 @@
   }
 }
 
-/* Pulse animation around phone icon */
-.sp-pulse-wrapper {
+/* ── Checkout Shell (Modal & Page) ── */
+.nxp-checkout-shell {
+  width: 100%;
+  max-width: 1060px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 24px 60px -12px rgba(7, 22, 41, 0.32);
+  overflow: hidden;
+  font-family: var(--sp-font-content, 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif);
+  color: #0f172a;
+}
+
+.nxp-checkout-shell.nxp-is-modal {
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  animation: nxpSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nxp-checkout-shell.nxp-is-page {
+  box-shadow: 0 12px 32px -8px rgba(7, 22, 41, 0.08);
+}
+
+/* ── Top Gateway Bar ── */
+.nxp-shell-topbar {
+  background: #071629;
+  color: #ffffff;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+
+.nxp-brand-cluster {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.nxp-logo-mark {
+  width: 40px;
+  height: 40px;
+  background: #800020;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.nxp-brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nxp-brand-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.nxp-verified-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+.nxp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.nxp-brand-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 2px 0 0;
+}
+
+.nxp-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nxp-open-page-link {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nxp-open-page-link:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.nxp-close-btn {
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.nxp-close-btn:hover {
+  background: #800020;
+  border-color: #800020;
+}
+
+/* ── Main Two-Column Body ── */
+.nxp-shell-body {
+  display: grid;
+  grid-template-columns: 370px 1fr;
+  overflow-y: auto;
+  max-height: calc(100vh - 115px);
+}
+
+.nxp-is-page .nxp-shell-body {
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* ── Left Summary Pane ── */
+.nxp-summary-pane {
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nxp-pane-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #800020;
+  text-transform: uppercase;
+}
+
+.nxp-plan-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.nxp-plan-tab {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: all 0.15s ease;
+}
+
+.nxp-plan-tab:hover:not(:disabled) {
+  border-color: #071629;
+}
+
+.nxp-plan-tab.active {
+  background: #071629;
+  border-color: #071629;
+  color: #ffffff;
+}
+
+.nxp-plan-tab-name {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.nxp-plan-tab-badge {
+  font-size: 10.5px;
+  opacity: 0.78;
+}
+
+/* Billing Cycle Switch */
+.nxp-cycle-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+}
+
+.nxp-cycle-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.nxp-cycle-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.nxp-cycle-btn {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.nxp-cycle-btn.active {
+  background: #071629;
+  border-color: #071629;
+  color: #ffffff;
+}
+
+.nxp-cycle-save {
+  background: #800020;
+  color: #ffffff;
+  font-size: 10px;
+  padding: 1px 5px;
+  font-weight: 700;
+}
+
+/* Selected Plan Highlight Box */
+.nxp-selected-plan-box {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-left: 4px solid #800020;
+  padding: 16px;
+}
+
+.nxp-selected-plan-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: #071629;
+  margin: 0 0 4px;
+}
+
+.nxp-selected-plan-tagline {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.nxp-price-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.nxp-price-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: 24px;
+  font-weight: 800;
+  color: #071629;
+}
+
+.nxp-price-period {
+  font-size: 12.5px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.nxp-annual-note {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: #059669;
+  font-weight: 600;
+}
+
+/* Features Checklist */
+.nxp-features-section {
+  flex: 1;
+}
+
+.nxp-features-heading {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.nxp-features-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nxp-feature-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.nxp-feature-check {
+  width: 16px;
+  height: 16px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Totals Breakdown */
+.nxp-totals-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nxp-total-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  color: #475569;
+}
+
+.nxp-total-line.grand {
+  border-top: 1px solid #cbd5e1;
+  padding-top: 10px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #071629;
+}
+
+.nxp-grand-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 18px;
+  font-weight: 800;
+  color: #800020;
+}
+
+/* ── Right Interactive Payment Pane ── */
+.nxp-payment-pane {
+  padding: 26px 30px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+/* Error Alert */
+.nxp-error-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  color: #991b1b;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.nxp-error-icon {
+  width: 22px;
+  height: 22px;
+  background: #dc2626;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nxp-error-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.nxp-retry-mini {
+  background: #ffffff;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Form Step Blocks */
+.nxp-step-block {
+  border: 1px solid #e2e8f0;
+  padding: 20px;
+  margin-bottom: 18px;
+  background: #ffffff;
+}
+
+.nxp-step-block:last-child {
+  margin-bottom: 0;
+}
+
+.nxp-step-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.nxp-step-badge {
+  width: 26px;
+  height: 26px;
+  background: #071629;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.nxp-step-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #071629;
+  margin: 0 0 2px;
+}
+
+.nxp-step-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.nxp-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.nxp-field {
+  margin-bottom: 14px;
+}
+
+.nxp-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.nxp-req {
+  color: #dc2626;
+}
+
+.nxp-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: #0f172a;
+  background: #ffffff;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nxp-input:focus {
+  border-color: #071629;
+  box-shadow: 0 0 0 3px rgba(7, 22, 41, 0.08);
+}
+
+/* Mobile Money Network Cards */
+.nxp-network-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.nxp-network-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.nxp-network-card.mtn.selected {
+  border-color: #eab308;
+  background: #fefce8;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.15);
+}
+
+.nxp-network-card.airtel.selected {
+  border-color: #dc2626;
+  background: #fef2f2;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.12);
+}
+
+.nxp-net-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 8px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.nxp-net-badge.mtn {
+  background: #ffcc00;
+  color: #071629;
+}
+
+.nxp-net-badge.airtel {
+  background: #e11d48;
+  color: #ffffff;
+}
+
+.nxp-net-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.nxp-net-info strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.nxp-net-info span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.nxp-net-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #94a3b8;
   position: relative;
-  width: 84px;
-  height: 84px;
-  margin: 0 auto 20px;
+  flex-shrink: 0;
+}
+
+.nxp-network-card.selected .nxp-net-radio {
+  border-color: #071629;
+  background: #071629;
+  box-shadow: inset 0 0 0 3px #ffffff;
+}
+
+/* Phone Input Group */
+.nxp-phone-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nxp-phone-group:focus-within {
+  border-color: #071629;
+  box-shadow: 0 0 0 3px rgba(7, 22, 41, 0.08);
+}
+
+.nxp-phone-prefix {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 44px;
+  background: #f1f5f9;
+  border-right: 1px solid #cbd5e1;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #071629;
+  user-select: none;
+}
+
+.nxp-phone-input {
+  flex: 1;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  outline: none;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #0f172a;
+  font-family: 'DM Mono', monospace;
+}
+
+.nxp-detected-pill {
+  margin-right: 10px;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  text-transform: uppercase;
+}
+
+.nxp-detected-pill.mtn {
+  background: #ffcc00;
+  color: #071629;
+}
+
+.nxp-detected-pill.airtel {
+  background: #e11d48;
+  color: #ffffff;
+}
+
+.nxp-field-hint {
+  font-size: 11.5px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+/* How USSD Push Strip */
+.nxp-how-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: #334155;
+  flex-wrap: wrap;
+}
+
+.nxp-how-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.nxp-how-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #071629;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nxp-how-arrow {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+/* Primary Submit CTA Button */
+.nxp-pay-btn {
+  width: 100%;
+  height: 48px;
+  background: #800020;
+  border: 1px solid #800020;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(128, 0, 32, 0.22);
+}
+
+.nxp-pay-btn:hover:not(:disabled) {
+  background: #071629;
+  border-color: #071629;
+  box-shadow: 0 6px 18px rgba(7, 22, 41, 0.24);
+}
+
+.nxp-pay-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.nxp-security-foot {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* ── STAGE B: Awaiting PIN View ── */
+.nxp-awaiting-box {
+  text-align: center;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nxp-pulse-ring-wrap {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.sp-pulse-circle {
+.nxp-pulse-ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: rgba(255, 204, 0, 0.3);
-  animation: spPulseWave 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(128, 0, 32, 0.2);
+  animation: nxpPulse 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.sp-pulse-circle-2 {
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  background: rgba(255, 204, 0, 0.15);
-  animation: spPulseWave 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1) 0.4s;
+.nxp-pulse-ring.r2 {
+  animation-delay: 0.5s;
 }
 
-@keyframes spPulseWave {
+@keyframes nxpPulse {
   0% {
-    transform: scale(0.8);
+    transform: scale(0.85);
     opacity: 0.9;
   }
   100% {
-    transform: scale(1.6);
+    transform: scale(1.65);
     opacity: 0;
   }
 }
 
-.sp-pulse-icon {
+.nxp-phone-avatar {
   position: relative;
-  width: 64px;
-  height: 64px;
-  background: #ffcc00;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
+  background: #071629;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0b1f3a;
-  box-shadow: 0 4px 12px rgba(255, 204, 0, 0.4);
+  box-shadow: 0 6px 16px rgba(7, 22, 41, 0.25);
 }
 
-.sp-modal-title {
+.nxp-awaiting-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #800020;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  padding: 3px 10px;
+  margin-bottom: 10px;
+}
+
+.nxp-awaiting-title {
+  font-family: 'Montserrat', sans-serif;
   font-size: 22px;
   font-weight: 800;
-  color: var(--sp-navy-950, #071629);
-  margin: 0 0 8px;
+  color: #071629;
+  margin: 0 0 6px;
 }
 
-.sp-modal-desc {
-  font-size: 14px;
-  color: var(--sp-text-muted, #64748b);
+.nxp-awaiting-desc {
+  font-size: 13.5px;
+  color: #475569;
+  max-width: 460px;
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+/* Simulated USSD Dialog Preview */
+.nxp-ussd-dialog-preview {
+  width: 100%;
+  max-width: 460px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  padding: 16px 18px;
+  text-align: left;
+  margin-bottom: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
+
+.nxp-ussd-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  color: #94a3b8;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.nxp-ussd-ref {
+  font-family: 'DM Mono', monospace;
+  color: #38bdf8;
+}
+
+.nxp-ussd-dialog-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.nxp-ussd-dialog-body span {
+  display: block;
+  margin-top: 6px;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.nxp-ussd-pin-dots {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 8px;
+  font-size: 18px;
+  color: #38bdf8;
+  letter-spacing: 6px;
+}
+
+.nxp-timer-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 7px 16px;
+  font-size: 13px;
+  color: #0f172a;
+  margin-bottom: 16px;
+}
+
+.nxp-awaiting-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 460px;
+}
+
+.nxp-check-now-btn {
+  width: 100%;
+  height: 42px;
+  background: #071629;
+  color: #ffffff;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nxp-check-now-btn:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.nxp-cancel-link {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  height: 38px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nxp-cancel-link:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* Simulation Controls Box */
+.nxp-sim-box {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 460px;
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.nxp-sim-head {
+  font-size: 11.5px;
+  color: #92400e;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nxp-sim-btns {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 8px;
+}
+
+.nxp-sim-approve-btn {
+  background: #059669;
+  border: none;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.nxp-sim-approve-btn:hover:not(:disabled) {
+  background: #047857;
+}
+
+.nxp-sim-fail-btn {
+  background: #ffffff;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+/* ── STAGE C: Success & Receipt View ── */
+.nxp-success-box {
+  text-align: center;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nxp-success-check-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  border: 2px solid #10b981;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.nxp-success-pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  padding: 3px 10px;
+  margin-bottom: 8px;
+}
+
+.nxp-success-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #071629;
+  margin: 0 0 6px;
+}
+
+.nxp-success-desc {
+  font-size: 13.5px;
+  color: #475569;
+  max-width: 480px;
   margin: 0 0 20px;
   line-height: 1.5;
 }
 
-.sp-modal-prompt-box {
-  background: #fffdf5;
-  border: 1px dashed #e5b800;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 24px;
-  font-size: 13px;
-  color: #0b1f3a;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.nxp-receipt-card {
+  width: 100%;
+  max-width: 480px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 20px;
   text-align: left;
 }
 
-.sp-timer-badge {
-  display: inline-flex;
+.nxp-receipt-head {
+  background: #071629;
+  color: #ffffff;
+  padding: 10px 16px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sp-navy-700, #1a3e61);
-  background: #f1f5f9;
-  padding: 6px 14px;
-  border-radius: 20px;
-  margin-bottom: 20px;
 }
 
-.sp-modal-actions {
+.nxp-receipt-status {
+  background: #10b981;
+  color: #071629;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.nxp-receipt-rows {
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.sp-btn-cancel {
-  background: transparent;
-  border: 1px solid var(--sp-border-strong, #cbd5e1);
-  color: var(--sp-text-muted, #64748b);
-  height: 40px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.sp-btn-cancel:hover {
-  background: #f1f5f9;
-  color: var(--sp-text, #0f172a);
-}
-
-/* ── Success Screen Card ── */
-.sp-success-card {
-  text-align: center;
-  padding: 40px 24px;
-}
-
-.sp-success-icon-wrap {
-  width: 72px;
-  height: 72px;
-  background: #ecfdf5;
-  color: #059669;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 20px;
-  border: 2px solid #a7f3d0;
-}
-
-.sp-receipt-box {
-  background: #f8fafc;
-  border: 1px dashed var(--sp-border-strong, #cbd5e1);
-  border-radius: 10px;
-  padding: 20px;
-  margin: 24px 0;
-  text-align: left;
-}
-
-.sp-receipt-row {
+.nxp-receipt-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
-  padding: 6px 0;
-  border-bottom: 1px solid #e2e8f0;
+  font-size: 12.5px;
+  color: #475569;
+  border-bottom: 1px dashed #e2e8f0;
+  padding-bottom: 8px;
 }
 
-.sp-receipt-row:last-child {
+.nxp-receipt-row:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
-.sp-receipt-label {
-  color: var(--sp-text-muted, #64748b);
-}
-
-.sp-receipt-value {
-  font-weight: 600;
-  color: var(--sp-navy-900, #0b1f3a);
-}
-
-.sp-badge-success {
-  background: #ecfdf5;
+.nxp-receipt-amount {
   color: #059669;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid #a7f3d0;
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
 }
 
-/* ── Error / Alert Banner ── */
-.sp-alert-error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 20px;
+.nxp-receipt-row code {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  background: #e2e8f0;
+  padding: 2px 6px;
+  color: #0f172a;
+}
+
+.nxp-success-actions {
+  width: 100%;
+  max-width: 480px;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 10px;
 }
 
-.sp-alert-warning {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #92400e;
-  padding: 12px 16px;
-  border-radius: 8px;
+.nxp-print-btn {
+  height: 40px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #071629;
   font-size: 13px;
-  margin-bottom: 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nxp-print-btn:hover {
+  background: #f8fafc;
 }
 
 /* Spinner */
-.sp-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(11, 31, 58, 0.2);
-  border-top-color: #0b1f3a;
+.nxp-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
   border-radius: 50%;
-  animation: spSpin 0.7s linear infinite;
+  animation: nxpSpin 0.7s linear infinite;
+  display: inline-block;
 }
 
-@keyframes spSpin {
+.nxp-spinner.dark {
+  border-color: rgba(7, 22, 41, 0.2);
+  border-top-color: #071629;
+}
+
+@keyframes nxpSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ── Responsive Adjustments ── */
+@media (max-width: 900px) {
+  .nxp-shell-body {
+    grid-template-columns: 1fr;
+  }
+
+  .nxp-summary-pane {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+}
+
+@media (max-width: 600px) {
+  .nxp-modal-overlay {
+    padding: 8px;
+  }
+
+  .nxp-grid-2,
+  .nxp-network-grid,
+  .nxp-sim-btns {
+    grid-template-columns: 1fr;
+  }
+
+  .nxp-payment-pane {
+    padding: 18px 16px;
+  }
+
+  .nxp-summary-pane {
+    padding: 18px 16px;
   }
 }

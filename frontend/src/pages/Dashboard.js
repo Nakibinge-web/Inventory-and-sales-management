@@ -51,10 +51,174 @@ function getTabFromPath() {
   return 'overview';
 }
 
+function getSubscriptionBadge(tenant) {
+  if (!tenant) return null;
+
+  const plan = (tenant.subscription_plan || '').toLowerCase();
+  const status = (tenant.subscription_status || '').toLowerCase();
+  const expiresAt = tenant.subscription_expires_at;
+
+  const planTitle =
+    plan === 'business'
+      ? 'Business'
+      : plan === 'enterprise'
+      ? 'Enterprise'
+      : plan === 'starter'
+      ? 'Starter'
+      : status === 'trial'
+      ? 'Trial'
+      : 'Subscription';
+
+  if (!expiresAt) {
+    if (status === 'trial') {
+      return {
+        variant: 'trial',
+        text: 'Free Trial',
+        shortText: 'Trial',
+        subText: '14-day free trial active. Click to choose a plan.',
+      };
+    }
+    if (status === 'active') {
+      return {
+        variant: 'active',
+        text: `${planTitle} Active`,
+        shortText: planTitle,
+        subText: 'Subscription active. Click to manage.',
+      };
+    }
+    return null;
+  }
+
+  const expiryDate = new Date(expiresAt);
+  if (isNaN(expiryDate.getTime())) {
+    return {
+      variant: 'active',
+      text: `${planTitle} Active`,
+      shortText: planTitle,
+      subText: 'Subscription active. Click to manage.',
+    };
+  }
+
+  const now = new Date();
+  const diffMs = expiryDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    const expiredDays = Math.abs(diffDays);
+    return {
+      variant: 'expired',
+      text: `${planTitle} · Expired`,
+      shortText: 'Expired',
+      subText: `Expired ${expiredDays} day${expiredDays === 1 ? '' : 's'} ago. Click to renew.`,
+    };
+  }
+
+  if (diffDays === 0) {
+    return {
+      variant: 'warning',
+      text: `${planTitle} · Expires today`,
+      shortText: 'Expires today',
+      subText: 'Subscription expires today. Click to renew.',
+    };
+  }
+
+  if (diffDays === 1) {
+    return {
+      variant: 'warning',
+      text: `${planTitle} · 1 day left`,
+      shortText: '1 day left',
+      subText: 'Renews tomorrow. Click to manage.',
+    };
+  }
+
+  if (diffDays <= 7) {
+    return {
+      variant: 'warning',
+      text: `${planTitle} · ${diffDays} days left`,
+      shortText: `${diffDays}d left`,
+      subText: `Expires on ${expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}. Click to manage.`,
+    };
+  }
+
+  return {
+    variant: 'active',
+    text: `${planTitle} · ${diffDays} days left`,
+    shortText: `${diffDays}d left`,
+    subText: `Valid until ${expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}. Click to manage.`,
+  };
+}
+
+function getPillColors(variant) {
+  switch (variant) {
+    case 'expired':
+      return {
+        bg: '#fef2f2',
+        border: '#fecaca',
+        color: '#991b1b',
+        dot: '#dc2626',
+      };
+    case 'warning':
+      return {
+        bg: '#fffbeb',
+        border: '#fde68a',
+        color: '#92400e',
+        dot: '#f59e0b',
+      };
+    case 'trial':
+      return {
+        bg: '#f8fafc',
+        border: '#cbd5e1',
+        color: '#334155',
+        dot: '#64748b',
+      };
+    case 'active':
+    default:
+      return {
+        bg: '#f0fdf4',
+        border: '#bbf7d0',
+        color: '#166534',
+        dot: '#22c55e',
+      };
+  }
+}
+
 export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTabState] = useState(getTabFromPath);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
+
+  // Subscription info & pill colors computed from current tenant state
+  const subBadge = getSubscriptionBadge(user?.tenant);
+  const pillColors = subBadge ? getPillColors(subBadge.variant) : null;
+
+  // Sync latest user/tenant profile from server on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API}/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData && resData.success && resData.data && onUserUpdate) {
+          onUserUpdate(resData.data);
+        }
+      })
+      .catch(() => {});
+  }, [token, onUserUpdate]);
+
+  // Listen for real-time subscription update events (from checkout modal or settings)
+  useEffect(() => {
+    const handleSubUpdated = (e) => {
+      if (e.detail && onUserUpdate) {
+        onUserUpdate(e.detail);
+      }
+    };
+    window.addEventListener('subscription_updated', handleSubUpdated);
+    return () => window.removeEventListener('subscription_updated', handleSubUpdated);
+  }, [onUserUpdate]);
 
   const setActiveTab = useCallback((tabId, replace = false) => {
     setActiveTabState(tabId);
@@ -510,6 +674,45 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         </div>
 
         <div style={styles.headerRight}>
+          {/* Topbar Subscription Days Left Badge */}
+          {subBadge && pillColors && (
+            <button
+              type="button"
+              className="sub-topbar-pill"
+              onClick={() => setActiveTab('settings')}
+              title={subBadge.subText ? `${subBadge.subText} (Click to manage subscription)` : 'Subscription Settings'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '6px 12px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                border: `1px solid ${pillColors.border}`,
+                backgroundColor: pillColors.bg,
+                color: pillColors.color,
+                transition: 'all 0.15s ease',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  backgroundColor: pillColors.dot,
+                  flexShrink: 0,
+                }}
+              />
+              <span className="sub-pill-text-long">{subBadge.text}</span>
+              <span className="sub-pill-text-short">{subBadge.shortText}</span>
+            </button>
+          )}
           <div 
             className="resp-hide"
             style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
