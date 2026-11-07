@@ -29,6 +29,9 @@ class Tenant extends Model
         'payment_terms',
         'invoice_notes',
         'enabled_modules',
+        'subscription_plan',
+        'subscription_status',
+        'subscription_expires_at',
     ];
 
     public const DEFAULT_MODULES = [
@@ -48,6 +51,7 @@ class Tenant extends Model
     protected $casts = [
         'contacts' => 'array',
         'enabled_modules' => 'array',
+        'subscription_expires_at' => 'datetime',
     ];
 
     protected $appends = [

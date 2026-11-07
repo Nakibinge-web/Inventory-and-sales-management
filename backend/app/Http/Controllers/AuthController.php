@@ -126,6 +126,13 @@ class AuthController extends Controller
             $request->merge(['username' => strtolower(trim($request->username))]);
         }
 
+        $logoRule = 'nullable';
+        if ($request->hasFile('logo')) {
+            $logoRule = 'file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120';
+        } elseif ($request->filled('logo') && is_string($request->logo)) {
+            $logoRule = ['string', 'regex:/^data:image\/(jpeg|png|jpg|gif|svg\+xml|webp);base64,/i'];
+        }
+
         $request->validate([
             'name'          => 'required|string|max:255',
             'email'         => 'required|string|email|max:255|unique:users',
@@ -134,36 +141,93 @@ class AuthController extends Controller
             'business_name' => 'required|string|max:255',
             'phone'         => 'nullable|string|max:20',
             'address'       => 'nullable|string',
-            'logo'          => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
+            'logo'          => $logoRule,
         ]);
 
         $logoPath = null;
         if ($request->hasFile('logo') && $request->file('logo')->isValid()) {
             $logoPath = $request->file('logo')->store('logos', 'public');
-        } elseif ($request->filled('logo') && is_string($request->logo) && str_starts_with($request->logo, 'data:image/')) {
-            try {
-                preg_match('/^data:image\/(\w+);base64,/', $request->logo, $type);
-                $image = substr($request->logo, strpos($request->logo, ',') + 1);
-                $type = strtolower($type[1] ?? 'png');
-                $decoded = base64_decode($image);
-                if ($decoded !== false) {
-                    $fileName = 'logos/' . \Illuminate\Support\Str::random(40) . '.' . $type;
-                    \Illuminate\Support\Facades\Storage::disk('public')->put($fileName, $decoded);
-                    $logoPath = $fileName;
+        } elseif ($request->filled('logo') && is_string($request->logo)) {
+            $allowedExtensions = [
+                'jpeg'    => 'jpg',
+                'jpg'     => 'jpg',
+                'png'     => 'png',
+                'gif'     => 'gif',
+                'webp'    => 'webp',
+                'svg+xml' => 'svg',
+                'svg'     => 'svg',
+            ];
+
+            if (preg_match('/^data:image\/([a-zA-Z0-9\+\-\.]+);base64,/', $request->logo, $matches)) {
+                $subtype = strtolower($matches[1]);
+                if (isset($allowedExtensions[$subtype])) {
+                    $ext = $allowedExtensions[$subtype];
+                    $base64Data = substr($request->logo, strpos($request->logo, ',') + 1);
+                    $decoded = base64_decode($base64Data, true);
+
+                    // Verify valid decoded binary data within 5MB limit
+                    if ($decoded !== false && strlen($decoded) > 0 && strlen($decoded) <= 5242880) {
+                        $fileName = 'logos/' . \Illuminate\Support\Str::random(40) . '.' . $ext;
+                        \Illuminate\Support\Facades\Storage::disk('public')->put($fileName, $decoded);
+                        $logoPath = $fileName;
+                    }
                 }
-            } catch (\Throwable $e) {
-                // Ignore base64 parse errors
             }
         }
 
-        // Create a new tenant for the user
-        $tenant = \App\Models\Tenant::create([
+        // Check if this email already completed a NexumPay subscription payment
+        $paidSub = null;
+        try {
+            $paidSub = \Illuminate\Support\Facades\Cache::get('nexumpay_paid_sub_' . strtolower(trim($request->email)));
+            if (!$paidSub) {
+                $paidTx = \App\Models\NexumPayTransaction::where('customer_email', $request->email)
+                    ->where('status', 'SUCCESSFUL')
+                    ->latest()
+                    ->first();
+                if ($paidTx) {
+                    $months = ($paidTx->billing_cycle === 'annual') ? 12 : 1;
+                    $paidSub = [
+                        'subscription_plan'       => $paidTx->plan_id,
+                        'subscription_status'     => 'active',
+                        'subscription_expires_at' => now()->addMonths($months),
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // Ignore if table/columns not migrated yet
+        }
+
+        $tenantAttributes = [
             'name'      => $request->business_name,
             'email'     => $request->email,
             'phone'     => $request->phone,
             'address'   => $request->address,
             'logo_path' => $logoPath,
-        ]);
+        ];
+
+        if ($paidSub) {
+            $tenantAttributes['subscription_plan']       = $paidSub['subscription_plan'];
+            $tenantAttributes['subscription_status']     = 'active';
+            $tenantAttributes['subscription_expires_at'] = $paidSub['subscription_expires_at'];
+        } elseif ($request->filled('subscription_plan')) {
+            $tenantAttributes['subscription_plan']       = $request->subscription_plan;
+            $tenantAttributes['subscription_status']     = $request->subscription_plan === 'trial' ? 'trial' : 'pending';
+            $tenantAttributes['subscription_expires_at'] = $request->subscription_plan === 'trial' ? now()->addDays(14) : null;
+        }
+
+        // Create a new tenant for the user
+        try {
+            $tenant = \App\Models\Tenant::create($tenantAttributes);
+        } catch (\Exception $e) {
+            // Fallback if subscription columns haven't been migrated yet
+            $tenant = \App\Models\Tenant::create([
+                'name'      => $request->business_name,
+                'email'     => $request->email,
+                'phone'     => $request->phone,
+                'address'   => $request->address,
+                'logo_path' => $logoPath,
+            ]);
+        }
 
         $user = User::create([
             'tenant_id' => $tenant->id,

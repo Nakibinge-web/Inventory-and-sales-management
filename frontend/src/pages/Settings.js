@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Button from '../components/ui/Button';
 import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
+import NexumPayCheckoutModal, { NEXUMPAY_PLANS, formatUgx } from '../components/marketing/NexumPayCheckoutModal';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -114,7 +115,10 @@ export default function Settings({
     signature_url: '',
     signature_path: '',
     enabled_modules: {},
-    receipt_color: 'rose'
+    receipt_color: 'rose',
+    subscription_plan: user?.tenant?.subscription_plan || 'trial',
+    subscription_status: user?.tenant?.subscription_status || 'trial',
+    subscription_expires_at: user?.tenant?.subscription_expires_at || null,
   });
 
   const [loading, setLoading] = useState(true);
@@ -123,7 +127,8 @@ export default function Settings({
   const [activeTab, setActiveTab] = useState(initialTab || 'branding'); // 'branding' | 'contacts' | 'invoicing' | 'modules'
   const [sigMode, setSigMode] = useState('upload'); // 'upload' | 'draw'
   const [togglingModules, setTogglingModules] = useState({});
-
+  const [checkoutPlan, setCheckoutPlan] = useState(null);
+  const [billingCycle, setBillingCycle] = useState('monthly');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -201,7 +206,10 @@ export default function Settings({
           payment_terms: result.data.payment_terms || '',
           invoice_notes: result.data.invoice_notes || '',
           enabled_modules: result.data.enabled_modules || user?.tenant?.enabled_modules || {},
-          receipt_color: result.data.receipt_color || 'rose'
+          receipt_color: result.data.receipt_color || 'rose',
+          subscription_plan: result.data.subscription_plan || user?.tenant?.subscription_plan || 'trial',
+          subscription_status: result.data.subscription_status || user?.tenant?.subscription_status || 'trial',
+          subscription_expires_at: result.data.subscription_expires_at || user?.tenant?.subscription_expires_at || null,
         };
         setBusinessInfo(data);
         setFormData({
@@ -573,7 +581,10 @@ export default function Settings({
           ...result.data,
           contacts: Array.isArray(result.data.contacts) ? result.data.contacts : [],
           enabled_modules: result.data.enabled_modules || businessInfo.enabled_modules,
-          receipt_color: result.data.receipt_color || formData.receipt_color || 'rose'
+          receipt_color: result.data.receipt_color || formData.receipt_color || 'rose',
+          subscription_plan: result.data.subscription_plan || businessInfo.subscription_plan || 'trial',
+          subscription_status: result.data.subscription_status || businessInfo.subscription_status || 'trial',
+          subscription_expires_at: result.data.subscription_expires_at || businessInfo.subscription_expires_at || null,
         };
         setBusinessInfo(data);
         setFormData({
@@ -658,6 +669,40 @@ export default function Settings({
     setIsEditing(false);
   };
 
+  const handleSubscriptionSuccess = (tx) => {
+    const newPlan = tx?.plan_id || checkoutPlan || 'starter';
+    const expiresAt = tx?.tenant_subscription?.subscription_expires_at || null;
+    setBusinessInfo((prev) => ({
+      ...prev,
+      subscription_plan: newPlan,
+      subscription_status: 'active',
+      subscription_expires_at: expiresAt,
+    }));
+    if (onBusinessInfoUpdate) {
+      onBusinessInfoUpdate((prevUser) => {
+        const updated = {
+          ...prevUser,
+          tenant: {
+            ...(prevUser?.tenant || {}),
+            subscription_plan: newPlan,
+            subscription_status: 'active',
+            subscription_expires_at: expiresAt,
+          },
+        };
+        try {
+          localStorage.setItem('user', JSON.stringify(updated));
+        } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent('subscription_updated', { detail: updated }));
+        } catch {}
+        return updated;
+      });
+    }
+    if (toast) {
+      toast.success('Subscription Active', `Your ${newPlan.toUpperCase()} subscription is now active via NexumPay!`);
+    }
+  };
+
   if (loading) {
     return (
       <div style={styles.container}>
@@ -672,6 +717,8 @@ export default function Settings({
   }
 
   const activeModulesCount = SYSTEM_MODULES.filter(m => isModuleActive(m.id)).length;
+  const activePlanKey = (businessInfo.subscription_plan || 'trial').toLowerCase();
+  const activeStatus = (businessInfo.subscription_status || 'trial').toUpperCase();
 
   return (
     <div style={styles.container}>
@@ -686,7 +733,7 @@ export default function Settings({
             )}
           </div>
           <p style={styles.subtitle}>
-            Manage your company identity, branding logo, digital signature, and active business modules.
+            Manage your company identity, branding logo, digital signature, active business modules, and subscription plan.
           </p>
         </div>
         {activeTab !== 'modules' && (
@@ -1854,6 +1901,157 @@ export default function Settings({
           </div>
         )
       )}
+
+      {/* Subscription & Billing Section (NexumPay) */}
+      <div style={{ ...styles.sectionCard, marginTop: '24px' }}>
+        <div style={{ ...styles.cardHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h2 style={styles.cardTitle}>💳 Subscription &amp; Billing (NexumPay)</h2>
+            <p style={styles.cardSubtitle}>
+              Upgrade or renew your StockPro subscription instantly with MTN Mobile Money or Airtel Money
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{
+              fontSize: '12px',
+              fontWeight: '700',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: activeStatus === 'ACTIVE' ? '#ecfdf5' : '#fef3c7',
+              color: activeStatus === 'ACTIVE' ? '#047857' : '#92400e',
+              border: activeStatus === 'ACTIVE' ? '1px solid #a7f3d0' : '1px solid #fde68a',
+            }}>
+              Current Tier: {activePlanKey.toUpperCase()} ({activeStatus})
+            </span>
+          </div>
+        </div>
+
+        <div style={{ padding: '24px' }}>
+          {/* Billing Cycle Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ fontSize: '13.5px', color: '#475569' }}>
+              Select a plan below to open the <strong>NexumPay Checkout</strong> window and authorize payment on your phone.
+            </div>
+            <div style={{ display: 'inline-flex', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setBillingCycle('monthly')}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '12.5px',
+                  fontWeight: '600',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: billingCycle === 'monthly' ? '#071629' : '#ffffff',
+                  color: billingCycle === 'monthly' ? '#ffffff' : '#475569',
+                }}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingCycle('annual')}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '12.5px',
+                  fontWeight: '600',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: billingCycle === 'annual' ? '#071629' : '#ffffff',
+                  color: billingCycle === 'annual' ? '#ffffff' : '#475569',
+                }}
+              >
+                Annual (Save 15%)
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+            {Object.values(NEXUMPAY_PLANS).map((plan) => {
+              const isCurrent = activePlanKey === plan.id && activeStatus === 'ACTIVE';
+              const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+
+              return (
+                <div
+                  key={plan.id}
+                  style={{
+                    border: plan.id === 'business' ? '2px solid #071629' : '1px solid #cbd5e1',
+                    borderRadius: '10px',
+                    padding: '22px',
+                    background: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#800020', letterSpacing: '0.06em' }}>
+                        {plan.badge}
+                      </span>
+                      {isCurrent && (
+                        <span style={{ fontSize: '11px', fontWeight: '700', background: '#ecfdf5', color: '#047857', padding: '2px 8px', borderRadius: '4px' }}>
+                          Active Plan
+                        </span>
+                      )}
+                    </div>
+                    <h3 style={{ fontSize: '19px', fontWeight: '800', color: '#071629', margin: '0 0 6px' }}>
+                      {plan.name}
+                    </h3>
+                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px', lineHeight: 1.45 }}>
+                      {plan.tagline}
+                    </p>
+                    <div style={{ padding: '12px 0', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', marginBottom: '16px' }}>
+                      <span style={{ fontSize: '24px', fontWeight: '800', color: '#071629', fontFamily: 'monospace' }}>
+                        {formatUgx(price)}
+                      </span>
+                      <span style={{ fontSize: '12.5px', color: '#64748b', marginLeft: '6px' }}>
+                        {billingCycle === 'annual' ? '/ year' : '/ month'}
+                      </span>
+                    </div>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {plan.features.slice(0, 5).map((feat, i) => (
+                        <li key={i} style={{ fontSize: '12.5px', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: '#059669', fontWeight: '800' }}>✓</span>
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutPlan(plan.id)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 16px',
+                      background: plan.id === 'business' ? '#800020' : '#071629',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '13.5px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {isCurrent ? `Renew ${plan.name} via NexumPay` : `Subscribe to ${plan.name}`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* NexumPay Checkout Modal */}
+      <NexumPayCheckoutModal
+        isOpen={Boolean(checkoutPlan)}
+        isModal={true}
+        initialPlanId={checkoutPlan || 'starter'}
+        initialBillingCycle={billingCycle}
+        onClose={() => setCheckoutPlan(null)}
+        onPaymentSuccess={handleSubscriptionSuccess}
+      />
     </div>
   );
 }
