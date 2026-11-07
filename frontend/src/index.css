@@ -1405,13 +1405,22 @@ textarea.field-input {
   #printable-receipt,
   #printable-receipt *,
   #printable-invoices-list,
-  #printable-invoices-list * {
+  #printable-invoices-list *,
+  #printable-quotation,
+  #printable-quotation *,
+  #printable-quotations-list,
+  #printable-quotations-list *,
+  #printable-report-preview,
+  #printable-report-preview * {
     visibility: visible !important;
   }
   
   #printable-invoice,
   #printable-receipt,
-  #printable-invoices-list {
+  #printable-invoices-list,
+  #printable-quotation,
+  #printable-quotations-list,
+  #printable-report-preview {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;

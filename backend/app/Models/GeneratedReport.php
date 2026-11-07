@@ -13,13 +13,25 @@ class GeneratedReport extends Model
     protected $fillable = [
         'tenant_id',
         'report_type',
+        'title',
+        'period_start',
+        'period_end',
+        'total_sales',
+        'total_profit',
+        'total_transactions',
+        'source',
         'generated_at',
         'data',
     ];
 
     protected $casts = [
-        'data' => 'array',
-        'generated_at' => 'datetime',
+        'data'               => 'array',
+        'generated_at'       => 'datetime',
+        'period_start'       => 'date',
+        'period_end'         => 'date',
+        'total_sales'        => 'float',
+        'total_profit'       => 'float',
+        'total_transactions' => 'integer',
     ];
 
     public function tenant()

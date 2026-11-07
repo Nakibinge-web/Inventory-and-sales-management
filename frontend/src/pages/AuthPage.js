@@ -390,7 +390,7 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
             </h1>
             <p className="auth-subtitle">
               {isLogin
-                ? 'Enter your email and password to access your workspace.'
+                ? 'Enter your email or username and password to access your workspace.'
                 : 'Create a business profile and your primary administrator account.'}
             </p>
           </div>

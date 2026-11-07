@@ -111,6 +111,24 @@ function CustomRolePermissionEditor({ permissions, selectedIds, onChange, roleNa
 }
 
 
+/* ── SVG Eye Icons for Password Visibility ── */
+const EyeIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit = false, canDelete = false, canViewRoles = false }) {
@@ -128,6 +146,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
   const [permissions, setPermissions] = useState({}); // grouped by category
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -173,12 +192,14 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    setShowPassword(false);
     setShowModal(true);
   };
 
   // Load full user details (including custom role permissions) before opening edit modal
   const openEdit = async (u) => {
     setFormError(null);
+    setShowPassword(false);
     setLoadingUserDetail(true);
     setShowModal(true);
     try {
@@ -195,7 +216,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
         ...EMPTY_FORM,
         name: fullUser.name,
         username: fullUser.username || '',
-        email: fullUser.email,
+        email: fullUser.email || '',
         is_active: fullUser.is_active !== undefined ? fullUser.is_active : true,
         role_ids: (fullUser.roles || []).map(r => r.id),
         editCustomRoleId: customRole ? customRole.id : null,
@@ -203,7 +224,7 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       });
     } catch {
       setEditTarget(u);
-      setForm({ ...EMPTY_FORM, name: u.name, username: u.username || '', email: u.email, is_active: u.is_active !== undefined ? u.is_active : true, role_ids: (u.roles || []).map(r => r.id) });
+      setForm({ ...EMPTY_FORM, name: u.name, username: u.username || '', email: u.email || '', is_active: u.is_active !== undefined ? u.is_active : true, role_ids: (u.roles || []).map(r => r.id) });
     } finally {
       setLoadingUserDetail(false);
     }
@@ -228,14 +249,31 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       setFormError('User name must be at least 2 characters');
       return;
     }
-    if (!form.email.trim()) {
-      setFormError('Email is required');
+
+    const cleanEmail = form.email.trim();
+    const cleanUsername = form.username.trim();
+
+    // Staff must have at least one identifier to log in (Username or Email)
+    if (!cleanEmail && !cleanUsername) {
+      setFormError('Please provide either a staff username or an email address for login.');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       setFormError('Please enter a valid email address');
       return;
     }
+
+    if (cleanUsername && cleanUsername.length < 3) {
+      setFormError('Username must be at least 3 characters');
+      return;
+    }
+
+    if (cleanUsername && !/^[a-zA-Z0-9_.-]+$/.test(cleanUsername)) {
+      setFormError('Username can only contain letters, numbers, dashes, underscores, and dots.');
+      return;
+    }
+
     if (!editTarget && !form.password) {
       setFormError('Password is required for new users');
       return;
@@ -256,7 +294,8 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
           method: 'POST', headers,
           body: JSON.stringify({
             name: form.name.trim(),
-            email: form.email.trim(),
+            username: cleanUsername || null,
+            email: cleanEmail || null,
             password: form.password,
             role_name: form.customRoleName.trim(),
             role_description: form.customRoleDesc.trim() || null,
@@ -303,8 +342,22 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
       }
 
       const body = isEdit
-        ? { name: form.name, username: form.username.trim() || null, email: form.email, is_active: form.is_active, role_ids: form.role_ids, ...(form.password ? { password: form.password } : {}) }
-        : { name: form.name, username: form.username.trim() || null, email: form.email, is_active: form.is_active, password: form.password, role_ids: form.role_ids };
+        ? {
+            name: form.name.trim(),
+            username: cleanUsername || null,
+            email: cleanEmail || null,
+            is_active: form.is_active,
+            role_ids: form.role_ids,
+            ...(form.password ? { password: form.password } : {})
+          }
+        : {
+            name: form.name.trim(),
+            username: cleanUsername || null,
+            email: cleanEmail || null,
+            is_active: form.is_active,
+            password: form.password,
+            role_ids: form.role_ids
+          };
 
       const res = await fetch(`${API_URL}/users${isEdit ? `/${editTarget.id}` : ''}`, {
         method: isEdit ? 'PUT' : 'POST',
@@ -454,7 +507,13 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
                       {u.username ? `@${u.username}` : <span style={{ color: '#cbd5e1' }}>—</span>}
                     </td>
                     {/* Email */}
-                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>{u.email}</td>
+                    <td style={{ padding: '14px 14px', color: '#475569', fontSize: 14 }}>
+                      {u.email ? u.email : (
+                        <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 12 }}>
+                          No email {u.username ? `(login via @${u.username})` : ''}
+                        </span>
+                      )}
+                    </td>
                     {/* Status */}
                     <td style={{ padding: '14px 14px' }}>
                       <span style={{
@@ -723,23 +782,35 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
             {/* Row 1: Name + Username */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Staff Full Name (Required)</label>
+                <label style={supS.label}>
+                  Staff Full Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input style={supS.input} placeholder="e.g., John Mukasa" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Username (Optional for login)</label>
+                <label style={supS.label}>
+                  Staff Username {form.email?.trim() ? <span style={{ fontSize: 11, fontWeight: 400, color: '#64748b' }}>(Optional)</span> : <span style={{ color: '#ef4444' }}>* (Required if no email)</span>}
+                </label>
                 <input style={supS.input} placeholder="e.g., jmukasa" value={form.username}
                   onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+                <span style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                  Staff can use this username to log in without an email.
+                </span>
               </div>
             </div>
 
             {/* Row 2: Email + Account Status */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label style={supS.label}>Staff Email Address (Required)</label>
-                <input style={supS.input} type="email" placeholder="staff@zziwa.com" value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+                <label style={supS.label}>
+                  Staff Email Address {form.username?.trim() ? <span style={{ fontSize: 11, fontWeight: 400, color: '#64748b' }}>(Optional)</span> : <span style={{ color: '#ef4444' }}>* (Required if no username)</span>}
+                </label>
+                <input style={supS.input} type="email" placeholder="staff@zziwa.com (leave blank if none)" value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                <span style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                  Optional if a staff username is provided above.
+                </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <label style={supS.label}>Account Access Status</label>
@@ -772,12 +843,77 @@ function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit 
               </div>
             </div>
 
-            {/* Password */}
+            {/* Password with Eye Icon Visibility Toggle */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={supS.label}>{editTarget ? 'New Password (Leave blank to keep current)' : 'Create Password (Required)'}</label>
-              <input style={supS.input} type="password" placeholder={editTarget ? '••••••••' : 'Minimum 8 characters with uppercase, lowercase & number'}
-                value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                required={!editTarget} minLength={editTarget ? 0 : 8} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ ...supS.label, marginBottom: 0 }}>
+                  {editTarget ? 'New Password (Leave blank to keep current)' : 'Assign Password (Required)'} {!editTarget && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '2px 6px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#4f46e5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    borderRadius: 4,
+                  }}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  <span>{showPassword ? 'Hide Password' : 'Show Password'}</span>
+                </button>
+              </div>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  style={{ ...supS.input, paddingRight: 44 }}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={editTarget ? '••••••••' : 'Minimum 8 characters with uppercase, lowercase & number'}
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  required={!editTarget}
+                  minLength={editTarget ? 0 : 8}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  style={{
+                    position: 'absolute',
+                    right: 10,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 6,
+                    borderRadius: 6,
+                    transition: 'color 0.15s ease',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              <span style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                {showPassword
+                  ? 'Password is visible so you can note it down or verify it for the staff member.'
+                  : 'Click the eye icon to verify or reveal the password.'}
+              </span>
             </div>
 
             {/* Role Mode Toggle — only shown when adding a new user (owners only can create custom roles) */}

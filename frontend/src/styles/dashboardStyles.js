@@ -205,8 +205,9 @@ const posS = {
     flexShrink: 0,
   },
   qtyInput: {
-    width: 40, textAlign: 'center', border: '1px solid #e2e8f0',
-    borderRadius: 6, padding: '4px 2px', fontSize: 13, outline: 'none',
+    width: 48, textAlign: 'center', border: '1px solid #cbd5e1',
+    borderRadius: 6, padding: '4px 2px', fontSize: 13, fontWeight: 600,
+    outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
   },
   removeBtn: {
     background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer',

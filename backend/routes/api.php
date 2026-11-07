@@ -15,6 +15,7 @@ use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\MomoPaymentController;
 use App\Http\Controllers\NexumPayController;
@@ -212,6 +213,17 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::delete('/{invoice}', [InvoiceController::class, 'destroy']);
     });
 
+    // Quotations (price estimates / quotes stored in DB)
+    Route::prefix('quotations')->group(function () {
+        Route::get('/',                     [QuotationController::class, 'index']);
+        Route::post('/',                    [QuotationController::class, 'store']);
+        Route::get('/{quotation}',          [QuotationController::class, 'show']);
+        Route::put('/{quotation}',          [QuotationController::class, 'update']);
+        Route::patch('/{quotation}/status', [QuotationController::class, 'updateStatus']);
+        Route::post('/{quotation}/convert', [QuotationController::class, 'convertToInvoice']);
+        Route::delete('/{quotation}',       [QuotationController::class, 'destroy']);
+    });
+
     // AI Assistant
     Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'chat']);
 
@@ -225,8 +237,18 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/{stockMovement}', [StockMovementController::class, 'show']);
     });
 
-    // Report Preferences
+    // Report Preferences & Automation
+    Route::post('report-preferences/check-due', [\App\Http\Controllers\ReportPreferenceController::class, 'checkDue']);
+    Route::post('report-preferences/{id}/run-now', [\App\Http\Controllers\ReportPreferenceController::class, 'runNow']);
+    Route::post('report-preferences/{id}/execute-due', [\App\Http\Controllers\ReportPreferenceController::class, 'executeDue']);
     Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
+
+    // Saved / Generated Reports Archive
+    Route::prefix('generated-reports')->group(function () {
+        Route::get('/',     [\App\Http\Controllers\GeneratedReportController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\GeneratedReportController::class, 'show']);
+        Route::delete('/{id}', [\App\Http\Controllers\GeneratedReportController::class, 'destroy']);
+    });
 
     // Business Settings
     Route::prefix('settings')->group(function () {

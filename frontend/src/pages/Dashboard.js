@@ -20,6 +20,7 @@ import AiTab from './Ai';
 import UsersTab from './Users';
 import StockMovementsTab from './StockMovements';
 import InvoicesTab from './Invoices';
+import QuotationsTab from './Quotations';
 import Settings from './Settings';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -33,6 +34,7 @@ const VALID_TABS = [
   'customers',
   'sales',
   'invoices',
+  'quotations',
   'purchases',
   'stock-movements',
   'reports',
@@ -477,6 +479,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS Terminal', icon: '🖥️' }] : []),
         ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales History', icon: '💰' }] : []),
         ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄' }] : []),
+        ...(hasPermission('sales.view') ? [{ id: 'quotations', label: 'Quotations', icon: '📋' }] : []),
         ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒' }] : []),
         ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄' }] : []),
         ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Analytics & Reports', icon: '📈' }] : []),
@@ -1159,6 +1162,19 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               user={user}
               token={token}
               toast={toast}
+            />
+          )}
+          {activeTab === 'quotations' && (
+            <QuotationsTab
+              customers={data.customers}
+              products={data.products}
+              user={user}
+              token={token}
+              toast={toast}
+              canCreate={hasPermission('sales.create') || isOwnerOrAdmin}
+              canEdit={hasPermission('sales.edit') || isOwnerOrAdmin}
+              canDelete={hasPermission('sales.delete') || isOwnerOrAdmin}
+              onNavigateToInvoices={() => setActiveTab('invoices')}
             />
           )}
           {activeTab === 'purchases' && (

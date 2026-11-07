@@ -18,6 +18,49 @@ const isPriceInvalid = (item) => {
   return false;
 };
 
+const isQtyInvalid = (item) => {
+  if (!item) return false;
+  if (item.isQtyInvalid) return true;
+  const q = item.quantity;
+  if (q === null || q === undefined || typeof q !== 'number' || isNaN(q) || !isFinite(q) || q < 1) return true;
+  if (item.maxStock !== undefined && item.maxStock !== null && q > item.maxStock) return true;
+  if (typeof item.qtyInput === 'string' && item.qtyInput.trim() === '') return true;
+  return false;
+};
+
+function CartQtyInput({ item, updateQty, onBlurQty }) {
+  const isOverStock = item.maxStock !== undefined && item.maxStock !== null && item.quantity > item.maxStock;
+  const isInvalid = item.isQtyInvalid || !item.qtyInput || parseInt(item.qtyInput, 10) < 1 || isOverStock;
+  const displayVal = item.qtyInput !== undefined ? item.qtyInput : (item.quantity ?? '');
+
+  return (
+    <input
+      style={{
+        ...posS.qtyInput,
+        color: isInvalid ? '#dc2626' : '#0f172a',
+        backgroundColor: isInvalid ? '#fef2f2' : '#ffffff',
+        border: isInvalid ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+        transition: 'border-color 0.15s, background-color 0.15s',
+      }}
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={displayVal}
+      onFocus={e => e.target.select()}
+      onChange={e => updateQty(item.product_id, e.target.value)}
+      onBlur={() => onBlurQty(item.product_id)}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.target.blur();
+        }
+      }}
+      placeholder="1"
+      title={isOverStock ? `Only ${item.maxStock} available in stock` : `In stock: ${item.maxStock}`}
+    />
+  );
+}
+
 function CartPriceInput({ item, updatePrice, resetPrice, onBlurPrice }) {
   const inputRef = useRef(null);
   const cursorPosRef = useRef(null);
@@ -206,11 +249,19 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const addToCart = (product) => {
     setCart(prev => {
       const existing = prev.find(i => i.product_id === product.id);
+      const stockLimit = Number(product.stock) || 0;
       if (existing) {
-        if (existing.quantity >= product.stock) return prev; // cap at available stock
+        if (existing.quantity >= stockLimit) return prev; // cap at available stock
+        const newQty = (parseInt(existing.quantity, 10) || 0) + 1;
         const effectivePrice = isPriceInvalid(existing) ? 0 : (existing.price ?? parseFloat(product.price) ?? 0);
         return prev.map(i => i.product_id === product.id
-          ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * effectivePrice }
+          ? {
+              ...i,
+              quantity: newQty,
+              qtyInput: String(newQty),
+              isQtyInvalid: false,
+              subtotal: newQty * effectivePrice,
+            }
           : i
         );
       }
@@ -223,8 +274,10 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         priceInput: formatCurrencyInput(initialPrice),
         isInvalid: false,
         quantity: 1,
+        qtyInput: '1',
+        isQtyInvalid: false,
         subtotal: initialPrice,
-        maxStock: product.stock,
+        maxStock: stockLimit,
       }];
     });
   };
@@ -242,7 +295,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         price: isInvalid ? null : numeric,
         priceInput: formatted,
         isInvalid,
-        subtotal: isInvalid ? 0 : i.quantity * numeric,
+        subtotal: isInvalid ? 0 : (i.quantity || 0) * numeric,
       };
     }));
   };
@@ -256,7 +309,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         price: def,
         priceInput: formatCurrencyInput(def),
         isInvalid: false,
-        subtotal: i.quantity * def,
+        subtotal: (i.quantity || 0) * def,
       };
     }));
   };
@@ -274,16 +327,58 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
     }));
   };
 
-  const updateQty = (product_id, qty) => {
-    const n = parseInt(qty, 10);
-    if (isNaN(n) || n < 1) return;
+  const updateQty = (product_id, rawVal) => {
     setCart(prev => prev.map(i => {
       if (i.product_id !== product_id) return i;
       const effectivePrice = isPriceInvalid(i) ? 0 : (i.price ?? 0);
+      const rawStr = String(rawVal ?? '').trim();
+      const clean = rawStr.replace(/[^\d]/g, '');
+
+      if (clean === '') {
+        return {
+          ...i,
+          quantity: 0,
+          qtyInput: '',
+          isQtyInvalid: true,
+          subtotal: 0,
+        };
+      }
+
+      const cleanDigits = clean.length > 1 ? String(parseInt(clean, 10)) : clean;
+      const n = parseInt(cleanDigits, 10);
+      const isOverStock = i.maxStock !== undefined && i.maxStock !== null && n > i.maxStock;
+      const isInvalid = isNaN(n) || n < 1 || isOverStock;
+
       return {
         ...i,
-        quantity: Math.min(n, i.maxStock),
-        subtotal: Math.min(n, i.maxStock) * effectivePrice,
+        quantity: isNaN(n) ? 0 : n,
+        qtyInput: cleanDigits,
+        isQtyInvalid: isInvalid,
+        subtotal: isInvalid ? 0 : n * effectivePrice,
+      };
+    }));
+  };
+
+  const handleQtyBlur = (product_id) => {
+    setCart(prev => prev.map(i => {
+      if (i.product_id !== product_id) return i;
+      const effectivePrice = isPriceInvalid(i) ? 0 : (i.price ?? 0);
+      let n = parseInt(i.qtyInput, 10);
+
+      if (isNaN(n) || n < 1) {
+        n = 1;
+      }
+
+      if (i.maxStock !== undefined && i.maxStock !== null && n > i.maxStock) {
+        n = i.maxStock;
+      }
+
+      return {
+        ...i,
+        quantity: n,
+        qtyInput: String(n),
+        isQtyInvalid: false,
+        subtotal: n * effectivePrice,
       };
     }));
   };
@@ -291,7 +386,8 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
   const removeFromCart = (product_id) => setCart(prev => prev.filter(i => i.product_id !== product_id));
 
   const hasInvalidPrice = cart.some(isPriceInvalid);
-  const cartSubtotal = cart.reduce((sum, i) => sum + (isPriceInvalid(i) ? 0 : i.subtotal), 0);
+  const hasInvalidQty = cart.some(isQtyInvalid);
+  const cartSubtotal = cart.reduce((sum, i) => sum + ((isPriceInvalid(i) || isQtyInvalid(i)) ? 0 : i.subtotal), 0);
   const discountAmount = (() => {
     const v = parseCurrency(discountValue);
     return Math.min(v, cartSubtotal);
@@ -304,9 +400,20 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    const invalidItem = cart.find(isPriceInvalid);
-    if (invalidItem) {
-      setSaleError(`Please enter a valid price for "${invalidItem.name}" before completing the sale.`);
+    const invalidPriceItem = cart.find(isPriceInvalid);
+    if (invalidPriceItem) {
+      setSaleError(`Please enter a valid price for "${invalidPriceItem.name}" before completing the sale.`);
+      return;
+    }
+    const invalidQtyItem = cart.find(isQtyInvalid);
+    if (invalidQtyItem) {
+      if (!invalidQtyItem.quantity || invalidQtyItem.quantity < 1) {
+        setSaleError(`Please enter a valid quantity for "${invalidQtyItem.name}".`);
+      } else if (invalidQtyItem.maxStock && invalidQtyItem.quantity > invalidQtyItem.maxStock) {
+        setSaleError(`Quantity for "${invalidQtyItem.name}" exceeds available stock (${invalidQtyItem.maxStock}).`);
+      } else {
+        setSaleError(`Please check the quantity for "${invalidQtyItem.name}".`);
+      }
       return;
     }
     setSubmitting(true);
@@ -373,7 +480,7 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Items in cart</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>{cart.reduce((s, i) => s + i.quantity, 0)}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>{cart.reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0)}</div>
         </div>
       </div>
 
@@ -590,19 +697,69 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
                         resetPrice={resetPrice}
                         onBlurPrice={handlePriceBlur}
                       />
+                      {item.maxStock !== undefined && item.maxStock !== null && item.quantity > item.maxStock && (
+                        <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, fontWeight: 500 }}>
+                          Only {item.maxStock} available in stock
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity - 1)}>−</button>
-                      <input style={posS.qtyInput} type="number" min={1} max={item.maxStock}
-                        value={item.quantity} onChange={e => updateQty(item.product_id, e.target.value)} />
-                      <button style={posS.qtyBtn} onClick={() => updateQty(item.product_id, item.quantity + 1)}>+</button>
-                      <button style={posS.removeBtn} onClick={() => removeFromCart(item.product_id)}>✕</button>
+                      <button
+                        type="button"
+                        style={{
+                          ...posS.qtyBtn,
+                          opacity: (item.quantity <= 1) ? 0.4 : 1,
+                          cursor: (item.quantity <= 1) ? 'not-allowed' : 'pointer',
+                        }}
+                        disabled={item.quantity <= 1}
+                        onClick={() => {
+                          const current = parseInt(item.quantity, 10) || 1;
+                          if (current > 1) {
+                            updateQty(item.product_id, current - 1);
+                          }
+                        }}
+                        title="Decrease quantity"
+                      >
+                        −
+                      </button>
+                      <CartQtyInput
+                        item={item}
+                        updateQty={updateQty}
+                        onBlurQty={handleQtyBlur}
+                      />
+                      <button
+                        type="button"
+                        style={{
+                          ...posS.qtyBtn,
+                          opacity: (item.maxStock !== undefined && item.quantity >= item.maxStock) ? 0.4 : 1,
+                          cursor: (item.maxStock !== undefined && item.quantity >= item.maxStock) ? 'not-allowed' : 'pointer',
+                        }}
+                        disabled={item.maxStock !== undefined && item.quantity >= item.maxStock}
+                        onClick={() => {
+                          const current = parseInt(item.quantity, 10) || 0;
+                          const max = item.maxStock ?? 999999;
+                          if (current < max) {
+                            updateQty(item.product_id, current + 1);
+                          }
+                        }}
+                        title={item.maxStock !== undefined && item.quantity >= item.maxStock ? `Maximum stock reached (${item.maxStock})` : 'Increase quantity'}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        style={posS.removeBtn}
+                        onClick={() => removeFromCart(item.product_id)}
+                        title="Remove from cart"
+                      >
+                        ✕
+                      </button>
                     </div>
                     <div style={{
                       ...posS.cartItemSubtotal,
-                      color: isPriceInvalid(item) ? '#ef4444' : '#0f172a',
+                      color: (isPriceInvalid(item) || isQtyInvalid(item)) ? '#ef4444' : '#0f172a',
                     }}>
-                      {isPriceInvalid(item) ? 'UGX —' : `UGX ${item.subtotal.toLocaleString()}`}
+                      {(isPriceInvalid(item) || isQtyInvalid(item)) ? 'UGX —' : `UGX ${Number(item.subtotal || 0).toLocaleString()}`}
                     </div>
                   </div>
                 ))}
@@ -743,18 +900,26 @@ function POSTab({ products, categories, customers, token, user, onSaleCompleted,
 
               <button
                 onClick={handleCheckout}
-                disabled={cart.length === 0 || submitting || !canSell || hasInvalidPrice}
+                disabled={cart.length === 0 || submitting || !canSell || hasInvalidPrice || hasInvalidQty}
                 style={{
                   width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-                  background: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#e2e8f0' : '#be123c',
-                  color: (cart.length === 0 || !canSell || hasInvalidPrice) ? '#94a3b8' : '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell || hasInvalidPrice) ? 'not-allowed' : 'pointer',
+                  background: (cart.length === 0 || !canSell || hasInvalidPrice || hasInvalidQty) ? '#e2e8f0' : '#be123c',
+                  color: (cart.length === 0 || !canSell || hasInvalidPrice || hasInvalidQty) ? '#94a3b8' : '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: (cart.length === 0 || !canSell || hasInvalidPrice || hasInvalidQty) ? 'not-allowed' : 'pointer',
                   transition: 'background 0.15s', letterSpacing: '0.02em',
                 }}
-                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#881337'; }}
-                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice) e.currentTarget.style.background = '#be123c'; }}
+                onMouseEnter={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice && !hasInvalidQty) e.currentTarget.style.background = '#881337'; }}
+                onMouseLeave={e => { if (cart.length > 0 && !submitting && canSell && !hasInvalidPrice && !hasInvalidQty) e.currentTarget.style.background = '#be123c'; }}
               >
-                {!canSell ? 'No permission to sell' : hasInvalidPrice ? 'Fix invalid item price' : submitting ? 'Processing…' : 'Complete Sale'}
+                {!canSell
+                  ? 'No permission to sell'
+                  : hasInvalidPrice
+                  ? 'Fix invalid item price'
+                  : hasInvalidQty
+                  ? 'Fix invalid quantity'
+                  : submitting
+                  ? 'Processing…'
+                  : 'Complete Sale'}
               </button>
             </div>
           </div>

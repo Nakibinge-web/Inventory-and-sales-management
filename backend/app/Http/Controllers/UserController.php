@@ -71,12 +71,16 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
-            'username'   => 'nullable|string|max:255|unique:users,username',
-            'email'      => 'required|email|max:255|unique:users,email',
+            'username'   => 'required_without:email|nullable|string|min:3|max:30|alpha_dash|unique:users,username',
+            'email'      => 'required_without:username|nullable|email|max:255|unique:users,email',
             'role_ids'   => 'required|array|min:1',
             'role_ids.*' => 'exists:roles,id',
             'password'   => ['required', Password::min(8)->mixedCase()->numbers()],
             'is_active'  => 'nullable|boolean',
+        ], [
+            'username.required_without' => 'A username is required when no email address is provided.',
+            'email.required_without'    => 'An email address is required when no username is provided.',
+            'username.alpha_dash'       => 'Username may only contain letters, numbers, dashes, and underscores.',
         ]);
 
         // Ensure all assigned roles are visible to this tenant
@@ -109,8 +113,8 @@ class UserController extends Controller
         $user = User::create([
             'tenant_id'  => $tenantId,
             'name'       => $validated['name'],
-            'username'   => !empty($validated['username']) ? $validated['username'] : null,
-            'email'      => $validated['email'],
+            'username'   => !empty($validated['username']) ? strtolower(trim($validated['username'])) : null,
+            'email'      => !empty($validated['email']) ? strtolower(trim($validated['email'])) : null,
             'password'   => Hash::make($validated['password']),
             'is_active'  => $validated['is_active'] ?? true,
             'created_by' => $actor->id,
@@ -122,10 +126,12 @@ class UserController extends Controller
             'success' => true,
             'message' => 'User created successfully.',
             'data'    => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-                'roles' => $user->roles()->get(['roles.id', 'name']),
+                'id'        => $user->id,
+                'name'      => $user->name,
+                'username'  => $user->username,
+                'email'     => $user->email,
+                'is_active' => $user->is_active,
+                'roles'     => $user->roles()->get(['roles.id', 'name']),
             ],
         ], 201);
     }
@@ -145,12 +151,17 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name'              => 'required|string|max:255',
-            'email'             => 'required|email|max:255|unique:users,email',
+            'username'          => 'required_without:email|nullable|string|min:3|max:30|alpha_dash|unique:users,username',
+            'email'             => 'required_without:username|nullable|email|max:255|unique:users,email',
             'password'          => ['required', Password::min(8)->mixedCase()->numbers()],
             'role_name'         => 'required|string|max:255',
             'role_description'  => 'nullable|string|max:500',
             'permission_ids'    => 'required|array|min:1',
             'permission_ids.*'  => 'exists:permissions,id',
+        ], [
+            'username.required_without' => 'A username is required when no email address is provided.',
+            'email.required_without'    => 'An email address is required when no username is provided.',
+            'username.alpha_dash'       => 'Username may only contain letters, numbers, dashes, and underscores.',
         ]);
 
         // Prevent name clash with default or existing tenant roles
@@ -185,10 +196,12 @@ class UserController extends Controller
 
             // 3. Create the user
             $user = User::create([
-                'tenant_id' => $tenantId,
-                'name'      => $validated['name'],
-                'email'     => $validated['email'],
-                'password'  => Hash::make($validated['password']),
+                'tenant_id'  => $tenantId,
+                'name'       => $validated['name'],
+                'username'   => !empty($validated['username']) ? strtolower(trim($validated['username'])) : null,
+                'email'      => !empty($validated['email']) ? strtolower(trim($validated['email'])) : null,
+                'password'   => Hash::make($validated['password']),
+                'created_by' => Auth::id(),
             ]);
 
             // 4. Attach the new role to the user
@@ -200,11 +213,13 @@ class UserController extends Controller
                 'success' => true,
                 'message' => 'User created successfully with custom role.',
                 'data'    => [
-                    'id'         => $user->id,
-                    'name'       => $user->name,
-                    'email'      => $user->email,
-                    'created_at' => $user->created_at,
-                    'roles'      => $user->roles()->get(['roles.id', 'name']),
+                    'id'          => $user->id,
+                    'name'        => $user->name,
+                    'username'    => $user->username,
+                    'email'       => $user->email,
+                    'is_active'   => $user->is_active,
+                    'created_at'  => $user->created_at,
+                    'roles'       => $user->roles()->get(['roles.id', 'name']),
                     'custom_role' => $role,
                 ],
             ], 201);
@@ -324,13 +339,36 @@ class UserController extends Controller
 
         $validated = $request->validate([
             'name'      => 'sometimes|required|string|max:255',
-            'username'  => 'sometimes|nullable|string|max:255|unique:users,username,' . $user->id,
-            'email'     => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
+            'username'  => 'sometimes|nullable|string|min:3|max:30|alpha_dash|unique:users,username,' . $user->id,
+            'email'     => 'sometimes|nullable|email|max:255|unique:users,email,' . $user->id,
             'password'  => ['sometimes', 'nullable', Password::min(8)->mixedCase()->numbers()],
             'is_active' => 'sometimes|boolean',
             'role_ids'  => 'sometimes|array|min:1',
             'role_ids.*' => 'exists:roles,id',
+        ], [
+            'username.alpha_dash' => 'Username may only contain letters, numbers, dashes, and underscores.',
         ]);
+
+        $finalEmail = array_key_exists('email', $validated)
+            ? (!empty($validated['email']) ? strtolower(trim($validated['email'])) : null)
+            : $user->email;
+        $finalUsername = array_key_exists('username', $validated)
+            ? (!empty($validated['username']) ? strtolower(trim($validated['username'])) : null)
+            : $user->username;
+
+        if (empty($finalEmail) && empty($finalUsername)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The user must have at least an email address or a username to log in.',
+            ], 422);
+        }
+
+        if (array_key_exists('email', $validated)) {
+            $validated['email'] = $finalEmail;
+        }
+        if (array_key_exists('username', $validated)) {
+            $validated['username'] = $finalUsername;
+        }
 
         if (!empty($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
@@ -367,10 +405,12 @@ class UserController extends Controller
             'success' => true,
             'message' => 'User updated successfully.',
             'data'    => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-                'roles' => $user->roles()->get(['roles.id', 'name']),
+                'id'        => $user->id,
+                'name'      => $user->name,
+                'username'  => $user->username,
+                'email'     => $user->email,
+                'is_active' => $user->is_active,
+                'roles'     => $user->roles()->get(['roles.id', 'name']),
             ],
         ]);
     }

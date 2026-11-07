@@ -59,12 +59,10 @@ class AuthController extends Controller
         // Normalize to lowercase for comparison
         $loginNormalized = strtolower(trim($loginValue));
 
-        // Branch on whether the input looks like an email address
-        if (str_contains($loginNormalized, '@')) {
-            $user = User::where('email', $loginNormalized)->first();
-        } else {
-            $user = User::where('username', $loginNormalized)->first();
-        }
+        // Look up by email or username so staff can log in with either identifier
+        $user = User::where('email', $loginNormalized)
+                    ->orWhere('username', $loginNormalized)
+                    ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             RateLimiter::hit($key, 60);
