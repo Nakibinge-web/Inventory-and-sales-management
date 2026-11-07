@@ -32,7 +32,7 @@ class SaleController extends Controller
             return response()->json(['success' => false, 'message' => 'You do not have permission to view sales.'], 403);
         }
 
-        $query = Sale::with(['user', 'customer', 'saleItems.product', 'tenant'])
+        $query = Sale::with(['user', 'customer', 'saleItems.product.category', 'tenant'])
                      ->orderBy('sale_date', 'desc');
 
         // Non-privileged users (cashiers and custom-role users with sales.view)

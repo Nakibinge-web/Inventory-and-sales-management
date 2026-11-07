@@ -14,6 +14,7 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
   const businessEmail   = tenant.email   || user?.email || '';
   const businessAddress = tenant.address || 'Shop 311, Level 3, Kooki Tower Opp. City Square';
   const logoUrl         = tenant.logo_url || '';
+  const invoiceSignature = invoice.signature_url || invoice.tenant?.signature_url || tenant.signature_url;
 
   const items    = invoice.items || invoice.sale_items || invoice.saleItems || [];
   const subtotal = invoice.subtotal != null
@@ -274,6 +275,27 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
                 {balance.toLocaleString('en-UG', { minimumFractionDigits: 0 })} USh
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* ── AUTHORIZED SIGNATORY FOOTER ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 28, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: 11, color: '#64748b' }}>
+            <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>{businessName}</div>
+            <div>Computer generated document. Official and valid without physical seal.</div>
+          </div>
+          <div style={{ textAlign: 'right', minWidth: 180 }}>
+            {invoiceSignature && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+                <img
+                  src={invoiceSignature}
+                  alt="Authorized Signature"
+                  style={{ maxHeight: 52, maxWidth: 160, objectFit: 'contain', display: 'block' }}
+                />
+              </div>
+            )}
+            <div style={{ borderBottom: '1px solid #94a3b8', width: 160, marginLeft: 'auto', marginBottom: 4 }}></div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#475569', fontWeight: 600 }}>Authorized Signatory</div>
           </div>
         </div>
 

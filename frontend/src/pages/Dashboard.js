@@ -53,6 +53,7 @@ function getTabFromPath() {
 
 export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTabState] = useState(getTabFromPath);
+  const [settingsInitialTab, setSettingsInitialTab] = useState('branding');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
 
@@ -295,7 +296,27 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     setSearchOpen(false);
   };
 
-  const isOwnerOrAdmin = user.roles && user.roles.some(r => ['owner', 'admin'].includes(r.name));
+  const isOwner = Boolean(
+    (user.roles && user.roles.some(r => r.name === 'owner')) ||
+    user.role === 'owner' ||
+    user.is_owner
+  );
+  const isOwnerOrAdmin = isOwner || Boolean(user.roles && user.roles.some(r => ['admin'].includes(r.name)));
+
+  // Tenant enabled modules check
+  const enabledModules = user?.tenant?.enabled_modules || {};
+  const isModuleEnabled = (modId) => {
+    if (modId === 'overview' || modId === 'settings' || modId === 'users' || modId === 'modules') return true;
+    return enabledModules[modId] !== false; // default to true if unconfigured
+  };
+
+  // Redirect to overview if current tab is toggled off
+  useEffect(() => {
+    if (!isModuleEnabled(activeTab)) {
+      setActiveTab('overview');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user?.tenant?.enabled_modules]);
 
   // Returns true if the user has a given permission (via any role) OR is owner/admin
   const hasPermission = (perm) => {
@@ -310,33 +331,34 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
       title: 'Operations',
       items: [
         { id: 'overview', label: 'Overview', icon: '📊' },
-        ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS Terminal', icon: '🖥️' }] : []),
-        ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales History', icon: '💰' }] : []),
-        ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄' }] : []),
-        ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒' }] : []),
-        ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄' }] : []),
-        ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Analytics & Reports', icon: '📈' }] : []),
+        ...(isModuleEnabled('pos') && hasPermission('sales.create') ? [{ id: 'pos', label: 'POS Terminal', icon: '🖥️' }] : []),
+        ...(isModuleEnabled('sales') && hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales History', icon: '💰' }] : []),
+        ...(isModuleEnabled('invoices') && hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄' }] : []),
+        ...(isModuleEnabled('purchases') && hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒' }] : []),
+        ...(isModuleEnabled('stock-movements') && hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄' }] : []),
+        ...(isModuleEnabled('reports') && (hasPermission('sales.report') || hasPermission('purchases.report')) ? [{ id: 'reports', label: 'Analytics & Reports', icon: '📈' }] : []),
       ]
     },
     {
       title: 'Catalog & Inventory',
       items: [
-        ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products & Stock', icon: '📦' }] : []),
-        ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️' }] : []),
-        ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭' }] : []),
+        ...(isModuleEnabled('products') && hasPermission('products.view') ? [{ id: 'products', label: 'Products & Stock', icon: '📦' }] : []),
+        ...(isModuleEnabled('categories') && hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️' }] : []),
+        ...(isModuleEnabled('suppliers') && hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭' }] : []),
       ]
     },
     {
       title: 'CRM & Relations',
       items: [
-        ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers (CRM)', icon: '👥' }] : []),
+        ...(isModuleEnabled('customers') && hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers (CRM)', icon: '👥' }] : []),
       ]
     },
     {
       title: 'System & Intelligence',
       items: [
-        { id: 'ai', label: 'AI Assistant', icon: '🤖' },
+        ...(isModuleEnabled('ai') ? [{ id: 'ai', label: 'AI Assistant', icon: '🤖' }] : []),
         ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'User Control', icon: '🔑' }] : []),
+        ...(isOwner ? [{ id: 'modules', label: 'Modules', icon: '🧩' }] : []),
         { id: 'settings', label: 'System Settings', icon: '⚙️' }
       ]
     }
@@ -780,32 +802,50 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                     }}>
                       {group.title}
                     </p>
-                    {validItems.map(item => (
-                      <button
-                        key={item.id}
-                        style={{
-                          ...styles.menuItem,
-                          ...(activeTab === item.id ? styles.menuItemActive : {})
-                        }}
-                        onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
-                        onMouseEnter={e => {
-                          if (activeTab !== item.id) {
-                            e.currentTarget.style.background = '#f8fafc';
-                            e.currentTarget.style.color = '#0f172a';
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (activeTab !== item.id) {
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.color = '#475569';
-                          }
-                        }}
-                      >
-                        <span style={styles.menuIcon}>{item.icon}</span>
-                        <span style={styles.menuLabel}>{item.label}</span>
-                        {activeTab === item.id && <div style={styles.activeIndicator} />}
-                      </button>
-                    ))}
+                    {validItems.map(item => {
+                      const isItemActive = item.id === 'modules'
+                        ? (activeTab === 'settings' && settingsInitialTab === 'modules')
+                        : item.id === 'settings'
+                          ? (activeTab === 'settings' && settingsInitialTab !== 'modules')
+                          : activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          style={{
+                            ...styles.menuItem,
+                            ...(isItemActive ? styles.menuItemActive : {})
+                          }}
+                          onClick={() => {
+                            if (item.id === 'modules') {
+                              setSettingsInitialTab('modules');
+                              setActiveTab('settings');
+                            } else if (item.id === 'settings') {
+                              setSettingsInitialTab('branding');
+                              setActiveTab('settings');
+                            } else {
+                              setActiveTab(item.id);
+                            }
+                            setMobileNavOpen(false);
+                          }}
+                          onMouseEnter={e => {
+                            if (!isItemActive) {
+                              e.currentTarget.style.background = '#f8fafc';
+                              e.currentTarget.style.color = '#0f172a';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (!isItemActive) {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = '#475569';
+                            }
+                          }}
+                        >
+                          <span style={styles.menuIcon}>{item.icon}</span>
+                          <span style={styles.menuLabel}>{item.label}</span>
+                          {isItemActive && <div style={styles.activeIndicator} />}
+                        </button>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -1050,7 +1090,15 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
           )}
           {activeTab === 'settings' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
-            <Settings user={user} token={token} toast={toast} onBusinessInfoUpdate={onUserUpdate} />
+            <Settings
+              user={user}
+              token={token}
+              toast={toast}
+              onBusinessInfoUpdate={onUserUpdate}
+              initialTab={settingsInitialTab}
+              onTabChange={setSettingsInitialTab}
+              isOwner={isOwner}
+            />
           )}
                   </ErrorBoundary>
         </main>
@@ -1089,7 +1137,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
             <span>📊</span>
             <span>Home</span>
           </button>
-          {hasPermission('sales.create') && (
+          {isModuleEnabled('pos') && hasPermission('sales.create') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'pos' ? ' active' : ''}`}
               onClick={() => setActiveTab('pos')}
@@ -1099,7 +1147,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <span>POS</span>
             </button>
           )}
-          {hasPermission('products.view') && (
+          {isModuleEnabled('products') && hasPermission('products.view') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'products' ? ' active' : ''}`}
               onClick={() => setActiveTab('products')}
@@ -1109,7 +1157,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <span>Products</span>
             </button>
           )}
-          {hasPermission('sales.view') && (
+          {isModuleEnabled('sales') && hasPermission('sales.view') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'sales' ? ' active' : ''}`}
               onClick={() => setActiveTab('sales')}

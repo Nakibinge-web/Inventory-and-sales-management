@@ -130,7 +130,7 @@ class AuthController extends Controller
             'name'          => 'required|string|max:255',
             'email'         => 'required|string|email|max:255|unique:users',
             'username'      => 'required|string|min:3|max:30|regex:/^[a-zA-Z0-9_]+$/|unique:users',
-            'password'      => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()->uncompromised()],
+            'password'      => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
             'business_name' => 'required|string|max:255',
             'phone'         => 'nullable|string|max:20',
             'address'       => 'nullable|string',

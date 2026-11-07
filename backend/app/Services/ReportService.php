@@ -42,7 +42,7 @@ class ReportService
     public function getDailySalesReport(string $date): array
     {
         $sales = Sale::whereDate('sale_date', $date)
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->get();
 
         ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
@@ -65,7 +65,7 @@ class ReportService
         $weekEnd   = $dateObj->copy()->endOfWeek(Carbon::SUNDAY);
 
         $sales = Sale::whereBetween('sale_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->orderBy('sale_date')
                      ->get();
 
@@ -105,7 +105,7 @@ class ReportService
 
         $sales = Sale::whereYear('sale_date', $year)
                      ->whereMonth('sale_date', $monthNum)
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->orderBy('sale_date')
                      ->get();
 
@@ -151,7 +151,7 @@ class ReportService
     public function getYearlySalesReport(int $year): array
     {
         $sales = Sale::whereYear('sale_date', $year)
-                     ->with(['user', 'customer', 'saleItems.product'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
                      ->orderBy('sale_date')
                      ->get();
 
