@@ -1,23 +1,38 @@
 {
-  "short_name": "InventoryPro",
-  "name": "Inventory & Sales Management System",
-  "description": "Enterprise Inventory, POS, Purchases and Customer Management Solution",
-  "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "zziwa logo.png",
-      "type": "image/png",
-      "sizes": "192x192 512x512",
-      "purpose": "any maskable"
-    }
-  ],
-  "start_url": "/overview",
+  "short_name": "StockPro",
+  "name": "StockPro Inventory & Sales Management",
+  "description": "Enterprise Inventory, POS, Purchases, and Customer Management Solution",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "theme_color": "#0f172a",
-  "background_color": "#0f172a"
+  "background_color": "#0f172a",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/zziwa logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
 }

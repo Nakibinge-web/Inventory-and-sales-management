@@ -15,6 +15,7 @@ class Tenant extends Model
         'phone',
         'contacts',
         'address',
+        'receipt_color',
         'logo_path',
         'signature_path',
         'tagline',

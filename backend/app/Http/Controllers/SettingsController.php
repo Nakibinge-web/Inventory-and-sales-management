@@ -34,6 +34,7 @@ class SettingsController extends Controller
                 'phone' => $tenant->phone,
                 'contacts' => $tenant->contacts ?? [],
                 'address' => $tenant->address,
+                'receipt_color' => $tenant->receipt_color ?? 'rose',
                 'logo_path' => $tenant->logo_path,
                 'logo_url' => $tenant->logo_url,
                 'signature_path' => $tenant->signature_path,
@@ -89,6 +90,7 @@ class SettingsController extends Controller
             'payment_terms' => 'nullable|string|max:255',
             'invoice_notes' => 'nullable|string',
             'enabled_modules' => 'nullable|array',
+            'receipt_color' => 'nullable|string|max:30',
             'logo' => 'nullable',
             'signature' => 'nullable',
             'remove_logo' => 'nullable|boolean',
@@ -107,7 +109,7 @@ class SettingsController extends Controller
             'name', 'email', 'phone', 'address', 'tagline', 'tin', 'website',
             'bank_name', 'account_name', 'account_number',
             'mobile_money_number', 'mobile_money_name',
-            'payment_terms', 'invoice_notes', 'enabled_modules'
+            'payment_terms', 'invoice_notes', 'enabled_modules', 'receipt_color'
         ];
 
         $updateData = [];
@@ -192,6 +194,7 @@ class SettingsController extends Controller
                 'phone' => $tenant->phone,
                 'contacts' => $tenant->contacts ?? [],
                 'address' => $tenant->address,
+                'receipt_color' => $tenant->receipt_color ?? 'rose',
                 'logo_path' => $tenant->logo_path,
                 'logo_url' => $tenant->logo_url,
                 'signature_path' => $tenant->signature_path,

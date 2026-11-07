@@ -5,6 +5,7 @@ import Modal from '../components/ui/Modal';
 import AddProductForm from '../components/AddProductForm';
 import { ToastContainer, useToast } from '../components/ui/Toast';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
+import InstallPWA from '../components/InstallPWA';
 
 // Independent Page Modules
 import OverviewTab from './Overview';
@@ -532,6 +533,9 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         </div>
 
         <div style={styles.headerRight}>
+          <div className="resp-hide">
+            <InstallPWA variant="nav-item" />
+          </div>
           <div 
             className="resp-hide"
             style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
@@ -850,6 +854,9 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                 );
               })}
             </div>
+            <div style={{ marginTop: 16 }}>
+              <InstallPWA variant="sidebar-banner" />
+            </div>
           </div> 
         </nav>
 
@@ -1079,7 +1086,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               }}
             />
           )}
-          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} user={user} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (

@@ -82,12 +82,12 @@ class AuthController extends Controller
         }
 
         // Credentials matched — check account status before creating a session
-        if (!$user->is_active) {
+        if (isset($user->is_active) && !$user->is_active) {
             RateLimiter::hit($key, 60);
             if ($isApi) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Your account has been disabled. Please contact your administrator.',
+                    'message' => 'Your account has been disabled. Please contact your system administrator.',
                 ], 403);
             }
             return back()->withErrors(['login' => 'Your account has been disabled.']);
