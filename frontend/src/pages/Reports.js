@@ -1,5 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Button from '../components/ui/Button';
+import {
+  RevenueProfitBarChart,
+  RevenueProfitLineChart,
+  CostAccuracyBadge,
+  formatUGX,
+} from '../components/ui/AnalyticsCharts';
 import styles, { supS } from '../styles/dashboardStyles';
 
 function ReportExportBar({ title, onExportPdf, onExportWord, isPdfLoading, isWordLoading, extraActions }) {
@@ -134,6 +140,108 @@ function ReportsTab({ data, loading, token, user }) {
   const [savedLoading, setSavedLoading] = useState(false);
   const [savedError, setSavedError] = useState(null);
 
+  // ── Revenue & Gross Profit Analytics State (Overview Tab) ─────────────────
+  const formatLocalYMD = (d) => {
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${da}`;
+  };
+
+  const computePresetRange = useCallback((preset) => {
+    const now = new Date();
+    const todayStr = formatLocalYMD(now);
+    if (preset === 'last_7_days') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 6);
+      return { start: formatLocalYMD(start), end: todayStr };
+    }
+    if (preset === 'last_30_days') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 29);
+      return { start: formatLocalYMD(start), end: todayStr };
+    }
+    if (preset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: formatLocalYMD(start), end: todayStr };
+    }
+    if (preset === 'this_year') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      const end = new Date(now.getFullYear(), 11, 31);
+      return { start: formatLocalYMD(start), end: formatLocalYMD(end) };
+    }
+    return { start: todayStr, end: todayStr };
+  }, []);
+
+  const initialRange = useMemo(() => computePresetRange('last_30_days'), [computePresetRange]);
+  const [analyticsPreset, setAnalyticsPreset] = useState('last_30_days');
+  const [analyticsGroupBy, setAnalyticsGroupBy] = useState('daily');
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(initialRange.start);
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(initialRange.end);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
+
+  const handleSelectAnalyticsPreset = (preset) => {
+    setAnalyticsPreset(preset);
+    if (preset !== 'custom') {
+      const { start, end } = computePresetRange(preset);
+      setAnalyticsStartDate(start);
+      setAnalyticsEndDate(end);
+      if (preset === 'this_year') {
+        setAnalyticsGroupBy('monthly');
+      } else if (preset === 'last_7_days') {
+        setAnalyticsGroupBy('daily');
+      }
+    }
+  };
+
+  const fetchRevenueProfitAnalytics = useCallback(async () => {
+    if (!token) return;
+    if (analyticsStartDate && analyticsEndDate && analyticsStartDate > analyticsEndDate) {
+      setAnalyticsError('Start date cannot be after end date.');
+      setAnalyticsData(null);
+      setAnalyticsLoading(false);
+      return;
+    }
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    setAnalyticsData(null);
+    try {
+      const params = new URLSearchParams();
+      params.set('group_by', analyticsGroupBy);
+      if (analyticsStartDate) params.set('start_date', analyticsStartDate);
+      if (analyticsEndDate) params.set('end_date', analyticsEndDate);
+      if (analyticsPreset === 'this_year' && analyticsGroupBy === 'monthly') {
+        params.set('year', String(new Date().getFullYear()));
+      }
+
+      const res = await fetch(`${API_URL}/reports/revenue-profit?${params.toString()}`, { headers });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const msg =
+          json?.message ||
+          (json?.errors ? Object.values(json.errors).flat().join(' ') : 'Failed to load revenue & profit analytics.');
+        setAnalyticsError(msg);
+        setAnalyticsData(null);
+        return;
+      }
+      setAnalyticsData(json.data);
+    } catch {
+      setAnalyticsError('Could not reach the server to load revenue & profit analytics.');
+      setAnalyticsData(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API_URL, token, analyticsGroupBy, analyticsStartDate, analyticsEndDate, analyticsPreset]);
+
+  useEffect(() => {
+    if (activeReport === 'overview') {
+      fetchRevenueProfitAnalytics();
+    }
+  }, [activeReport, fetchRevenueProfitAnalytics]);
+
   const formatReportTypeName = (type) => {
     if (!type) return 'Report';
     return type
@@ -261,6 +369,8 @@ function ReportsTab({ data, loading, token, user }) {
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
   // ── Helper: Aggregate sold items from any list of sales ────────────────────
+  // Preserves recorded (snapshot), estimated (current product cost), and unavailable cost states.
+  // Never silently treats missing product costs as zero.
   const aggregateSoldItems = (salesList) => {
     if (!salesList || !Array.isArray(salesList)) return [];
     const map = {};
@@ -281,9 +391,19 @@ function ReportsTab({ data, loading, token, user }) {
         const qty = parseFloat(item.quantity || 0);
         const unitPrice = parseFloat(item.price || 0);
         const subtotal = parseFloat(item.subtotal || (qty * unitPrice) || 0);
-        const unitCost = parseFloat(prod.cost_price ?? item.cost_price ?? 0);
-        const totalCost = qty * unitCost;
-        const profit = subtotal - totalCost;
+
+        let itemCostStatus = 'unavailable';
+        let unitCost = null;
+        if (item.cost_price !== null && item.cost_price !== undefined && item.cost_price !== '') {
+          itemCostStatus = 'recorded';
+          unitCost = parseFloat(item.cost_price);
+        } else if (prod.cost_price !== null && prod.cost_price !== undefined && prod.cost_price !== '') {
+          itemCostStatus = 'estimated';
+          unitCost = parseFloat(prod.cost_price);
+        }
+
+        const itemCost = unitCost !== null ? qty * unitCost : null;
+        const profit = itemCost !== null ? subtotal - itemCost : null;
 
         if (!map[prodId]) {
           map[prodId] = {
@@ -295,16 +415,30 @@ function ReportsTab({ data, loading, token, user }) {
             cost_price: unitCost,
             totalQty: 0,
             totalRevenue: 0,
+            knownCost: 0,
             totalCost: 0,
             totalProfit: 0,
+            recordedCount: 0,
+            estimatedCount: 0,
+            unavailableCount: 0,
+            cost_status: 'recorded',
             salesCount: 0,
             salesHistory: []
           };
         }
         map[prodId].totalQty += qty;
         map[prodId].totalRevenue += subtotal;
-        map[prodId].totalCost += totalCost;
-        map[prodId].totalProfit += profit;
+        if (unitCost !== null) {
+          map[prodId].knownCost += itemCost;
+          map[prodId].cost_price = unitCost;
+        }
+        if (itemCostStatus === 'unavailable') {
+          map[prodId].unavailableCount += 1;
+        } else if (itemCostStatus === 'estimated') {
+          map[prodId].estimatedCount += 1;
+        } else {
+          map[prodId].recordedCount += 1;
+        }
         map[prodId].salesCount += 1;
         map[prodId].salesHistory.push({
           saleId,
@@ -315,16 +449,30 @@ function ReportsTab({ data, loading, token, user }) {
           unitPrice,
           subtotal,
           unitCost,
-          profit
+          profit,
+          cost_status: itemCostStatus
         });
       });
     });
 
     return Object.values(map).map(p => {
       const avgSellingPrice = p.totalQty > 0 ? (p.totalRevenue / p.totalQty) : 0;
-      const marginPct = p.totalRevenue > 0 ? ((p.totalProfit / p.totalRevenue) * 100) : 0;
+      const costStatus = p.unavailableCount > 0
+        ? 'unavailable'
+        : p.estimatedCount > 0
+        ? 'estimated'
+        : 'recorded';
+      const totalCost = costStatus === 'unavailable' ? null : p.knownCost;
+      const totalProfit = costStatus === 'unavailable' ? null : (p.totalRevenue - p.knownCost);
+      const marginPct = costStatus === 'unavailable'
+        ? null
+        : (p.totalRevenue > 0 ? ((totalProfit / p.totalRevenue) * 100) : 0);
       return {
         ...p,
+        cost_status: costStatus,
+        cost_price: costStatus === 'unavailable' ? null : p.cost_price,
+        totalCost,
+        totalProfit,
         avgSellingPrice,
         marginPct
       };
@@ -367,12 +515,13 @@ function ReportsTab({ data, loading, token, user }) {
       category: item.category || 'Uncategorized',
       quantity_sold: item.totalQty,
       unit: item.unit || 'pcs',
-      unit_cost_ugx: Math.round(item.cost_price || 0),
+      cost_status: item.cost_status || 'recorded',
+      unit_cost_ugx: item.cost_status === 'unavailable' || item.cost_price === null ? 'Unavailable' : Math.round(item.cost_price || 0),
       avg_selling_price_ugx: Math.round(item.avgSellingPrice || 0),
       total_revenue_ugx: Math.round(item.totalRevenue || 0),
-      total_cost_ugx: Math.round(item.totalCost || 0),
-      gross_profit_ugx: Math.round(item.totalProfit || 0),
-      profit_margin_pct: `${(item.marginPct || 0).toFixed(1)}%`,
+      total_cost_ugx: item.cost_status === 'unavailable' || item.totalCost === null ? 'Unavailable' : Math.round(item.totalCost || 0),
+      gross_profit_ugx: item.cost_status === 'unavailable' || item.totalProfit === null ? 'Unavailable' : Math.round(item.totalProfit || 0),
+      profit_margin_pct: item.cost_status === 'unavailable' || item.marginPct === null ? 'Unavailable' : `${(item.marginPct || 0).toFixed(1)}%`,
       orders_count: item.salesCount || 0
     }));
     exportToCSV(exportData, filename);
@@ -484,7 +633,7 @@ function ReportsTab({ data, loading, token, user }) {
     items.sort((a, b) => {
       if (soldItemSort === 'revenue-desc') return b.totalRevenue - a.totalRevenue;
       if (soldItemSort === 'qty-desc') return b.totalQty - a.totalQty;
-      if (soldItemSort === 'profit-desc') return b.totalProfit - a.totalProfit;
+      if (soldItemSort === 'profit-desc') return (b.totalProfit ?? -Infinity) - (a.totalProfit ?? -Infinity);
       if (soldItemSort === 'name-asc') return a.name.localeCompare(b.name);
       return 0;
     });
@@ -493,13 +642,34 @@ function ReportsTab({ data, loading, token, user }) {
   }, [filteredSalesForSoldItems, soldItemCategory, soldItemSearch, soldItemSort]);
 
   const soldItemsTotals = useMemo(() => {
-    return aggregatedSoldItemsList.reduce((acc, item) => {
-      acc.totalQty += item.totalQty;
-      acc.totalRevenue += item.totalRevenue;
-      acc.totalCost += item.totalCost;
-      acc.totalProfit += item.totalProfit;
-      return acc;
-    }, { totalQty: 0, totalRevenue: 0, totalCost: 0, totalProfit: 0 });
+    const acc = aggregatedSoldItemsList.reduce((sum, item) => {
+      sum.totalQty += item.totalQty;
+      sum.totalRevenue += item.totalRevenue;
+      sum.knownCost += (item.knownCost || 0);
+      if (item.cost_status === 'unavailable' || item.totalCost === null) {
+        sum.hasUnavailable = true;
+      } else if (item.cost_status === 'estimated') {
+        sum.hasEstimated = true;
+      }
+      return sum;
+    }, { totalQty: 0, totalRevenue: 0, knownCost: 0, hasUnavailable: false, hasEstimated: false });
+
+    const costStatus = aggregatedSoldItemsList.length === 0
+      ? 'no_sales'
+      : acc.hasUnavailable
+      ? 'unavailable'
+      : acc.hasEstimated
+      ? 'estimated'
+      : 'recorded';
+
+    return {
+      totalQty: acc.totalQty,
+      totalRevenue: acc.totalRevenue,
+      knownCost: acc.knownCost,
+      totalCost: costStatus === 'unavailable' ? null : acc.knownCost,
+      totalProfit: costStatus === 'unavailable' ? null : (acc.totalRevenue - acc.knownCost),
+      cost_status: costStatus,
+    };
   }, [aggregatedSoldItemsList]);
 
   // ── Render Nested Receipt Breakdown Table ────────────────────────────────
@@ -512,12 +682,23 @@ function ReportsTab({ data, loading, token, user }) {
         </div>
       );
     }
-    const totalCost = items.reduce((sum, item) => {
-      const c = parseFloat(item.product?.cost_price ?? item.cost_price ?? 0);
-      return sum + (item.quantity * c);
-    }, 0);
+    let knownCost = 0;
+    let hasUnavailable = false;
+    let hasEstimated = false;
+    items.forEach(item => {
+      const qty = parseFloat(item.quantity || 0);
+      if (item.cost_price !== null && item.cost_price !== undefined && item.cost_price !== '') {
+        knownCost += qty * parseFloat(item.cost_price);
+      } else if (item.product?.cost_price !== null && item.product?.cost_price !== undefined && item.product?.cost_price !== '') {
+        knownCost += qty * parseFloat(item.product.cost_price);
+        hasEstimated = true;
+      } else {
+        hasUnavailable = true;
+      }
+    });
     const totalRev = items.reduce((sum, item) => sum + parseFloat(item.subtotal || (item.quantity * item.price) || 0), 0);
-    const totalProfit = totalRev - totalCost;
+    const totalCost = hasUnavailable ? null : knownCost;
+    const totalProfit = hasUnavailable ? null : (totalRev - knownCost);
 
     return (
       <div style={{ background: '#f8fafc', padding: '16px 20px', borderTop: '1px dashed #cbd5e1', borderBottom: '2px solid #e2e8f0' }}>
@@ -536,11 +717,16 @@ function ReportsTab({ data, loading, token, user }) {
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 14, fontSize: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 14, fontSize: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: '#64748b' }}>Revenue: <strong style={{ color: '#0f172a' }}>UGX {Math.round(totalRev).toLocaleString()}</strong></span>
-            <span style={{ color: '#64748b' }}>Cost: <strong style={{ color: '#475569' }}>UGX {Math.round(totalCost).toLocaleString()}</strong></span>
-            <span style={{ color: totalProfit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
-              Profit: UGX {Math.round(totalProfit).toLocaleString()}
+            <span style={{ color: '#64748b' }}>
+              Cost:{' '}
+              <strong style={{ color: hasUnavailable ? '#b91c1c' : '#475569' }}>
+                {hasUnavailable ? 'Unavailable' : `UGX ${Math.round(totalCost).toLocaleString()}${hasEstimated ? ' (Est.)' : ''}`}
+              </strong>
+            </span>
+            <span style={{ color: hasUnavailable ? '#b91c1c' : totalProfit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+              Profit: {hasUnavailable ? 'Unavailable' : `UGX ${Math.round(totalProfit).toLocaleString()}${hasEstimated ? ' (Est.)' : ''}`}
             </span>
           </div>
         </div>
@@ -569,10 +755,14 @@ function ReportsTab({ data, loading, token, user }) {
                 const unit = prod.unit || 'pcs';
                 const unitPrice = parseFloat(item.price || 0);
                 const subtotal = parseFloat(item.subtotal || (qty * unitPrice) || 0);
-                const unitCost = parseFloat(prod.cost_price ?? item.cost_price ?? 0);
-                const cost = qty * unitCost;
-                const profit = subtotal - cost;
-                const margin = subtotal > 0 ? ((profit / subtotal) * 100).toFixed(1) : '0';
+                const hasRecordedCost = item.cost_price !== null && item.cost_price !== undefined && item.cost_price !== '';
+                const hasProdCost = prod.cost_price !== null && prod.cost_price !== undefined && prod.cost_price !== '';
+                const isItemUnavailable = !hasRecordedCost && !hasProdCost;
+                const isItemEstimated = !hasRecordedCost && hasProdCost;
+                const unitCost = isItemUnavailable ? null : parseFloat(hasRecordedCost ? item.cost_price : prod.cost_price);
+                const cost = isItemUnavailable ? null : qty * unitCost;
+                const profit = isItemUnavailable ? null : subtotal - cost;
+                const margin = isItemUnavailable ? null : (subtotal > 0 ? ((profit / subtotal) * 100).toFixed(1) : '0');
 
                 return (
                   <tr key={idx} style={{ borderBottom: idx < items.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
@@ -589,8 +779,8 @@ function ReportsTab({ data, loading, token, user }) {
                     <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>
                       {qty} <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{unit}</span>
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>
-                      UGX {Math.round(unitCost).toLocaleString()}
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: isItemUnavailable ? '#b91c1c' : '#64748b' }}>
+                      {isItemUnavailable ? 'Unavailable' : `UGX ${Math.round(unitCost).toLocaleString()}${isItemEstimated ? ' (Est.)' : ''}`}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
                       UGX {Math.round(unitPrice).toLocaleString()}
@@ -598,20 +788,26 @@ function ReportsTab({ data, loading, token, user }) {
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
                       UGX {Math.round(subtotal).toLocaleString()}
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#16a34a' : '#dc2626' }}>
-                      UGX {Math.round(profit).toLocaleString()}
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: isItemUnavailable ? '#b91c1c' : profit >= 0 ? '#16a34a' : '#dc2626' }}>
+                      {isItemUnavailable ? 'Unavailable' : `UGX ${Math.round(profit).toLocaleString()}`}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                      <span style={{
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: profit >= 0 ? '#dcfce7' : '#fee2e2',
-                        color: profit >= 0 ? '#15803d' : '#b91c1c'
-                      }}>
-                        {profit >= 0 ? '+' : ''}{margin}%
-                      </span>
+                      {isItemUnavailable ? (
+                        <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#fee2e2', color: '#b91c1c' }}>
+                          Unavailable
+                        </span>
+                      ) : (
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: profit >= 0 ? '#dcfce7' : '#fee2e2',
+                          color: profit >= 0 ? '#15803d' : '#b91c1c'
+                        }}>
+                          {profit >= 0 ? '+' : ''}{margin}%
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -636,9 +832,11 @@ function ReportsTab({ data, loading, token, user }) {
 
     const totalUnits = filteredItems.reduce((s, it) => s + it.totalQty, 0);
     const totalRev = filteredItems.reduce((s, it) => s + it.totalRevenue, 0);
-    const totalCost = filteredItems.reduce((s, it) => s + it.totalCost, 0);
-    const totalProfit = totalRev - totalCost;
-    const overallMargin = totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : '0';
+    const hasUnavailable = filteredItems.some(it => it.cost_status === 'unavailable' || it.totalCost === null);
+    const hasEstimated = filteredItems.some(it => it.cost_status === 'estimated');
+    const knownCost = filteredItems.reduce((s, it) => s + (it.knownCost || 0), 0);
+    const totalProfit = hasUnavailable ? null : (totalRev - knownCost);
+    const overallMargin = hasUnavailable ? null : (totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : '0');
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '18px 20px' }}>
@@ -658,8 +856,17 @@ function ReportsTab({ data, loading, token, user }) {
           </div>
           <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Items Profit & Margin</span>
-            <div style={{ fontSize: 18, fontWeight: 700, color: totalProfit >= 0 ? '#16a34a' : '#dc2626', marginTop: 4 }}>
-              UGX {Math.round(totalProfit).toLocaleString()} <span style={{ fontSize: 12, fontWeight: 600 }}>({overallMargin}%)</span>
+            <div style={{ fontSize: 18, fontWeight: 700, color: hasUnavailable ? '#b91c1c' : totalProfit >= 0 ? '#16a34a' : '#dc2626', marginTop: 4 }}>
+              {hasUnavailable ? (
+                'Cost Unavailable'
+              ) : (
+                <>
+                  UGX {Math.round(totalProfit).toLocaleString()}{' '}
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                    ({overallMargin}%{hasEstimated ? ' Est.' : ''})
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -724,6 +931,8 @@ function ReportsTab({ data, loading, token, user }) {
               <tbody>
                 {filteredItems.map(item => {
                   const isExp = !!expandedSoldProducts[item.id];
+                  const isUnav = item.cost_status === 'unavailable' || item.totalCost === null;
+                  const isEst = item.cost_status === 'estimated';
                   return (
                     <React.Fragment key={item.id}>
                       <tr style={{ borderBottom: '1px solid #f1f5f9', background: isExp ? '#fafbff' : '#fff' }}>
@@ -744,29 +953,35 @@ function ReportsTab({ data, loading, token, user }) {
                         <td style={{ padding: '12px 14px', textAlign: 'right', color: '#334155' }}>
                           UGX {Math.round(item.avgSellingPrice).toLocaleString()}
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
-                          UGX {Math.round(item.cost_price).toLocaleString()}
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: isUnav ? '#b91c1c' : '#64748b' }}>
+                          {isUnav ? 'Unavailable' : `UGX ${Math.round(item.cost_price).toLocaleString()}${isEst ? ' (Est.)' : ''}`}
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
                           UGX {Math.round(item.totalRevenue).toLocaleString()}
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
-                          UGX {Math.round(item.totalCost).toLocaleString()}
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: isUnav ? '#b91c1c' : '#64748b' }}>
+                          {isUnav ? 'Unavailable' : `UGX ${Math.round(item.totalCost).toLocaleString()}${isEst ? ' (Est.)' : ''}`}
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: item.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
-                          UGX {Math.round(item.totalProfit).toLocaleString()}
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: isUnav ? '#b91c1c' : item.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                          {isUnav ? 'Unavailable' : `UGX ${Math.round(item.totalProfit).toLocaleString()}`}
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                          <span style={{
-                            padding: '3px 8px',
-                            borderRadius: 12,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background: item.totalProfit >= 0 ? '#dcfce7' : '#fee2e2',
-                            color: item.totalProfit >= 0 ? '#15803d' : '#b91c1c'
-                          }}>
-                            {item.totalProfit >= 0 ? '+' : ''}{item.marginPct.toFixed(1)}%
-                          </span>
+                          {isUnav ? (
+                            <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#fee2e2', color: '#b91c1c' }}>
+                              Unavailable
+                            </span>
+                          ) : (
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: 12,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: item.totalProfit >= 0 ? '#dcfce7' : '#fee2e2',
+                              color: item.totalProfit >= 0 ? '#15803d' : '#b91c1c'
+                            }}>
+                              {item.totalProfit >= 0 ? '+' : ''}{item.marginPct.toFixed(1)}%
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b' }}>
                           <span style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 10, fontSize: 11, border: '1px solid #e2e8f0' }}>
@@ -826,8 +1041,8 @@ function ReportsTab({ data, loading, token, user }) {
                                       <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600 }}>{h.quantity}</td>
                                       <td style={{ padding: '6px 12px', textAlign: 'right' }}>UGX {Math.round(h.unitPrice).toLocaleString()}</td>
                                       <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 700 }}>UGX {Math.round(h.subtotal).toLocaleString()}</td>
-                                      <td style={{ padding: '6px 12px', textAlign: 'right', color: h.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
-                                        UGX {Math.round(h.profit).toLocaleString()}
+                                      <td style={{ padding: '6px 12px', textAlign: 'right', color: h.profit === null ? '#b91c1c' : h.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                                        {h.profit === null ? 'Unavailable' : `UGX ${Math.round(h.profit).toLocaleString()}`}
                                       </td>
                                     </tr>
                                   ))}
@@ -946,6 +1161,8 @@ function ReportsTab({ data, loading, token, user }) {
                   const itemsCount = (s.sale_items || s.saleItems || []).length;
                   const isExp = !!expandedSales[s.id];
                   const colSpanCount = showCustomer ? 8 : 7;
+                  const isSaleCostUnavailable = s.cost_status === 'unavailable' || s.cost === null || s.profit === null;
+                  const isSaleCostEstimated = s.cost_status === 'estimated';
                   return (
                     <React.Fragment key={s.id}>
                       <tr style={{ borderTop: '1px solid #f1f5f9', background: isExp ? '#fafbff' : '#fff' }}>
@@ -989,11 +1206,15 @@ function ReportsTab({ data, loading, token, user }) {
                         <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
                           UGX {parseFloat(s.total_amount || 0).toLocaleString()}
                         </td>
-                        <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>
-                          UGX {parseFloat(s.cost || 0).toLocaleString()}
+                        <td style={{ padding: '12px 16px', fontSize: 14, color: isSaleCostUnavailable ? '#b91c1c' : '#64748b' }}>
+                          {isSaleCostUnavailable
+                            ? 'Unavailable'
+                            : `UGX ${parseFloat(s.cost || 0).toLocaleString()}${isSaleCostEstimated ? ' (Est.)' : ''}`}
                         </td>
-                        <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                          UGX {parseFloat(s.profit || 0).toLocaleString()}
+                        <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: isSaleCostUnavailable ? '#b91c1c' : parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                          {isSaleCostUnavailable
+                            ? 'Unavailable'
+                            : `UGX ${parseFloat(s.profit || 0).toLocaleString()}${isSaleCostEstimated ? ' (Est.)' : ''}`}
                         </td>
                       </tr>
                       {isExp && (
@@ -1305,9 +1526,9 @@ function ReportsTab({ data, loading, token, user }) {
           {/* KPI row */}
           <div className="reports-kpi-grid">
             {[
-              { label: 'Total Revenue', value: `UGX ${data.stats.totalSales.toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
-              { label: 'Total Costs', value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
-              { label: 'Net Profit', value: `UGX ${totalRevenue.toLocaleString()}`, icon: '📈', color: totalRevenue >= 0 ? '#16a34a' : '#dc2626', bg: totalRevenue >= 0 ? '#f0fdf4' : '#fef2f2' },
+              { label: 'Total Collected Sales', value: `UGX ${data.stats.totalSales.toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
+              { label: 'Total Stock Purchases', value: `UGX ${data.stats.totalPurchases.toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
+              { label: 'Net Cash Flow (Sales − Purchases)', value: `UGX ${totalRevenue.toLocaleString()}`, icon: '📈', color: totalRevenue >= 0 ? '#16a34a' : '#dc2626', bg: totalRevenue >= 0 ? '#f0fdf4' : '#fef2f2' },
               { label: 'Low Stock', value: data.stats.lowStockCount, icon: '⚠️', color: data.stats.lowStockCount > 0 ? '#dc2626' : '#16a34a', bg: data.stats.lowStockCount > 0 ? '#fef2f2' : '#f0fdf4' },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 22px' }}>
@@ -1320,6 +1541,476 @@ function ReportsTab({ data, loading, token, user }) {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* ── REVENUE & GROSS PROFIT ANALYTICS SECTION ── */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 14,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+              boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
+            }}
+          >
+            {/* Header & Filter Controls */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                gap: 16,
+                borderBottom: '1px solid #f1f5f9',
+                paddingBottom: 16,
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+                    📊 Revenue & Gross Profit Analytics
+                  </h2>
+                  {analyticsData?.cost_status && (
+                    <CostAccuracyBadge status={analyticsData.cost_status} size="md" />
+                  )}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
+                  Net Sales Revenue excludes tax collected and subtracts discounts. Gross Profit = Net Sales Revenue − COGS (operating expenses are not tracked).
+                </p>
+              </div>
+
+              {/* Filter Bar: Date Range Presets + Grouping */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: 4 }}>
+                    Range:
+                  </span>
+                  {[
+                    { id: 'last_7_days', label: 'Last 7 Days' },
+                    { id: 'last_30_days', label: 'Last 30 Days' },
+                    { id: 'this_month', label: 'This Month' },
+                    { id: 'this_year', label: 'This Year' },
+                    { id: 'custom', label: 'Custom Range' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleSelectAnalyticsPreset(p.id)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 20,
+                        border: analyticsPreset === p.id ? '1px solid #4f46e5' : '1px solid #cbd5e1',
+                        background: analyticsPreset === p.id ? '#4f46e5' : '#f8fafc',
+                        color: analyticsPreset === p.id ? '#fff' : '#475569',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                  {/* Custom or active date inputs */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <input
+                      type="date"
+                      value={analyticsStartDate}
+                      onChange={e => {
+                        setAnalyticsPreset('custom');
+                        setAnalyticsStartDate(e.target.value);
+                      }}
+                      aria-label="Analytics Start Date"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 12,
+                        color: '#0f172a',
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: '#64748b' }}>to</span>
+                    <input
+                      type="date"
+                      value={analyticsEndDate}
+                      onChange={e => {
+                        setAnalyticsPreset('custom');
+                        setAnalyticsEndDate(e.target.value);
+                      }}
+                      aria-label="Analytics End Date"
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 12,
+                        color: '#0f172a',
+                      }}
+                    />
+                  </div>
+
+                  {/* Grouping Toggle: Daily / Weekly / Monthly */}
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: '#f1f5f9',
+                      borderRadius: 8,
+                      padding: 3,
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    {[
+                      { id: 'daily', label: 'Daily' },
+                      { id: 'weekly', label: 'Weekly' },
+                      { id: 'monthly', label: 'Monthly' },
+                    ].map(g => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setAnalyticsGroupBy(g.id)}
+                        style={{
+                          padding: '5px 12px',
+                          border: 'none',
+                          borderRadius: 6,
+                          background: analyticsGroupBy === g.id ? '#ffffff' : 'transparent',
+                          color: analyticsGroupBy === g.id ? '#4f46e5' : '#64748b',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: analyticsGroupBy === g.id ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                        }}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cost Completeness / Accuracy Banner when Estimated or Unavailable */}
+            {analyticsData?.cost_accuracy && analyticsData.cost_status === 'unavailable' && (
+              <div
+                style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 10,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  color: '#991b1b',
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ fontSize: 16 }}>⚠️</span>
+                <div>
+                  <strong style={{ display: 'block', marginBottom: 2 }}>
+                    Incomplete Cost Data — Gross Profit Cannot Be Accurately Calculated
+                  </strong>
+                  <span>
+                    {analyticsData.cost_accuracy.unavailable_items} sold item(s) across{' '}
+                    {analyticsData.cost_accuracy.unavailable_sales} sale(s) have neither a recorded historical cost snapshot nor a current product cost price.
+                    Unknown COGS is never treated as zero to avoid reporting inflated profit figures.
+                    Known partial COGS for the remaining items is{' '}
+                    <strong>{formatUGX(analyticsData.known_cogs)}</strong>.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {analyticsData?.cost_accuracy && analyticsData.cost_status === 'estimated' && (
+              <div
+                style={{
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: 10,
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                  color: '#92400e',
+                  fontSize: 12,
+                }}
+              >
+                <div>
+                  <strong>≈ Historical Cost Estimate Active: </strong>
+                  {analyticsData.cost_accuracy.estimated_items} of {analyticsData.cost_accuracy.total_items} sold item(s) ({analyticsData.cost_accuracy.estimated_items_pct}%) predated cost snapshotting and use current product catalog cost prices as an estimate.
+                  {' '}({analyticsData.cost_accuracy.recorded_items} item(s) use recorded snapshots.)
+                </div>
+              </div>
+            )}
+
+            {/* Analytics Summary KPI Cards */}
+            <div className="reports-kpi-grid">
+              {/* 1. Net Sales Revenue */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Net Sales Revenue
+                    </p>
+                    <p style={{ margin: '6px 0 4px', fontSize: 21, fontWeight: 700, color: '#2563eb' }}>
+                      {analyticsLoading
+                        ? '...'
+                        : analyticsError || !analyticsData
+                        ? '—'
+                        : formatUGX(analyticsData.net_sales_revenue ?? 0)}
+                    </p>
+                    <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>
+                        Gross Item Sales:{' '}
+                        <strong>
+                          {analyticsError || !analyticsData ? '—' : formatUGX(analyticsData.gross_item_sales ?? 0)}
+                        </strong>
+                      </span>
+                      <span>
+                        Discounts Subtracted:{' '}
+                        <strong style={{ color: '#d97706' }}>
+                          {analyticsError || !analyticsData
+                            ? '—'
+                            : `-${formatUGX(analyticsData.effective_discounts ?? analyticsData.total_discounts ?? 0)}`}
+                        </strong>
+                      </span>
+                      {analyticsData &&
+                        Number(analyticsData.total_discounts ?? 0) >
+                          Number(analyticsData.effective_discounts ?? analyticsData.total_discounts ?? 0) && (
+                          <span style={{ color: '#b45309' }}>
+                            Raw Discount: <strong>{formatUGX(analyticsData.total_discounts)}</strong> (Excess Capped:{' '}
+                            <strong>
+                              {formatUGX(
+                                analyticsData.excess_discounts ??
+                                  Number(analyticsData.total_discounts || 0) -
+                                    Number(analyticsData.effective_discounts ?? 0)
+                              )}
+                            </strong>
+                            )
+                          </span>
+                        )}
+                      <span>
+                        Tax Collected (Excl.):{' '}
+                        <strong>
+                          {analyticsError || !analyticsData ? '—' : formatUGX(analyticsData.tax_collected ?? 0)}
+                        </strong>
+                      </span>
+                      <span>
+                        Total Collected:{' '}
+                        <strong>
+                          {analyticsError || !analyticsData ? '—' : formatUGX(analyticsData.total_collected ?? 0)}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#dbeafe', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                    💵
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Cost of Goods Sold (COGS) */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Cost of Goods Sold (COGS)
+                    </p>
+                    <p
+                      style={{
+                        margin: '6px 0 4px',
+                        fontSize: 21,
+                        fontWeight: 700,
+                        color: analyticsData?.cost_status === 'unavailable' ? '#b91c1c' : '#d97706',
+                      }}
+                    >
+                      {analyticsLoading
+                        ? '...'
+                        : analyticsError || !analyticsData
+                        ? '—'
+                        : analyticsData.cost_status === 'unavailable'
+                        ? 'Cost Unavailable'
+                        : formatUGX(analyticsData.total_cogs ?? 0)}
+                    </p>
+                    <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {analyticsData?.cost_status === 'unavailable' && (
+                        <span style={{ color: '#b91c1c', fontWeight: 600 }}>
+                          Known Partial COGS: {formatUGX(analyticsData?.known_cogs ?? 0)}
+                        </span>
+                      )}
+                      <span>
+                        Recorded Snapshots:{' '}
+                        <strong>{analyticsError || !analyticsData ? '—' : (analyticsData?.cost_accuracy?.recorded_items ?? 0)}</strong>{' '}
+                        {analyticsError || !analyticsData ? '' : `item(s) (${formatUGX(analyticsData?.cost_accuracy?.recorded_cogs ?? 0)})`}
+                      </span>
+                      <span>
+                        Estimated Historical:{' '}
+                        <strong>{analyticsError || !analyticsData ? '—' : (analyticsData?.cost_accuracy?.estimated_items ?? 0)}</strong>{' '}
+                        {analyticsError || !analyticsData ? '' : `item(s) (${formatUGX(analyticsData?.cost_accuracy?.estimated_cogs ?? 0)})`}
+                      </span>
+                      {(analyticsData?.cost_accuracy?.unavailable_items ?? 0) > 0 && (
+                        <span style={{ color: '#b91c1c', fontWeight: 600 }}>
+                          Unavailable Cost: {analyticsData.cost_accuracy.unavailable_items} item(s)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                    📦
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Gross Profit */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Gross Profit
+                      </p>
+                      {analyticsData?.cost_status === 'estimated' && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 999 }}>
+                          Estimated
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      style={{
+                        margin: '6px 0 4px',
+                        fontSize: 21,
+                        fontWeight: 700,
+                        color:
+                          analyticsError || !analyticsData
+                            ? '#64748b'
+                            : analyticsData?.cost_status === 'unavailable'
+                            ? '#b91c1c'
+                            : Number(analyticsData?.gross_profit ?? 0) >= 0
+                            ? '#16a34a'
+                            : '#dc2626',
+                      }}
+                    >
+                      {analyticsLoading
+                        ? '...'
+                        : analyticsError || !analyticsData
+                        ? '—'
+                        : analyticsData.cost_status === 'unavailable'
+                        ? 'Unavailable'
+                        : formatUGX(analyticsData.gross_profit ?? 0)}
+                    </p>
+                    <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>Formula: Net Sales Revenue − COGS</span>
+                      <span>
+                        {analyticsError || !analyticsData
+                          ? 'Select a valid date range to calculate gross profit.'
+                          : analyticsData?.cost_status === 'unavailable'
+                          ? 'Missing product cost prevents accurate gross profit calculation.'
+                          : analyticsData?.cost_status === 'estimated'
+                          ? 'Includes estimated COGS from current catalog costs.'
+                          : 'Based on recorded cost snapshots.'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                    📈
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Gross Profit Margin */}
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Gross Profit Margin
+                    </p>
+                    <p
+                      style={{
+                        margin: '6px 0 4px',
+                        fontSize: 21,
+                        fontWeight: 700,
+                        color:
+                          analyticsError || !analyticsData
+                            ? '#64748b'
+                            : analyticsData?.cost_status === 'unavailable'
+                            ? '#b91c1c'
+                            : Number(analyticsData?.gross_profit_margin ?? 0) >= 0
+                            ? '#0f172a'
+                            : '#dc2626',
+                      }}
+                    >
+                      {analyticsLoading
+                        ? '...'
+                        : analyticsError || !analyticsData
+                        ? '—'
+                        : analyticsData.cost_status === 'unavailable' || analyticsData.gross_profit_margin === null
+                        ? 'Unavailable'
+                        : `${Number(analyticsData.gross_profit_margin ?? 0).toFixed(1)}%`}
+                    </p>
+                    <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>(Gross Profit ÷ Net Sales Revenue) × 100</span>
+                      <span>
+                        Transactions in range:{' '}
+                        <strong>{analyticsError || !analyticsData ? '—' : (analyticsData?.transaction_count ?? 0)}</strong>
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eef2ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                    🎯
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Graphs Grid: Bar Graph + Line Graph */}
+            <div className="reports-2col">
+              {/* Bar Graph */}
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                      Revenue, COGS & Gross Profit Comparison
+                    </h3>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+                      Grouped bar graph ({analyticsGroupBy} buckets, {analyticsData?.filters?.start_date || analyticsStartDate} to {analyticsData?.filters?.end_date || analyticsEndDate})
+                    </p>
+                  </div>
+                </div>
+                <RevenueProfitBarChart
+                  series={analyticsData?.series || []}
+                  loading={analyticsLoading}
+                  error={analyticsError}
+                  groupBy={analyticsGroupBy}
+                  onRetry={fetchRevenueProfitAnalytics}
+                />
+              </div>
+
+              {/* Line Graph */}
+              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                      Net Sales Revenue & Gross Profit Trend
+                    </h3>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+                      Continuous time-series trend line ({analyticsData?.series?.length || 0} {analyticsGroupBy} buckets)
+                    </p>
+                  </div>
+                </div>
+                <RevenueProfitLineChart
+                  series={analyticsData?.series || []}
+                  loading={analyticsLoading}
+                  error={analyticsError}
+                  groupBy={analyticsGroupBy}
+                  onRetry={fetchRevenueProfitAnalytics}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="reports-2col">
@@ -1601,10 +2292,14 @@ function ReportsTab({ data, loading, token, user }) {
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cost of Goods Sold (COGS)</p>
-                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#d97706' }}>
-                  UGX {Math.round(soldItemsTotals.totalCost).toLocaleString()}
+                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: soldItemsTotals.totalCost === null ? '#b91c1c' : '#d97706' }}>
+                  {soldItemsTotals.totalCost === null
+                    ? 'Unavailable'
+                    : `UGX ${Math.round(soldItemsTotals.totalCost).toLocaleString()}${soldItemsTotals.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                 </p>
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94a3b8' }}>Wholesale acquisition cost</p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#94a3b8' }}>
+                  {soldItemsTotals.totalCost === null ? 'Some items missing cost price' : 'Wholesale acquisition cost'}
+                </p>
               </div>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🛒</div>
             </div>
@@ -1612,17 +2307,23 @@ function ReportsTab({ data, loading, token, user }) {
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Gross Profit & Margin</p>
-                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: soldItemsTotals.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
-                  UGX {Math.round(soldItemsTotals.totalProfit).toLocaleString()}
+                <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: soldItemsTotals.totalProfit === null ? '#b91c1c' : soldItemsTotals.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                  {soldItemsTotals.totalProfit === null
+                    ? 'Unavailable'
+                    : `UGX ${Math.round(soldItemsTotals.totalProfit).toLocaleString()}${soldItemsTotals.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 11, color: '#64748b' }}>
-                  Margin: <strong style={{ color: soldItemsTotals.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
-                    {soldItemsTotals.totalRevenue > 0 ? `${((soldItemsTotals.totalProfit / soldItemsTotals.totalRevenue) * 100).toFixed(1)}%` : '0%'}
+                  Margin: <strong style={{ color: soldItemsTotals.totalProfit === null ? '#b91c1c' : soldItemsTotals.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {soldItemsTotals.totalProfit === null
+                      ? '—'
+                      : soldItemsTotals.totalRevenue > 0
+                        ? `${((soldItemsTotals.totalProfit / soldItemsTotals.totalRevenue) * 100).toFixed(1)}%`
+                        : '0%'}
                   </strong>
                 </p>
               </div>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: soldItemsTotals.totalProfit >= 0 ? '#f0fdf4' : '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                {soldItemsTotals.totalProfit >= 0 ? '📈' : '📉'}
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: soldItemsTotals.totalProfit === null ? '#fef2f2' : soldItemsTotals.totalProfit >= 0 ? '#f0fdf4' : '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+                {soldItemsTotals.totalProfit === null ? '⚠️' : soldItemsTotals.totalProfit >= 0 ? '📈' : '📉'}
               </div>
             </div>
           </div>
@@ -1662,6 +2363,8 @@ function ReportsTab({ data, loading, token, user }) {
                   <tbody>
                     {aggregatedSoldItemsList.map((item, index) => {
                       const isExp = !!expandedSoldProducts[item.id];
+                      const itemUnavailable = item.cost_status === 'unavailable' || item.totalProfit === null;
+                      const itemEstimated = item.cost_status === 'estimated';
                       return (
                         <React.Fragment key={item.id}>
                           <tr style={{ borderBottom: '1px solid #f1f5f9', background: isExp ? '#fafbff' : '#fff' }}>
@@ -1682,8 +2385,10 @@ function ReportsTab({ data, loading, token, user }) {
                             <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                               {item.totalQty.toLocaleString()} <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{item.unit}</span>
                             </td>
-                            <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
-                              UGX {Math.round(item.cost_price).toLocaleString()}
+                            <td style={{ padding: '12px 14px', textAlign: 'right', color: itemUnavailable ? '#b91c1c' : '#64748b' }}>
+                              {itemUnavailable || item.cost_price === null
+                                ? 'Unavailable'
+                                : `UGX ${Math.round(item.cost_price).toLocaleString()}${itemEstimated ? ' (Est.)' : ''}`}
                             </td>
                             <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#334155' }}>
                               UGX {Math.round(item.avgSellingPrice).toLocaleString()}
@@ -1691,23 +2396,31 @@ function ReportsTab({ data, loading, token, user }) {
                             <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                               UGX {Math.round(item.totalRevenue).toLocaleString()}
                             </td>
-                            <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
-                              UGX {Math.round(item.totalCost).toLocaleString()}
+                            <td style={{ padding: '12px 14px', textAlign: 'right', color: itemUnavailable ? '#b91c1c' : '#64748b' }}>
+                              {itemUnavailable || item.totalCost === null
+                                ? 'Unavailable'
+                                : `UGX ${Math.round(item.totalCost).toLocaleString()}${itemEstimated ? ' (Est.)' : ''}`}
                             </td>
-                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: item.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
-                              UGX {Math.round(item.totalProfit).toLocaleString()}
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: itemUnavailable ? '#b91c1c' : item.totalProfit >= 0 ? '#16a34a' : '#dc2626' }}>
+                              {itemUnavailable
+                                ? 'Unavailable'
+                                : `UGX ${Math.round(item.totalProfit).toLocaleString()}${itemEstimated ? ' (Est.)' : ''}`}
                             </td>
                             <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                              <span style={{
-                                padding: '3px 8px',
-                                borderRadius: 12,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                background: item.totalProfit >= 0 ? '#dcfce7' : '#fee2e2',
-                                color: item.totalProfit >= 0 ? '#15803d' : '#b91c1c'
-                              }}>
-                                {item.totalProfit >= 0 ? '+' : ''}{item.marginPct.toFixed(1)}%
-                              </span>
+                              {itemUnavailable || item.marginPct === null ? (
+                                <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>
+                              ) : (
+                                <span style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 12,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  background: item.totalProfit >= 0 ? '#dcfce7' : '#fee2e2',
+                                  color: item.totalProfit >= 0 ? '#15803d' : '#b91c1c'
+                                }}>
+                                  {item.totalProfit >= 0 ? '+' : ''}{item.marginPct.toFixed(1)}%
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748b' }}>
                               <span style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 10, fontSize: 11, border: '1px solid #e2e8f0', fontWeight: 600 }}>
@@ -1769,8 +2482,10 @@ function ReportsTab({ data, loading, token, user }) {
                                           <td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 600 }}>{h.quantity} {item.unit}</td>
                                           <td style={{ padding: '7px 14px', textAlign: 'right' }}>UGX {Math.round(h.unitPrice).toLocaleString()}</td>
                                           <td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 700 }}>UGX {Math.round(h.subtotal).toLocaleString()}</td>
-                                          <td style={{ padding: '7px 14px', textAlign: 'right', color: h.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
-                                            UGX {Math.round(h.profit).toLocaleString()}
+                                          <td style={{ padding: '7px 14px', textAlign: 'right', color: h.profit === null ? '#b91c1c' : h.profit >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                                            {h.profit === null
+                                              ? 'Unavailable'
+                                              : `UGX ${Math.round(h.profit).toLocaleString()}${h.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                                           </td>
                                         </tr>
                                       ))}
@@ -1818,7 +2533,12 @@ function ReportsTab({ data, loading, token, user }) {
                   { label: 'Date', value: reportData.date },
                   { label: 'Transactions', value: reportData.total_transactions },
                   { label: 'Total Sales', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}` },
-                  { label: 'Total Cost', value: `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}` },
+                  {
+                    label: 'Total Cost',
+                    value: reportData.total_cost === null || reportData.cost_status === 'unavailable'
+                      ? 'Unavailable'
+                      : `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`,
+                  },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px' }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{k.label}</p>
@@ -1827,18 +2547,20 @@ function ReportsTab({ data, loading, token, user }) {
                 ))}
               </div>
               {/* Profit highlight */}
-              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ fontSize: 32 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+              <div style={{ background: reportData.total_profit === null ? '#fef2f2' : parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${reportData.total_profit !== null && parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 32 }}>{reportData.total_profit === null ? '⚠️' : parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
                 <div>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Net Profit</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Gross Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: reportData.total_profit === null ? '#b91c1c' : parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {reportData.total_profit === null || reportData.cost_status === 'unavailable'
+                      ? 'Cost Unavailable'
+                      : `UGX ${parseFloat(reportData.total_profit || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                   </p>
                 </div>
                 <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Margin</p>
                   <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
-                    {parseFloat(reportData.total_sales) > 0
+                    {reportData.total_profit !== null && parseFloat(reportData.total_sales) > 0
                       ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%`
                       : '—'}
                   </p>
@@ -1888,22 +2610,28 @@ function ReportsTab({ data, loading, token, user }) {
               </div>
 
               {/* Profit highlight */}
-              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ fontSize: 32 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+              <div style={{ background: reportData.total_profit === null ? '#fef2f2' : parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${reportData.total_profit !== null && parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 32 }}>{reportData.total_profit === null ? '⚠️' : parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
                 <div>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Net Profit</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Gross Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: reportData.total_profit === null ? '#b91c1c' : parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {reportData.total_profit === null || reportData.cost_status === 'unavailable'
+                      ? 'Cost Unavailable'
+                      : `UGX ${parseFloat(reportData.total_profit || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                   </p>
                 </div>
                 <div style={{ marginLeft: 16 }}>
                   <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Total Cost</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>UGX {parseFloat(reportData.total_cost || 0).toLocaleString()}</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
+                    {reportData.total_cost === null || reportData.cost_status === 'unavailable'
+                      ? 'Unavailable'
+                      : `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`}
+                  </p>
                 </div>
                 <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Margin</p>
                   <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
-                    {parseFloat(reportData.total_sales) > 0
+                    {reportData.total_profit !== null && parseFloat(reportData.total_sales) > 0
                       ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%`
                       : '—'}
                   </p>
@@ -1925,8 +2653,8 @@ function ReportsTab({ data, loading, token, user }) {
                               UGX {parseFloat(d.total || 0).toLocaleString()} &nbsp;
                               <span style={{ color: '#94a3b8', fontWeight: 400 }}>{d.transactions} txn{d.transactions !== 1 ? 's' : ''}</span>
                               &nbsp;·&nbsp;
-                              <span style={{ color: parseFloat(d.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                                profit: UGX {parseFloat(d.profit || 0).toLocaleString()}
+                              <span style={{ color: d.profit === null ? '#b91c1c' : parseFloat(d.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                profit: {d.profit === null ? 'Unavailable' : `UGX ${parseFloat(d.profit || 0).toLocaleString()}`}
                               </span>
                             </span>
                           </div>
@@ -1989,22 +2717,28 @@ function ReportsTab({ data, loading, token, user }) {
               </div>
 
               {/* Profit highlight */}
-              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ fontSize: 32 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+              <div style={{ background: reportData.total_profit === null ? '#fef2f2' : parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${reportData.total_profit !== null && parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 32 }}>{reportData.total_profit === null ? '⚠️' : parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
                 <div>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Net Profit</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Gross Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 800, color: reportData.total_profit === null ? '#b91c1c' : parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {reportData.total_profit === null || reportData.cost_status === 'unavailable'
+                      ? 'Cost Unavailable'
+                      : `UGX ${parseFloat(reportData.total_profit || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                   </p>
                 </div>
                 <div style={{ marginLeft: 16 }}>
                   <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Total Cost</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>UGX {parseFloat(reportData.total_cost || 0).toLocaleString()}</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
+                    {reportData.total_cost === null || reportData.cost_status === 'unavailable'
+                      ? 'Unavailable'
+                      : `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`}
+                  </p>
                 </div>
                 <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Margin</p>
                   <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: '#374151' }}>
-                    {parseFloat(reportData.total_sales) > 0
+                    {reportData.total_profit !== null && parseFloat(reportData.total_sales) > 0
                       ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%`
                       : '—'}
                   </p>
@@ -2027,8 +2761,8 @@ function ReportsTab({ data, loading, token, user }) {
                                 UGX {parseFloat(p.total || 0).toLocaleString()} &nbsp;
                                 <span style={{ color: '#94a3b8', fontWeight: 400 }}>({Math.round((parseFloat(p.total || 0) / methodTotal) * 100)}%)</span>
                                 &nbsp;·&nbsp;
-                                <span style={{ color: parseFloat(p.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                                  profit: UGX {parseFloat(p.profit || 0).toLocaleString()}
+                                <span style={{ color: p.profit === null ? '#b91c1c' : parseFloat(p.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                  profit: {p.profit === null ? 'Unavailable' : `UGX ${parseFloat(p.profit || 0).toLocaleString()}`}
                                 </span>
                               </span>
                             </div>
@@ -2056,8 +2790,8 @@ function ReportsTab({ data, loading, token, user }) {
                               <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
                                 UGX {parseFloat(d.total || 0).toLocaleString()} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({d.transactions})</span>
                                 &nbsp;·&nbsp;
-                                <span style={{ color: parseFloat(d.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                                  UGX {parseFloat(d.profit || 0).toLocaleString()}
+                                <span style={{ color: d.profit === null ? '#b91c1c' : parseFloat(d.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                  {d.profit === null ? 'Unavailable' : `UGX ${parseFloat(d.profit || 0).toLocaleString()}`}
                                 </span>
                               </span>
                             </div>
@@ -2115,7 +2849,13 @@ function ReportsTab({ data, loading, token, user }) {
                   { label: 'Year', value: reportData.year, icon: '📅', color: '#4f46e5', bg: '#eef2ff' },
                   { label: 'Transactions', value: reportData.total_transactions, icon: '🧾', color: '#0891b2', bg: '#ecfeff' },
                   { label: 'Total Revenue', value: `UGX ${parseFloat(reportData.total_sales || 0).toLocaleString()}`, icon: '💰', color: '#16a34a', bg: '#f0fdf4' },
-                  { label: 'Total Cost', value: `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}`, icon: '🛒', color: '#d97706', bg: '#fffbeb' },
+                  {
+                    label: 'Total Cost',
+                    value: reportData.total_cost === null || reportData.cost_status === 'unavailable'
+                      ? 'Unavailable'
+                      : `UGX ${parseFloat(reportData.total_cost || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`,
+                    icon: '🛒', color: '#d97706', bg: '#fffbeb',
+                  },
                 ].map(k => (
                   <div key={k.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{ width: 42, height: 42, borderRadius: 10, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{k.icon}</div>
@@ -2128,18 +2868,20 @@ function ReportsTab({ data, loading, token, user }) {
               </div>
 
               {/* ── Profit highlight ── */}
-              <div style={{ background: parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '20px 26px', display: 'flex', alignItems: 'center', gap: 18 }}>
-                <div style={{ fontSize: 36 }}>{parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
+              <div style={{ background: reportData.total_profit === null ? '#fef2f2' : parseFloat(reportData.total_profit || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${reportData.total_profit !== null && parseFloat(reportData.total_profit || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: 12, padding: '20px 26px', display: 'flex', alignItems: 'center', gap: 18 }}>
+                <div style={{ fontSize: 36 }}>{reportData.total_profit === null ? '⚠️' : parseFloat(reportData.total_profit || 0) >= 0 ? '📈' : '📉'}</div>
                 <div>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Annual Net Profit</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 800, color: parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626', letterSpacing: '-0.5px' }}>
-                    UGX {parseFloat(reportData.total_profit || 0).toLocaleString()}
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Annual Gross Profit</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 800, color: reportData.total_profit === null ? '#b91c1c' : parseFloat(reportData.total_profit || 0) >= 0 ? '#16a34a' : '#dc2626', letterSpacing: '-0.5px' }}>
+                    {reportData.total_profit === null || reportData.cost_status === 'unavailable'
+                      ? 'Cost Unavailable'
+                      : `UGX ${parseFloat(reportData.total_profit || 0).toLocaleString()}${reportData.cost_status === 'estimated' ? ' (Est.)' : ''}`}
                   </p>
                 </div>
                 <div style={{ marginLeft: 20 }}>
                   <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Profit Margin</p>
                   <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, color: '#374151' }}>
-                    {parseFloat(reportData.total_sales) > 0 ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%` : '—'}
+                    {reportData.total_profit !== null && parseFloat(reportData.total_sales) > 0 ? `${((parseFloat(reportData.total_profit) / parseFloat(reportData.total_sales)) * 100).toFixed(1)}%` : '—'}
                   </p>
                 </div>
                 {reportData.best_month && (
@@ -2169,8 +2911,9 @@ function ReportsTab({ data, loading, token, user }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {(reportData.by_month || []).map(m => {
                         const revPct = Math.round((parseFloat(m.total || 0) / maxTotal) * 100);
-                        const profitPct = Math.round((parseFloat(m.profit || 0) / maxTotal) * 100);
-                        const isProfit = parseFloat(m.profit || 0) >= 0;
+                        const profitUnavailable = m.profit === null || m.cost_status === 'unavailable';
+                        const profitPct = profitUnavailable ? 0 : Math.round((parseFloat(m.profit || 0) / maxTotal) * 100);
+                        const isProfit = !profitUnavailable && parseFloat(m.profit || 0) >= 0;
                         return (
                           <div key={m.month}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -2178,8 +2921,8 @@ function ReportsTab({ data, loading, token, user }) {
                               <span style={{ fontSize: 12, color: '#64748b' }}>
                                 UGX {parseFloat(m.total || 0).toLocaleString()}
                                 &nbsp;·&nbsp;
-                                <span style={{ color: isProfit ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
-                                  {isProfit ? '+' : ''}UGX {parseFloat(m.profit || 0).toLocaleString()}
+                                <span style={{ color: profitUnavailable ? '#b91c1c' : isProfit ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                                  {profitUnavailable ? 'Profit Unavailable' : `${isProfit ? '+' : ''}UGX ${parseFloat(m.profit || 0).toLocaleString()}`}
                                 </span>
                                 &nbsp;·&nbsp;
                                 <span style={{ color: '#94a3b8' }}>{m.transactions} txns</span>
@@ -2221,8 +2964,8 @@ function ReportsTab({ data, loading, token, user }) {
                           </div>
                           <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginBottom: 2 }}>UGX {parseFloat(q.total || 0).toLocaleString()}</div>
                           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{q.transactions} transactions</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: parseFloat(q.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
-                            Profit: UGX {parseFloat(q.profit || 0).toLocaleString()}
+                          <div style={{ fontSize: 12, fontWeight: 700, color: q.profit === null ? '#b91c1c' : parseFloat(q.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                            Profit: {q.profit === null ? 'Unavailable' : `UGX ${parseFloat(q.profit || 0).toLocaleString()}`}
                           </div>
                         </div>
                       );
@@ -2246,7 +2989,9 @@ function ReportsTab({ data, loading, token, user }) {
                               UGX {parseFloat(p.total || 0).toLocaleString()}
                               &nbsp;<span style={{ color: '#94a3b8', fontWeight: 400 }}>({Math.round((parseFloat(p.total || 0) / total) * 100)}%)</span>
                               &nbsp;·&nbsp;
-                              <span style={{ color: parseFloat(p.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>profit: UGX {parseFloat(p.profit || 0).toLocaleString()}</span>
+                              <span style={{ color: p.profit === null ? '#b91c1c' : parseFloat(p.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                                profit: {p.profit === null ? 'Unavailable' : `UGX ${parseFloat(p.profit || 0).toLocaleString()}`}
+                              </span>
                             </span>
                           </div>
                           <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>

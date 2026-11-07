@@ -122,6 +122,7 @@ class SaleController extends Controller
                         'product_id' => $item['product_id'],
                         'quantity'   => $item['quantity'],
                         'price'      => $item['price'],
+                        'cost_price' => $product->cost_price,
                         'subtotal'   => $item['quantity'] * $item['price'],
                     ]);
 
@@ -138,7 +139,7 @@ class SaleController extends Controller
                     ]);
                 }
 
-                $sale->load(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price', 'tenant']);
+                $sale->load(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price,cost_price', 'tenant']);
 
                 return response()->json(['success' => true, 'message' => 'Sale completed successfully.', 'data' => $sale], 201);
             });
@@ -358,6 +359,7 @@ class SaleController extends Controller
                             'product_id' => $item['product_id'],
                             'quantity'   => $item['quantity'],
                             'price'      => $item['price'],
+                            'cost_price' => $product->cost_price,
                             'subtotal'   => $item['quantity'] * $item['price'],
                         ]);
 
@@ -380,7 +382,7 @@ class SaleController extends Controller
 
                 // Eager-load relations for all created sales in one batch
                 $createdSaleIds = collect($createdSales)->pluck('id')->all();
-                $salesWithRelations = Sale::with(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price', 'tenant'])
+                $salesWithRelations = Sale::with(['user:id,name,email', 'customer:id,name,phone,email', 'saleItems.product:id,name,price,cost_price', 'tenant'])
                     ->whereIn('id', $createdSaleIds)
                     ->orderBy('id', 'asc')
                     ->get();
@@ -551,6 +553,7 @@ class SaleController extends Controller
                             'product_id' => $item['product_id'],
                             'quantity'   => $item['quantity'],
                             'price'      => $item['price'],
+                            'cost_price' => $product->cost_price,
                             'subtotal'   => $item['quantity'] * $item['price'],
                         ]);
                         $product->decrement('stock', $item['quantity']);
@@ -644,34 +647,89 @@ class SaleController extends Controller
 
     /**
      * Calculate the total cost and profit for a collection of sales.
-     * Cost  = sum of (item.quantity × product.cost_price) across all sale items.
+     * Cost  = sum of (item.quantity × cost_price) across all sale items.
      * Profit = total_sales_amount − total_cost.
+     * Never silently treats unavailable product costs as zero.
      *
-     * Returns ['total_cost' => float, 'total_profit' => float, 'sales' => collection with appended cost/profit].
+     * Returns ['total_cost' => ?float, 'known_cost' => float, 'total_profit' => ?float, 'cost_status' => string, 'sales' => collection].
      */
     private function calcProfitForSales($sales): array
     {
-        $totalCost = 0;
+        $knownCost        = 0.0;
+        $estimatedSales   = 0;
+        $unavailableSales = 0;
 
-        $salesWithProfit = $sales->map(function ($sale) use (&$totalCost) {
-            $saleCost = $sale->saleItems->sum(function ($item) {
-                $costPrice = $item->product?->cost_price ?? 0;
-                return $item->quantity * floatval($costPrice);
-            });
-            $totalCost   += $saleCost;
-            $saleProfit   = floatval($sale->total_amount) - $saleCost;
+        $salesWithProfit = $sales->map(function ($sale) use (&$knownCost, &$estimatedSales, &$unavailableSales) {
+            $saleKnownCost        = 0.0;
+            $saleEstimatedItems   = 0;
+            $saleUnavailableItems = 0;
+            $saleItemCount        = 0;
+
+            foreach ($sale->saleItems as $item) {
+                $qty = (int) $item->quantity;
+                $saleItemCount++;
+
+                if ($item->cost_price !== null) {
+                    $saleKnownCost += $qty * floatval($item->cost_price);
+                } elseif ($item->product !== null && $item->product->cost_price !== null) {
+                    $saleKnownCost += $qty * floatval($item->product->cost_price);
+                    $saleEstimatedItems++;
+                } else {
+                    $saleUnavailableItems++;
+                }
+            }
+
+            $knownCost += $saleKnownCost;
+
+            if ($saleUnavailableItems > 0 || $saleItemCount === 0) {
+                $saleCostStatus = 'unavailable';
+                $saleCost       = null;
+                $saleProfit     = null;
+                $unavailableSales++;
+            } elseif ($saleEstimatedItems > 0) {
+                $saleCostStatus = 'estimated';
+                $saleCost       = round($saleKnownCost, 2);
+                $saleProfit     = round(floatval($sale->total_amount) - $saleKnownCost, 2);
+                $estimatedSales++;
+            } else {
+                $saleCostStatus = 'recorded';
+                $saleCost       = round($saleKnownCost, 2);
+                $saleProfit     = round(floatval($sale->total_amount) - $saleKnownCost, 2);
+            }
+
             // Append computed fields without persisting
-            $sale->setAttribute('cost',   round($saleCost,   2));
-            $sale->setAttribute('profit', round($saleProfit, 2));
+            $sale->setAttribute('cost',        $saleCost);
+            $sale->setAttribute('known_cost',  round($saleKnownCost, 2));
+            $sale->setAttribute('profit',      $saleProfit);
+            $sale->setAttribute('cost_status', $saleCostStatus);
             return $sale;
         });
 
-        $totalSales  = $sales->sum('total_amount');
-        $totalProfit = floatval($totalSales) - $totalCost;
+        $totalSales = floatval($sales->sum('total_amount'));
+
+        if ($sales->isEmpty()) {
+            $costStatus  = 'no_sales';
+            $totalCost   = 0.0;
+            $totalProfit = 0.0;
+        } elseif ($unavailableSales > 0) {
+            $costStatus  = 'unavailable';
+            $totalCost   = null;
+            $totalProfit = null;
+        } elseif ($estimatedSales > 0) {
+            $costStatus  = 'estimated';
+            $totalCost   = round($knownCost, 2);
+            $totalProfit = round($totalSales - $knownCost, 2);
+        } else {
+            $costStatus  = 'recorded';
+            $totalCost   = round($knownCost, 2);
+            $totalProfit = round($totalSales - $knownCost, 2);
+        }
 
         return [
-            'total_cost'   => round($totalCost,   2),
-            'total_profit' => round($totalProfit, 2),
+            'total_cost'   => $totalCost,
+            'known_cost'   => round($knownCost, 2),
+            'total_profit' => $totalProfit,
+            'cost_status'  => $costStatus,
             'sales'        => $salesWithProfit,
         ];
     }
@@ -738,5 +796,37 @@ class SaleController extends Controller
         $validated = $request->validate(['year' => 'required|digits:4|integer|min:2000|max:2100']);
 
         return response()->json(['success' => true, 'data' => $reportService->getYearlySalesReport((int)$validated['year'])]);
+    }
+
+    public function getRevenueProfitAnalytics(Request $request, \App\Services\ReportService $reportService): JsonResponse
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        if (isset($user->is_active) && !$user->is_active) {
+            return response()->json(['success' => false, 'message' => 'Your account has been disabled.'], 403);
+        }
+
+        $isPrivileged = $user->roles()->pluck('name')
+                            ->intersect(['owner', 'admin', 'manager'])
+                            ->isNotEmpty();
+
+        if (!$isPrivileged && !$user->hasPermission('sales.report') && !$user->hasPermission('reports.view')) {
+            return response()->json(['success' => false, 'message' => 'You do not have permission to view sales reports.'], 403);
+        }
+
+        $validated = $request->validate([
+            'group_by'   => 'nullable|string|in:daily,weekly,monthly',
+            'start_date' => 'nullable|date',
+            'end_date'   => 'nullable|date|after_or_equal:start_date',
+            'year'       => 'nullable|digits:4|integer|min:2000|max:2100',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $reportService->getRevenueProfitAnalytics($validated),
+        ]);
     }
 }

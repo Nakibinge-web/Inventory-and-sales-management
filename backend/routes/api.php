@@ -180,10 +180,11 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // (sales.create, sales.view, sales.report).
     Route::prefix('sales')->group(function () {
         // Report routes must be declared before /{sale} wildcard
-        Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
-        Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
-        Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
-        Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
+        Route::get('/daily-report',    [SaleController::class, 'getDailyReport']);
+        Route::get('/weekly-report',   [SaleController::class, 'getWeeklyReport']);
+        Route::get('/monthly-report',  [SaleController::class, 'getMonthlySalesReport']);
+        Route::get('/yearly-report',   [SaleController::class, 'getYearlyReport']);
+        Route::get('/revenue-profit',  [SaleController::class, 'getRevenueProfitAnalytics']);
 
         Route::post('/bulk',   [SaleController::class, 'bulkStore']);
         Route::get('/',        [SaleController::class, 'index']);
@@ -229,8 +230,9 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Report Preferences
     Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
 
-    // Report Exports
+    // Report Exports & Analytics
     Route::prefix('reports')->group(function () {
+        Route::get('/revenue-profit', [SaleController::class, 'getRevenueProfitAnalytics']);
         Route::get('/generated', [\App\Http\Controllers\ReportExportController::class, 'listGeneratedReports']);
         Route::get('/generated/{id}/export', [\App\Http\Controllers\ReportExportController::class, 'exportGeneratedReport'])->name('reports.export-generated');
         Route::match(['get', 'post'], '/overview/export', [\App\Http\Controllers\ReportExportController::class, 'exportOverviewReport']);
