@@ -18,13 +18,13 @@ const CAPABILITIES = [
   },
   {
     index: '04',
-    title: 'Customers',
-    desc: 'Client profiles & transaction ledgers',
+    title: 'Sales',
+    desc: 'View all your Sales history with receipts',
   },
   {
     index: '05',
-    title: 'Reports',
-    desc: 'Daily audits, margins & cash totals',
+    title: 'Purchases',
+    desc: 'Record all business purchases',
   },
   {
     index: '06',
@@ -37,7 +37,7 @@ const TrustStrip = forwardRef(function TrustStrip({ activeId = '01', onSelect, c
   return (
     <section ref={ref} className={`sp-capability-strip ${className}`} aria-label="System Specifications">
       <div className="sp-container">
-        <div className="sp-spec-bar" role="tablist">
+        <div className="sp-spec-bar" role="tablist" data-aos="fade-up">
           {CAPABILITIES.map((item) => {
             const isActive = activeId === item.index;
             return (

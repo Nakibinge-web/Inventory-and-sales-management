@@ -7,8 +7,7 @@ import SaleReceipt from '../components/SaleReceipt';
 import { PrintableInvoiceModal } from './Invoices';
 import styles from '../styles/dashboardStyles';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
 
 
 function formatSaleDateTime(saleDate, createdAt) {

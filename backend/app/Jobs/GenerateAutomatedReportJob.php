@@ -34,6 +34,10 @@ class GenerateAutomatedReportJob implements ShouldQueue
             return;
         }
 
+        if ($preference->tenant && $preference->tenant->isSubscriptionExpired()) {
+            return;
+        }
+
         // Establish tenant context
         app()->instance('current_tenant', $preference->tenant);
 

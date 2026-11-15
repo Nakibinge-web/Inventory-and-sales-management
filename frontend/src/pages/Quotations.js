@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '../components/ui/Modal';
 import styles from '../styles/dashboardStyles';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
 
 // ══════════════════════════════════════════════════════════════════════════
 // PRINTABLE QUOTATION MODAL (Screen preview + PDF export / Browser Print)

@@ -4,11 +4,13 @@
  */
 
 // Base API URL with /api endpoint
-export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const envApiUrl = import.meta.env.VITE_API_URL || import.meta.env.REACT_APP_API_URL;
+
+export const API_URL = envApiUrl || 'http://localhost:8000/api';
 
 // Base URL without /api (for image uploads, etc.)
-export const API_BASE_URL = process.env.REACT_APP_API_URL 
-  ? process.env.REACT_APP_API_URL.replace('/api', '') 
+export const API_BASE_URL = envApiUrl
+  ? envApiUrl.replace('/api', '')
   : 'http://localhost:8000';
 
 // Helper function to create headers with authorization

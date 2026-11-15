@@ -47,7 +47,7 @@ export default function QuickStartSteps({
     <section id={id} className={sectionClass} aria-labelledby="steps-heading">
       <div className="sp-container">
         {/* Section Heading */}
-        <div className="sp-steps-header">
+        <div className="sp-steps-header" data-aos="fade-up">
           {eyebrow && (
             <div className="sp-steps-eyebrow">
               {eyebrow}
@@ -69,7 +69,11 @@ export default function QuickStartSteps({
         <div className="sp-steps-flow">
           {STEPS.map((item, index) => (
             <React.Fragment key={item.step}>
-              <div className="sp-step-card">
+              <div
+                className="sp-step-card"
+                data-aos="zoom-in-up"
+                data-aos-delay={index * 110}
+              >
                 {/* Number Badge */}
                 <div className="sp-step-badge-wrap">
                   <div className="sp-step-number-badge">
@@ -84,7 +88,12 @@ export default function QuickStartSteps({
 
               {/* Connector Arrow (Rendered between steps 1-2, 2-3, 3-4) */}
               {index < STEPS.length - 1 && (
-                <div className="sp-step-connector" aria-hidden="true">
+                <div
+                  className="sp-step-connector"
+                  aria-hidden="true"
+                  data-aos="fade-in"
+                  data-aos-delay={index * 110 + 60}
+                >
                   <FaArrowRightIcon size={20} className="sp-step-arrow-icon" />
                 </div>
               )}
@@ -94,7 +103,7 @@ export default function QuickStartSteps({
 
         {/* Action Buttons */}
         {showCta && (ctaText || secondaryCtaText) && (
-          <div className="sp-steps-cta-wrap">
+          <div className="sp-steps-cta-wrap" data-aos="fade-up" data-aos-delay="220">
             {ctaText && ctaHref && (
               <MarketingLink href={ctaHref} className="sp-btn sp-btn-primary sp-btn-lg sp-steps-btn">
                 <span>{ctaText}</span>

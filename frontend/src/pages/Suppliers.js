@@ -3,11 +3,10 @@ import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import styles, { supS } from '../styles/dashboardStyles';
+import { API_URL } from '../config/api';
 
 
 function SuppliersTab({ suppliers, loading, token, user, toast, onSupplierAdded, onSupplierUpdated, onSupplierDeleted, canCreate = true, canEdit = true, canDelete = true }) {
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-
   const EMPTY_FORM = { name: '', contact: '', email: '', address: '' };
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);

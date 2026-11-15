@@ -4,11 +4,10 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import styles, { supS } from '../styles/dashboardStyles';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
+import { API_URL } from '../config/api';
 
 
 function PurchasesTab({ purchases, loading, token, user, suppliers, products, categories = [], toast, onPurchaseAdded, onPurchaseUpdated, onPurchaseDeleted, canCreate = true, canEdit = true, canDelete = true }) {
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-
   // Each line can be 'existing' (select from products) or 'new' (fill in details)
   const EMPTY_LINE = {
     mode: 'existing',          // 'existing' | 'new'

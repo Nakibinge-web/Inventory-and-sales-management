@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\MomoTransaction;
 use App\Models\Tenant;
@@ -233,14 +234,20 @@ class MomoPaymentController extends Controller
             $newStatus = strtoupper($momoData['status'] ?? 'PENDING');
 
             if ($newStatus === 'SUCCESSFUL') {
-                $transaction->update([
-                    'status'                   => 'SUCCESSFUL',
-                    'financial_transaction_id' => $momoData['financialTransactionId'] ?? null,
-                    'raw_response'             => $momoData,
-                ]);
+                $updated = MomoTransaction::where('id', $transaction->id)
+                    ->where('status', 'PENDING')
+                    ->update([
+                        'status'                   => 'SUCCESSFUL',
+                        'financial_transaction_id' => $momoData['financialTransactionId'] ?? null,
+                        'raw_response'             => $momoData,
+                    ]);
 
-                // Update or provision Tenant Subscription
-                $this->handleSuccessfulSubscription($transaction);
+                $transaction = $transaction->fresh();
+
+                if ($updated > 0) {
+                    // Update or provision Tenant Subscription
+                    $this->handleSuccessfulSubscription($transaction);
+                }
 
             } elseif (in_array($newStatus, ['FAILED', 'REJECTED', 'TIMEOUT'])) {
                 $transaction->update([
@@ -300,13 +307,19 @@ class MomoPaymentController extends Controller
         $incomingStatus = strtoupper($payload['status'] ?? '');
 
         if ($incomingStatus === 'SUCCESSFUL') {
-            $transaction->update([
-                'status'                   => 'SUCCESSFUL',
-                'financial_transaction_id' => $payload['financialTransactionId'] ?? null,
-                'webhook_payload'          => $payload,
-            ]);
+            $updated = MomoTransaction::where('id', $transaction->id)
+                ->where('status', 'PENDING')
+                ->update([
+                    'status'                   => 'SUCCESSFUL',
+                    'financial_transaction_id' => $payload['financialTransactionId'] ?? null,
+                    'webhook_payload'          => $payload,
+                ]);
 
-            $this->handleSuccessfulSubscription($transaction);
+            $transaction = $transaction->fresh();
+
+            if ($updated > 0) {
+                $this->handleSuccessfulSubscription($transaction);
+            }
 
         } elseif (in_array($incomingStatus, ['FAILED', 'REJECTED'])) {
             $transaction->update([
@@ -324,25 +337,25 @@ class MomoPaymentController extends Controller
      */
     protected function handleSuccessfulSubscription(MomoTransaction $transaction): void
     {
-        $tenant = null;
+        DB::transaction(function () use ($transaction) {
+            $tenant = null;
 
-        if ($transaction->tenant_id) {
-            $tenant = Tenant::find($transaction->tenant_id);
-        } elseif (!empty($transaction->customer_email)) {
-            $tenant = Tenant::where('email', $transaction->customer_email)->first();
-        }
+            if ($transaction->tenant_id) {
+                $tenant = Tenant::where('id', $transaction->tenant_id)->lockForUpdate()->first();
+            } elseif (!empty($transaction->customer_email)) {
+                $tenant = Tenant::whereRaw('LOWER(email) = ?', [strtolower(trim($transaction->customer_email))])
+                    ->lockForUpdate()
+                    ->first();
+            }
 
-        if ($tenant) {
-            $durationMonths = ($transaction->billing_cycle === 'annual') ? 12 : 1;
-            $expiresAt = now()->addMonths($durationMonths);
+            if ($tenant) {
+                $expiresAt = $tenant->applySubscriptionPurchase(
+                    (string) $transaction->plan_id,
+                    (string) $transaction->billing_cycle
+                );
 
-            $tenant->update([
-                'subscription_plan'       => $transaction->plan_id,
-                'subscription_status'     => 'active',
-                'subscription_expires_at' => $expiresAt,
-            ]);
-
-            Log::info("Activated {$transaction->plan_id} subscription for Tenant #{$tenant->id} until {$expiresAt}");
-        }
+                Log::info("Activated {$transaction->plan_id} subscription for Tenant #{$tenant->id} until {$expiresAt}");
+            }
+        });
     }
 }

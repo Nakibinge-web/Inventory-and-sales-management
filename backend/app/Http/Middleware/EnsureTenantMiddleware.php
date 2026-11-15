@@ -31,6 +31,13 @@ class EnsureTenantMiddleware
             return response()->json(['success' => false, 'message' => 'Tenant not found.'], 403);
         }
 
+        if (!$request->is('api/logout') && $tenant->isSubscriptionExpired()) {
+            return response()->json(
+                $tenant->subscriptionBlockedPayload($user->hasRole('owner'), false),
+                403
+            );
+        }
+
         // Store tenant on the request for controllers to access
         $request->merge(['_tenant_id' => $tenant->id]);
         app()->instance('current_tenant', $tenant);

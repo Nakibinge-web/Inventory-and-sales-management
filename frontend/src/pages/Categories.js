@@ -3,8 +3,7 @@ import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import styles, { catS } from '../styles/dashboardStyles';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
 
 function CategoriesTab({ categories, loading, token, canCreate = true, canEdit = true, canDelete = true, onCategoryAdded, onCategoryUpdated, onCategoryDeleted }) {
   const [showAddModal, setShowAddModal] = useState(false);

@@ -4,8 +4,7 @@ import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
 import styles, { posS } from '../styles/dashboardStyles';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
 
 const isPriceInvalid = (item) => {
   if (!item) return false;

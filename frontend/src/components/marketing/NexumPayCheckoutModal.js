@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { navigateTo } from '../../utils/navigation';
 import { CheckIcon, ArrowRightIcon } from './Icons';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../../config/api';
+import {
+  computeExtendedSubscriptionExpiry,
+  getDurationDays,
+  getRemainingSubscriptionDays,
+  isTenantSubscriptionExpired,
+} from '../../utils/subscription';
 
 export const NEXUMPAY_PLANS = {
   starter: {
@@ -73,6 +78,10 @@ export default function NexumPayCheckoutModal({
   isModal = true,
   initialPlanId = 'starter',
   initialBillingCycle = 'monthly',
+  currentTenant = null,
+  prefillCustomer = null,
+  continueLabel = null,
+  onContinue = null,
   onClose,
   onPaymentSuccess,
 }) {
@@ -103,15 +112,28 @@ export default function NexumPayCheckoutModal({
     try {
       const raw = localStorage.getItem('user');
       if (raw) savedUser = JSON.parse(raw);
-    } catch {}
+    } catch {
+      // Ignore invalid localStorage payload
+    }
 
     return {
-      name: savedUser?.name || '',
-      email: savedUser?.email || savedUser?.tenant?.email || '',
-      businessName: savedUser?.tenant?.name || '',
-      phone: savedUser?.tenant?.phone || '',
+      name: prefillCustomer?.name || savedUser?.name || '',
+      email: prefillCustomer?.email || savedUser?.email || savedUser?.tenant?.email || '',
+      businessName: prefillCustomer?.businessName || savedUser?.tenant?.name || '',
+      phone: prefillCustomer?.phone || savedUser?.tenant?.phone || '',
     };
   });
+
+  // Sync prefilled customer info when opened with explicit tenant/renewal context
+  useEffect(() => {
+    if (!isOpen || !prefillCustomer) return;
+    setFormData((prev) => ({
+      name: prefillCustomer.name || prev.name,
+      email: prefillCustomer.email || prev.email,
+      businessName: prefillCustomer.businessName || prev.businessName,
+      phone: prefillCustomer.phone || prev.phone,
+    }));
+  }, [isOpen, prefillCustomer]);
 
   // Gateway configuration state
   const [configStatus, setConfigStatus] = useState(null);
@@ -141,6 +163,15 @@ export default function NexumPayCheckoutModal({
       timerIntervalRef.current = null;
     }
   }, []);
+
+  // Reset transient transaction state whenever the checkout modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    stopTimers();
+    setTxState('IDLE');
+    setTxData(null);
+    setErrorMessage('');
+  }, [isOpen, stopTimers]);
 
   // Check backend NexumPay config on mount
   useEffect(() => {
@@ -189,21 +220,22 @@ export default function NexumPayCheckoutModal({
         if (rawUser) {
           const parsed = JSON.parse(rawUser);
           if (parsed && parsed.tenant) {
+            const nextExpiresAt = computeExtendedSubscriptionExpiry(
+              parsed.tenant,
+              selectedPlanId,
+              billingCycle,
+              transactionObj?.tenant_subscription?.subscription_expires_at || null
+            );
             parsed.tenant.subscription_plan = selectedPlanId;
             parsed.tenant.subscription_status = 'active';
-            if (transactionObj?.tenant_subscription?.subscription_expires_at) {
-              parsed.tenant.subscription_expires_at =
-                transactionObj.tenant_subscription.subscription_expires_at;
-            } else {
-              const months = billingCycle === 'annual' ? 12 : 1;
-              const date = new Date();
-              date.setMonth(date.getMonth() + months);
-              parsed.tenant.subscription_expires_at = date.toISOString();
-            }
+            parsed.tenant.is_subscription_expired = false;
+            parsed.tenant.subscription_expires_at = nextExpiresAt;
             localStorage.setItem('user', JSON.stringify(parsed));
             try {
               window.dispatchEvent(new CustomEvent('subscription_updated', { detail: parsed }));
-            } catch {}
+            } catch {
+              // Ignore window event dispatch errors
+            }
           }
         }
         // Also store pending checkout details for new users heading to /register
@@ -222,7 +254,9 @@ export default function NexumPayCheckoutModal({
             customer_phone: formData.phone,
           })
         );
-      } catch {}
+      } catch {
+        // Ignore storage persistence errors
+      }
 
       if (onPaymentSuccess) {
         onPaymentSuccess(transactionObj);
@@ -347,6 +381,7 @@ export default function NexumPayCheckoutModal({
           customer_name: formData.name.trim(),
           customer_email: formData.email.trim(),
           business_name: formData.businessName.trim() || formData.name.trim(),
+          ...(prefillCustomer?.renewalToken ? { renewal_token: prefillCustomer.renewalToken } : {}),
         }),
       });
 
@@ -363,7 +398,7 @@ export default function NexumPayCheckoutModal({
       setTxData(data);
       setTxState('AWAITING_PIN');
       startPolling(data.client_ref || data.reference_id);
-    } catch (err) {
+    } catch {
       setTxState('FAILED');
       setErrorMessage(
         `Unable to reach the payment server at ${API}. Make sure your Laravel backend is running (php artisan serve).`
@@ -420,6 +455,10 @@ export default function NexumPayCheckoutModal({
   };
 
   const handleContinueAfterSuccess = () => {
+    if (onContinue) {
+      onContinue(txData);
+      return;
+    }
     const isLoggedIn = Boolean(localStorage.getItem('token') && localStorage.getItem('user'));
     if (onClose) onClose();
     if (isLoggedIn) {
@@ -434,6 +473,24 @@ export default function NexumPayCheckoutModal({
   const isLoggedIn = Boolean(localStorage.getItem('token') && localStorage.getItem('user'));
   const networkLabel =
     selectedNetwork === 'airtel' ? 'Airtel Money Uganda' : 'MTN Mobile Money';
+
+  let activeTenant = currentTenant;
+  if (!activeTenant) {
+    try {
+      const rawUser = localStorage.getItem('user');
+      if (rawUser) activeTenant = JSON.parse(rawUser)?.tenant || null;
+    } catch {
+      // Ignore storage read errors
+    }
+  }
+  const currentRemainingDays = getRemainingSubscriptionDays(activeTenant);
+  const cycleDays = getDurationDays(billingCycle);
+  const isSamePlanExtension = Boolean(
+    activeTenant &&
+      !isTenantSubscriptionExpired(activeTenant) &&
+      currentRemainingDays > 0 &&
+      String(activeTenant.subscription_plan || '').trim().toLowerCase() === selectedPlanId
+  );
 
   const checkoutContent = (
     <div
@@ -586,8 +643,17 @@ export default function NexumPayCheckoutModal({
             </div>
             <div className="nxp-total-line">
               <span>Duration</span>
-              <span>{billingCycle === 'annual' ? '12 Months (Annual)' : '1 Month (Monthly)'}</span>
+              <span>{billingCycle === 'annual' ? '365 Days (Annual)' : '30 Days (Monthly)'}</span>
             </div>
+            {isSamePlanExtension && (
+              <div className="nxp-total-line" data-testid="nxp-extension-summary">
+                <span>Subscription Extension</span>
+                <span>
+                  +{cycleDays} days ({currentRemainingDays} + {cycleDays} ={' '}
+                  {currentRemainingDays + cycleDays} days left)
+                </span>
+              </div>
+            )}
             <div className="nxp-total-line">
               <span>Payment Channel</span>
               <span>NexumPay ({selectedNetwork === 'airtel' ? 'Airtel' : 'MTN'})</span>
@@ -961,6 +1027,15 @@ export default function NexumPayCheckoutModal({
                       <code>{txData.internal_ref}</code>
                     </div>
                   )}
+                  {txData?.tenant_subscription?.remaining_days != null && (
+                    <div className="nxp-receipt-row" data-testid="nxp-receipt-remaining-days">
+                      <span>Total Days Remaining</span>
+                      <strong>
+                        {txData.tenant_subscription.remaining_days}{' '}
+                        {txData.tenant_subscription.remaining_days === 1 ? 'day' : 'days'}
+                      </strong>
+                    </div>
+                  )}
                   <div className="nxp-receipt-row">
                     <span>Transaction Date</span>
                     <span>{txData?.transaction_date || new Date().toLocaleString()}</span>
@@ -975,9 +1050,10 @@ export default function NexumPayCheckoutModal({
                   onClick={handleContinueAfterSuccess}
                 >
                   <span>
-                    {isLoggedIn
-                      ? 'Return to Business Dashboard'
-                      : 'Continue to Complete Store Registration'}
+                    {continueLabel ||
+                      (isLoggedIn
+                        ? 'Return to Business Dashboard'
+                        : 'Continue to Complete Store Registration')}
                   </span>
                   <ArrowRightIcon size={16} />
                 </button>

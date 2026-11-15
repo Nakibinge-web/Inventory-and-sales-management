@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../components/ui/Button';
 import NexumPayCheckoutModal, { NEXUMPAY_PLANS, formatUgx } from '../components/marketing/NexumPayCheckoutModal';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
+import {
+  computeExtendedSubscriptionExpiry,
+  getRemainingSubscriptionDays,
+} from '../utils/subscription';
 
 export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
   const [businessInfo, setBusinessInfo] = useState({
@@ -178,13 +181,30 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
   };
 
   const handleSubscriptionSuccess = (tx) => {
-    const newPlan = tx?.plan_id || checkoutPlan || 'starter';
-    const expiresAt = tx?.tenant_subscription?.subscription_expires_at || null;
+    const newPlan = tx?.plan_id || checkoutPlan || businessInfo.subscription_plan || 'starter';
+    const cycle = tx?.billing_cycle || billingCycle || 'monthly';
+    const serverExpiresAt = tx?.tenant_subscription?.subscription_expires_at || null;
+    const baseTenant = {
+      ...(user?.tenant || {}),
+      ...businessInfo,
+    };
+    const nextExpiresAt = computeExtendedSubscriptionExpiry(
+      baseTenant,
+      newPlan,
+      cycle,
+      serverExpiresAt
+    );
+
     setBusinessInfo((prev) => ({
       ...prev,
       subscription_plan: newPlan,
       subscription_status: 'active',
-      subscription_expires_at: expiresAt,
+      subscription_expires_at: computeExtendedSubscriptionExpiry(
+        prev,
+        newPlan,
+        cycle,
+        serverExpiresAt
+      ),
     }));
     if (onBusinessInfoUpdate) {
       onBusinessInfoUpdate((prevUser) => {
@@ -194,20 +214,40 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
             ...(prevUser?.tenant || {}),
             subscription_plan: newPlan,
             subscription_status: 'active',
-            subscription_expires_at: expiresAt,
+            subscription_expires_at: computeExtendedSubscriptionExpiry(
+              prevUser?.tenant || baseTenant,
+              newPlan,
+              cycle,
+              serverExpiresAt
+            ),
+            is_subscription_expired: false,
           },
         };
         try {
           localStorage.setItem('user', JSON.stringify(updated));
-        } catch {}
+        } catch {
+          // Ignore storage persistence errors
+        }
         try {
           window.dispatchEvent(new CustomEvent('subscription_updated', { detail: updated }));
-        } catch {}
+        } catch {
+          // Ignore window event dispatch errors
+        }
         return updated;
       });
     }
     if (toast) {
-      toast.success('Subscription Active', `Your ${newPlan.toUpperCase()} subscription is now active via NexumPay!`);
+      const updatedDays = getRemainingSubscriptionDays({
+        subscription_plan: newPlan,
+        subscription_status: 'active',
+        subscription_expires_at: nextExpiresAt,
+      });
+      toast.success(
+        'Subscription Active',
+        updatedDays > 0
+          ? `Your ${newPlan.toUpperCase()} subscription is active with ${updatedDays} days remaining.`
+          : `Your ${newPlan.toUpperCase()} subscription is now active via NexumPay!`
+      );
     }
   };
 
@@ -219,6 +259,11 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
     );
   }
 
+  const effectiveTenant = {
+    ...(user?.tenant || {}),
+    ...businessInfo,
+  };
+  const remainingSubscriptionDays = getRemainingSubscriptionDays(effectiveTenant);
   const activePlanKey = (businessInfo.subscription_plan || 'trial').toLowerCase();
   const activeStatus = (businessInfo.subscription_status || 'trial').toUpperCase();
 
@@ -461,7 +506,7 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
               Upgrade or renew your StockPro subscription instantly with MTN Mobile Money or Airtel Money
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <span style={{
               fontSize: '12px',
               fontWeight: '700',
@@ -473,6 +518,22 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
             }}>
               Current Tier: {activePlanKey.toUpperCase()} ({activeStatus})
             </span>
+            {remainingSubscriptionDays > 0 && (
+              <span
+                data-testid="settings-remaining-days"
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background: '#eef2ff',
+                  color: '#3730a3',
+                  border: '1px solid #c7d2fe',
+                }}
+              >
+                {remainingSubscriptionDays} {remainingSubscriptionDays === 1 ? 'day' : 'days'} left
+              </span>
+            )}
           </div>
         </div>
 
@@ -599,6 +660,13 @@ export default function Settings({ user, token, toast, onBusinessInfoUpdate }) {
         isModal={true}
         initialPlanId={checkoutPlan || 'starter'}
         initialBillingCycle={billingCycle}
+        currentTenant={effectiveTenant}
+        prefillCustomer={{
+          name: user?.name || businessInfo.name || '',
+          email: businessInfo.email || user?.email || '',
+          businessName: businessInfo.name || user?.tenant?.name || '',
+          phone: businessInfo.phone || user?.tenant?.phone || '',
+        }}
         onClose={() => setCheckoutPlan(null)}
         onPaymentSuccess={handleSubscriptionSuccess}
       />

@@ -115,7 +115,7 @@ export default function PricingSection() {
     <section className="sp-landing-pricing-section" aria-labelledby="pricing-plans-heading">
       <div className="sp-container">
         {/* Header Area */}
-        <div className="sp-pricing-header">
+        <div className="sp-pricing-header" data-aos="fade-up">
           <div className="sp-pricing-eyebrow">
             TRANSPARENT PLANS
           </div>
@@ -152,7 +152,7 @@ export default function PricingSection() {
 
         {/* 4 Cards in 1 Row: Card 1 | Card 2 | Card 3 | Card 4 */}
         <div className="sp-landing-pricing-grid" role="list" aria-label="Subscription Plans">
-          {PRICING_PLANS.map((plan) => {
+          {PRICING_PLANS.map((plan, index) => {
             const displayPrice = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
 
             return (
@@ -160,6 +160,8 @@ export default function PricingSection() {
                 key={plan.id}
                 className={`sp-landing-plan-card ${plan.featured ? 'featured' : ''}`}
                 role="listitem"
+                data-aos="fade-up"
+                data-aos-delay={index * 100}
               >
                 {/* Popular or Tier Badge */}
                 <div className="sp-plan-card-top">
@@ -226,7 +228,7 @@ export default function PricingSection() {
         </div>
 
         {/* Bottom Comparison Note */}
-        <div className="sp-pricing-bottom-bar">
+        <div className="sp-pricing-bottom-bar" data-aos="fade-up" data-aos-delay="150">
           <span>Need custom hardware integrations or enterprise multi-store consulting?</span>
           <MarketingLink href="/pricing" className="sp-pricing-link">
             <span>View Full Feature Comparison &amp; FAQs</span>

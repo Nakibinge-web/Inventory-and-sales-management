@@ -53,7 +53,7 @@ export default function WhoNeedsStock() {
     <section className="sp-who-section" aria-labelledby="who-needs-stock-heading">
       <div className="sp-container">
         {/* Section Header */}
-        <div className="sp-who-header">
+        <div className="sp-who-header" data-aos="fade-up">
           <div className="sp-who-eyebrow">
             BUILT FOR MODERN COMMERCE
           </div>
@@ -71,8 +71,13 @@ export default function WhoNeedsStock() {
         <div className="sp-who-grid">
           {/* Left Column (Points 1 - 5) */}
           <div className="sp-who-column">
-            {COLUMN_ONE_AUDIENCES.map((point) => (
-              <div key={point.id} className="sp-who-card">
+            {COLUMN_ONE_AUDIENCES.map((point, index) => (
+              <div
+                key={point.id}
+                className="sp-who-card"
+                data-aos="fade-up"
+                data-aos-delay={index * 70}
+              >
                 <div className="sp-who-marker" aria-hidden="true">
                   <span className="sp-who-dot" />
                 </div>
@@ -86,8 +91,13 @@ export default function WhoNeedsStock() {
 
           {/* Right Column (Points 6 - 10) */}
           <div className="sp-who-column">
-            {COLUMN_TWO_AUDIENCES.map((point) => (
-              <div key={point.id} className="sp-who-card">
+            {COLUMN_TWO_AUDIENCES.map((point, index) => (
+              <div
+                key={point.id}
+                className="sp-who-card"
+                data-aos="fade-up"
+                data-aos-delay={(index + 1) * 70}
+              >
                 <div className="sp-who-marker" aria-hidden="true">
                   <span className="sp-who-dot" />
                 </div>
@@ -101,7 +111,7 @@ export default function WhoNeedsStock() {
         </div>
 
         {/* Elegant Bottom Reassurance Banner */}
-        <div className="sp-who-footer-bar">
+        <div className="sp-who-footer-bar" data-aos="fade-up" data-aos-delay="150">
           <div className="sp-who-footer-text">
             <strong>Don't see your specific industry listed?</strong>
             <span style={{ display: 'block', fontSize: 13, color: 'var(--sp-text-muted)', marginTop: 3 }}>

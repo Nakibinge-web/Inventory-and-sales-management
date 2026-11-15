@@ -22,8 +22,14 @@ import StockMovementsTab from './StockMovements';
 import InvoicesTab from './Invoices';
 import QuotationsTab from './Quotations';
 import Settings from './Settings';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
+import SubscriptionExpiredScreen from '../components/SubscriptionExpiredScreen';
+import {
+  computeExtendedSubscriptionExpiry,
+  isTenantSubscriptionExpired,
+  isSubscriptionExpiredResponse,
+  dispatchSubscriptionExpired,
+} from '../utils/subscription';
 
 const VALID_TABS = [
   'overview',
@@ -72,6 +78,14 @@ function getSubscriptionBadge(tenant) {
       : 'Subscription';
 
   if (!expiresAt) {
+    if (['expired', 'cancelled', 'canceled', 'suspended', 'past_due'].includes(status)) {
+      return {
+        variant: 'expired',
+        text: `${planTitle} · Expired`,
+        shortText: 'Expired',
+        subText: 'Subscription expired. Click to renew.',
+      };
+    }
     if (status === 'trial') {
       return {
         variant: 'trial',
@@ -105,13 +119,16 @@ function getSubscriptionBadge(tenant) {
   const diffMs = expiryDate.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) {
-    const expiredDays = Math.abs(diffDays);
+  if (diffMs <= 0) {
+    const expiredDays = Math.max(0, Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24)));
     return {
       variant: 'expired',
       text: `${planTitle} · Expired`,
       shortText: 'Expired',
-      subText: `Expired ${expiredDays} day${expiredDays === 1 ? '' : 's'} ago. Click to renew.`,
+      subText:
+        expiredDays === 0
+          ? 'Expired today. Click to renew.'
+          : `Expired ${expiredDays} day${expiredDays === 1 ? '' : 's'} ago. Click to renew.`,
     };
   }
 
@@ -187,9 +204,12 @@ function getPillColors(variant) {
 export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTabState] = useState(getTabFromPath);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [subscriptionBlock, setSubscriptionBlock] = useState(null);
+  const [, setExpiryCheckTick] = useState(0);
   const { toasts, toast, remove } = useToast();
 
   // Subscription info & pill colors computed from current tenant state
+  const isSubscriptionBlocked = isTenantSubscriptionExpired(user?.tenant, subscriptionBlock);
   const subBadge = getSubscriptionBadge(user?.tenant);
   const pillColors = subBadge ? getPillColors(subBadge.variant) : null;
 
@@ -202,24 +222,82 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         Accept: 'application/json',
       },
     })
-      .then((res) => res.json())
-      .then((resData) => {
-        if (resData && resData.success && resData.data && onUserUpdate) {
+      .then(async (res) => {
+        const resData = await res.json().catch(() => null);
+        return { status: res.status, resData };
+      })
+      .then(({ status, resData }) => {
+        if (isSubscriptionExpiredResponse(status, resData)) {
+          setSubscriptionBlock(resData);
+          setLoading(false);
+          dispatchSubscriptionExpired(resData);
+          return;
+        }
+        if (
+          resData &&
+          resData.success &&
+          resData.data &&
+          typeof resData.data === 'object' &&
+          !Array.isArray(resData.data) &&
+          (resData.data.id || resData.data.email || resData.data.tenant) &&
+          onUserUpdate
+        ) {
           onUserUpdate(resData.data);
+          if (isTenantSubscriptionExpired(resData.data?.tenant)) {
+            setLoading(false);
+          } else {
+            setSubscriptionBlock(null);
+          }
         }
       })
       .catch(() => {});
   }, [token, onUserUpdate]);
 
-  // Listen for real-time subscription update events (from checkout modal or settings)
+  // Lock active session immediately when subscription expires while open
+  useEffect(() => {
+    const expiresAt = user?.tenant?.subscription_expires_at;
+    if (!expiresAt) return undefined;
+    const expiryMs = new Date(expiresAt).getTime();
+    if (Number.isNaN(expiryMs)) return undefined;
+
+    if (expiryMs <= Date.now()) {
+      setLoading(false);
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      if (Date.now() >= expiryMs) {
+        setExpiryCheckTick((n) => n + 1);
+        setLoading(false);
+        clearInterval(timer);
+      }
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, [user?.tenant?.subscription_expires_at]);
+
+  // Listen for real-time subscription update and expiration events
   useEffect(() => {
     const handleSubUpdated = (e) => {
-      if (e.detail && onUserUpdate) {
-        onUserUpdate(e.detail);
+      if (e.detail) {
+        setSubscriptionBlock(null);
+        if (onUserUpdate) {
+          onUserUpdate(e.detail);
+        }
+      }
+    };
+    const handleSubExpired = (e) => {
+      if (e.detail) {
+        setSubscriptionBlock(e.detail);
+        setLoading(false);
       }
     };
     window.addEventListener('subscription_updated', handleSubUpdated);
-    return () => window.removeEventListener('subscription_updated', handleSubUpdated);
+    window.addEventListener('subscription_expired', handleSubExpired);
+    return () => {
+      window.removeEventListener('subscription_updated', handleSubUpdated);
+      window.removeEventListener('subscription_expired', handleSubExpired);
+    };
   }, [onUserUpdate]);
 
   const setActiveTab = useCallback((tabId, replace = false) => {
@@ -302,6 +380,17 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
 
       const safeJson = async (res) => {
         if (!res.ok) {
+          if (res.status === 403) {
+            try {
+              const errData = await res.clone().json();
+              if (isSubscriptionExpiredResponse(res.status, errData)) {
+                setSubscriptionBlock(errData);
+                dispatchSubscriptionExpired(errData);
+              }
+            } catch {
+              // Ignore non-JSON error responses
+            }
+          }
           console.warn(`API ${res.url} returned ${res.status}`);
           return { data: [] };
         }
@@ -365,7 +454,20 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
       };
 
       const safeJson = async (res) => {
-        if (!res.ok) return { data: [] };
+        if (!res.ok) {
+          if (res.status === 403) {
+            try {
+              const errData = await res.clone().json();
+              if (isSubscriptionExpiredResponse(res.status, errData)) {
+                setSubscriptionBlock(errData);
+                dispatchSubscriptionExpired(errData);
+              }
+            } catch {
+              // Ignore non-JSON error responses
+            }
+          }
+          return { data: [] };
+        }
         try { return await res.json(); } catch { return { data: [] }; }
       };
 
@@ -411,17 +513,58 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     setShowAddProduct(false);
   };
 
+  const handleSubscriptionRestored = useCallback(
+    (tx) => {
+      setSubscriptionBlock(null);
+      if (onUserUpdate) {
+        const subMeta = tx?.tenant_subscription || {};
+        const nextPlan =
+          subMeta.subscription_plan ||
+          subMeta.plan ||
+          tx?.plan_id ||
+          tx?.plan ||
+          user?.tenant?.subscription_plan ||
+          'starter';
+        const serverExpiry = subMeta.subscription_expires_at || subMeta.expires_at || null;
+        onUserUpdate((prevUser) => {
+          if (!prevUser) return prevUser;
+          return {
+            ...prevUser,
+            tenant: {
+              ...(prevUser.tenant || {}),
+              subscription_plan: nextPlan,
+              subscription_status: subMeta.subscription_status || subMeta.status || 'active',
+              subscription_expires_at: computeExtendedSubscriptionExpiry(
+                prevUser.tenant,
+                nextPlan,
+                tx?.billing_cycle || 'monthly',
+                serverExpiry
+              ),
+              is_subscription_expired: false,
+            },
+          };
+        });
+      }
+    },
+    [onUserUpdate, user?.tenant?.subscription_plan]
+  );
+
   useEffect(() => {
+    if (isSubscriptionBlocked) {
+      setLoading(false);
+      return undefined;
+    }
+
     fetchData();
-    
+
     // Lightweight auto-refresh for notifications every 30 seconds
     // Only updates stock levels, recent sales, and recent purchases
     const notificationRefreshInterval = setInterval(() => {
       refreshNotifications();
     }, 30000); // 30 seconds
-    
+
     return () => clearInterval(notificationRefreshInterval);
-  }, [fetchData, refreshNotifications]);
+  }, [fetchData, refreshNotifications, isSubscriptionBlocked]);
 
   // ── Global search ──────────────────────────────────────────────────────────
   const handleSearch = (q) => {
@@ -508,6 +651,17 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
       ]
     }
   ];
+
+  if (isSubscriptionBlocked) {
+    return (
+      <SubscriptionExpiredScreen
+        user={user}
+        blockedInfo={subscriptionBlock}
+        onLogout={onLogout}
+        onSubscriptionRestored={handleSubscriptionRestored}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -928,10 +1082,10 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userAvatar}>
-              {user.name.charAt(0).toUpperCase()}
+              {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
             </div>
             <div style={{ ...styles.userDetails }} className="user-details-text">
-              <span style={styles.userName}>{user.name}</span>
+              <span style={styles.userName}>{user?.name || user?.username || 'User'}</span>
               <span style={styles.userRole}>
                 {user.roles && user.roles.length > 0
                   ? user.roles.map(r => r.name).join(', ')

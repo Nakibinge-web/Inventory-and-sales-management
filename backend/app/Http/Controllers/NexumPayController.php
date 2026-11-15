@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use App\Models\NexumPayTransaction;
 use App\Models\Tenant;
 use App\Services\NexumPayService;
@@ -106,6 +109,7 @@ class NexumPayController extends Controller
             'customer_name'  => 'required|string|max:255',
             'customer_email' => 'required|email|max:255',
             'business_name'  => 'nullable|string|max:255',
+            'renewal_token'  => 'nullable|string',
         ]);
 
         $planKey = strtolower($request->plan_id);
@@ -130,13 +134,25 @@ class NexumPayController extends Controller
         $msisdn      = $this->nexumPay->formatMsisdn($request->phone);
         $network     = $this->nexumPay->detectNetwork($request->phone);
 
-        // Identify current authenticated user/tenant if present
+        // Identify current authenticated user/tenant if present, or verified renewal token / tenant email
         $user     = auth('sanctum')->user();
         $tenantId = $user?->tenant_id;
 
+        if (!$tenantId && $request->filled('renewal_token')) {
+            try {
+                $decryptedId = (int) Crypt::decryptString($request->renewal_token);
+                if ($decryptedId > 0 && Tenant::where('id', $decryptedId)->exists()) {
+                    $tenantId = $decryptedId;
+                }
+            } catch (Exception $e) {
+                // Ignore invalid/tampered renewal token and fall back to email lookup
+            }
+        }
+
         if (!$tenantId) {
             try {
-                $existingTenant = Tenant::where('email', $request->customer_email)->first();
+                $normalizedEmail = strtolower(trim($request->customer_email));
+                $existingTenant = Tenant::whereRaw('LOWER(email) = ?', [$normalizedEmail])->first();
                 $tenantId = $existingTenant?->id;
             } catch (Exception $e) {
                 // Ignore if DB not migrated yet
@@ -283,10 +299,13 @@ class NexumPayController extends Controller
         // If already finalized (SUCCESSFUL or FAILED), return stored state
         if (in_array($currentStatus, ['SUCCESSFUL', 'SUCCESS', 'FAILED', 'REJECTED', 'TIMEOUT'], true)) {
             $normalizedStatus = ($currentStatus === 'SUCCESS') ? 'SUCCESSFUL' : $currentStatus;
+            $tenant = in_array($normalizedStatus, ['SUCCESSFUL', 'SUCCESS'], true)
+                ? $this->resolveTenant($transaction, $cached)
+                : null;
             return response()->json([
                 'success'     => true,
                 'status'      => $normalizedStatus,
-                'transaction' => $this->formatTransactionPayload($transaction, $cached),
+                'transaction' => $this->formatTransactionPayload($transaction, $cached, [], $tenant),
             ]);
         }
 
@@ -299,31 +318,29 @@ class NexumPayController extends Controller
             if ($txState === 'SUCCESSFUL') {
                 $internalRef = $details['internal_ref'] ?? ('NXP-INT-' . strtoupper(Str::random(8)));
 
-                if ($transaction) {
-                    $transaction->update([
+                $tenant = $this->finalizeSuccessfulTransaction(
+                    $transaction,
+                    $cached,
+                    [
                         'status'           => 'SUCCESSFUL',
                         'internal_ref'     => $internalRef,
                         'charge'           => (float) ($details['charge'] ?? 0.00),
                         'transaction_date' => $details['transaction_date'] ?? now(),
                         'raw_response'     => $statusResult['raw'] ?? $statusResult,
-                    ]);
-                }
-
-                if ($cached) {
-                    $cached['status']                   = 'SUCCESSFUL';
-                    $cached['financial_transaction_id'] = $internalRef;
-                    $cached['internal_ref']             = $internalRef;
-                    $cached['charge']                   = $details['charge'] ?? '0.00';
-                    $cached['transaction_date']         = $details['transaction_date'] ?? now()->toDateTimeString();
-                    $this->saveCachedTransaction($cached['reference_id'], $clientRef, $cached);
-                }
-
-                $tenant = $this->activateSubscription($transaction, $cached);
+                    ],
+                    [
+                        'status'                   => 'SUCCESSFUL',
+                        'financial_transaction_id' => $internalRef,
+                        'internal_ref'             => $internalRef,
+                        'charge'                   => $details['charge'] ?? '0.00',
+                        'transaction_date'         => $details['transaction_date'] ?? now()->toDateTimeString(),
+                    ]
+                );
 
                 return response()->json([
                     'success'     => true,
                     'status'      => 'SUCCESSFUL',
-                    'transaction' => $this->formatTransactionPayload($transaction?->fresh(), $cached, $details, $tenant),
+                    'transaction' => $this->formatTransactionPayload($transaction, $cached, $details, $tenant),
                 ]);
 
             } elseif ($txState === 'FAILED') {
@@ -412,6 +429,16 @@ class NexumPayController extends Controller
         $internalRef = (string) Str::uuid();
 
         if ($action === 'FAILED') {
+            $currentStatus = strtoupper((string) ($transaction?->status ?? $cached['status'] ?? 'PENDING'));
+            if (in_array($currentStatus, ['SUCCESSFUL', 'SUCCESS'], true)) {
+                $tenant = $this->resolveTenant($transaction, $cached);
+                return response()->json([
+                    'success'     => true,
+                    'status'      => 'SUCCESSFUL',
+                    'transaction' => $this->formatTransactionPayload($transaction, $cached, [], $tenant),
+                ]);
+            }
+
             $reason = 'Customer cancelled the Mobile Money PIN prompt on their phone.';
             if ($transaction) {
                 try {
@@ -448,35 +475,31 @@ class NexumPayController extends Controller
             'trans_type'       => 'COLLECTION',
         ];
 
-        if ($transaction) {
-            try {
-                $transaction->update([
-                    'status'           => 'SUCCESSFUL',
-                    'internal_ref'     => $internalRef,
-                    'transaction_date' => now(),
-                    'raw_response'     => [
-                        'status'  => 'OK',
-                        'message' => 'Your transaction status is: SUCCESS',
-                        'details' => $simulatedDetails,
-                    ],
-                ]);
-            } catch (Exception $e) {}
-        }
-
-        if ($cached) {
-            $cached['status']                   = 'SUCCESSFUL';
-            $cached['financial_transaction_id'] = $internalRef;
-            $cached['internal_ref']             = $internalRef;
-            $cached['transaction_date']         = $simulatedDetails['transaction_date'];
-            $this->saveCachedTransaction($referenceId, $clientRef, $cached);
-        }
-
-        $tenant = $this->activateSubscription($transaction, $cached);
+        $tenant = $this->finalizeSuccessfulTransaction(
+            $transaction,
+            $cached,
+            [
+                'status'           => 'SUCCESSFUL',
+                'internal_ref'     => $internalRef,
+                'transaction_date' => now(),
+                'raw_response'     => [
+                    'status'  => 'OK',
+                    'message' => 'Your transaction status is: SUCCESS',
+                    'details' => $simulatedDetails,
+                ],
+            ],
+            [
+                'status'                   => 'SUCCESSFUL',
+                'financial_transaction_id' => $internalRef,
+                'internal_ref'             => $internalRef,
+                'transaction_date'         => $simulatedDetails['transaction_date'],
+            ]
+        );
 
         return response()->json([
             'success'     => true,
             'status'      => 'SUCCESSFUL',
-            'transaction' => $this->formatTransactionPayload($transaction?->fresh(), $cached, $simulatedDetails, $tenant),
+            'transaction' => $this->formatTransactionPayload($transaction, $cached, $simulatedDetails, $tenant),
         ]);
     }
 
@@ -522,23 +545,22 @@ class NexumPayController extends Controller
         $internalRef = $details['internal_ref'] ?? $payload['internal_ref'] ?? null;
 
         if (in_array($rawStatus, ['SUCCESS', 'SUCCESSFUL', 'OK', 'COMPLETED'], true)) {
-            if ($transaction) {
-                $transaction->update([
+            $this->finalizeSuccessfulTransaction(
+                $transaction,
+                $cached,
+                [
                     'status'           => 'SUCCESSFUL',
                     'internal_ref'     => $internalRef,
                     'charge'           => (float) ($details['charge'] ?? 0.00),
                     'transaction_date' => $details['transaction_date'] ?? now(),
                     'webhook_payload'  => $payload,
-                ]);
-            }
-            if ($cached) {
-                $cached['status']                   = 'SUCCESSFUL';
-                $cached['financial_transaction_id'] = $internalRef;
-                $cached['internal_ref']             = $internalRef;
-                $this->saveCachedTransaction($cached['reference_id'], $clientRef, $cached);
-            }
-
-            $this->activateSubscription($transaction, $cached);
+                ],
+                [
+                    'status'                   => 'SUCCESSFUL',
+                    'financial_transaction_id' => $internalRef,
+                    'internal_ref'             => $internalRef,
+                ]
+            );
 
         } elseif (in_array($rawStatus, ['FAILED', 'FAIL', 'REJECTED', 'CANCELLED'], true)) {
             $reason = $payload['message'] ?? $details['message'] ?? 'Payment failed on Mobile Money network.';
@@ -560,53 +582,165 @@ class NexumPayController extends Controller
     }
 
     /**
+     * Atomically transition a pending transaction to SUCCESSFUL and extend/activate subscription once.
+     */
+    protected function finalizeSuccessfulTransaction(
+        ?NexumPayTransaction &$transaction,
+        ?array &$cached,
+        array $txUpdates,
+        array $cacheUpdates
+    ): ?Tenant {
+        $shouldActivate = false;
+
+        if ($transaction) {
+            try {
+                if (array_key_exists('raw_response', $txUpdates) && is_array($txUpdates['raw_response'])) {
+                    $txUpdates['raw_response'] = json_encode($txUpdates['raw_response']);
+                }
+                if (array_key_exists('webhook_payload', $txUpdates) && is_array($txUpdates['webhook_payload'])) {
+                    $txUpdates['webhook_payload'] = json_encode($txUpdates['webhook_payload']);
+                }
+
+                $affected = NexumPayTransaction::where('id', $transaction->id)
+                    ->whereNotIn('status', ['SUCCESSFUL', 'SUCCESS'])
+                    ->update($txUpdates);
+
+                $transaction    = $transaction->fresh();
+                $shouldActivate = ($affected > 0);
+            } catch (Exception $e) {
+                Log::warning('NexumPay: Atomic transaction update failed: ' . $e->getMessage());
+            }
+        }
+
+        if ($cached) {
+            $cacheStatus = strtoupper((string) ($cached['status'] ?? 'PENDING'));
+            if (!$transaction && !in_array($cacheStatus, ['SUCCESSFUL', 'SUCCESS'], true) && empty($cached['subscription_activated'])) {
+                $shouldActivate = true;
+            }
+            if (!in_array($cacheStatus, ['SUCCESSFUL', 'SUCCESS'], true)) {
+                $cached = array_merge($cached, $cacheUpdates);
+                $cached['status']                 = 'SUCCESSFUL';
+                $cached['subscription_activated'] = true;
+                $this->saveCachedTransaction(
+                    $cached['reference_id'] ?? ($transaction?->reference_id ?? ''),
+                    $cached['client_ref'] ?? ($transaction?->client_ref ?? ''),
+                    $cached
+                );
+            }
+        }
+
+        if ($shouldActivate) {
+            return $this->activateSubscription($transaction, $cached);
+        }
+
+        return $this->resolveTenant($transaction, $cached);
+    }
+
+    /**
+     * Locate the Tenant linked to a NexumPay transaction by tenant_id or customer_email.
+     */
+    protected function resolveTenant(
+        ?NexumPayTransaction $transaction,
+        ?array $cached,
+        bool $lockForUpdate = false
+    ): ?Tenant {
+        $tenantId      = $transaction?->tenant_id ?? ($cached['tenant_id'] ?? null);
+        $customerEmail = $transaction?->customer_email ?? ($cached['customer_email'] ?? null);
+
+        try {
+            if ($tenantId) {
+                $query = Tenant::where('id', $tenantId);
+                if ($lockForUpdate) {
+                    $query->lockForUpdate();
+                }
+                $tenant = $query->first();
+                if ($tenant) {
+                    return $tenant;
+                }
+            }
+
+            if (!empty($customerEmail)) {
+                $query = Tenant::whereRaw('LOWER(email) = ?', [strtolower(trim($customerEmail))]);
+                if ($lockForUpdate) {
+                    $query->lockForUpdate();
+                }
+                return $query->first();
+            }
+        } catch (Exception $e) {
+            Log::warning('NexumPay: Could not resolve tenant: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
      * Activate or extend the Tenant's subscription upon successful payment.
      */
     protected function activateSubscription(?NexumPayTransaction $transaction, ?array $cached): ?Tenant
     {
-        $tenantId      = $transaction?->tenant_id ?? ($cached['tenant_id'] ?? null);
         $customerEmail = $transaction?->customer_email ?? ($cached['customer_email'] ?? null);
-        $planId        = $transaction?->plan_id ?? ($cached['plan_id'] ?? 'starter');
+        $planId        = strtolower(trim((string) ($transaction?->plan_id ?? ($cached['plan_id'] ?? 'starter'))));
         $billingCycle  = $transaction?->billing_cycle ?? ($cached['billing_cycle'] ?? 'monthly');
+        $txKey         = $transaction?->reference_id ?? ($cached['reference_id'] ?? $transaction?->client_ref ?? ($cached['client_ref'] ?? null));
 
-        $durationMonths = ($billingCycle === 'annual') ? 12 : 1;
-        $expiresAt      = now()->addMonths($durationMonths);
+        if ($txKey) {
+            try {
+                if (!Cache::add('nexumpay_sub_applied_' . $txKey, true, now()->addDays(30))) {
+                    return $this->resolveTenant($transaction, $cached);
+                }
+            } catch (Exception $e) {}
+        }
+
+        $durationDays = Tenant::durationDaysForCycle($billingCycle);
+        $updatedTenant = null;
+        $resolvedExpiry = now()->addDays($durationDays);
+
+        try {
+            $updatedTenant = DB::transaction(function () use ($transaction, $cached, $planId, $billingCycle) {
+                $tenant = $this->resolveTenant($transaction, $cached, true);
+                if (!$tenant) {
+                    return null;
+                }
+
+                $tenant->applySubscriptionPurchase($planId, $billingCycle);
+                return $tenant->fresh();
+            });
+        } catch (Exception $e) {
+            Log::warning('NexumPay: Could not update tenant subscription columns: ' . $e->getMessage());
+        }
+
+        if ($updatedTenant) {
+            $resolvedExpiry = $updatedTenant->subscription_expires_at ?? $resolvedExpiry;
+            Log::info("NexumPay: Activated/extended {$planId} ({$billingCycle}) subscription for Tenant #{$updatedTenant->id} until {$resolvedExpiry}");
+        } elseif ($customerEmail) {
+            try {
+                $cacheKey = 'nexumpay_paid_sub_' . strtolower(trim($customerEmail));
+                $existingPaid = Cache::get($cacheKey);
+                if (
+                    is_array($existingPaid)
+                    && strtolower((string) ($existingPaid['subscription_plan'] ?? '')) === $planId
+                    && !empty($existingPaid['subscription_expires_at'])
+                ) {
+                    $cachedExpiry = Carbon::parse($existingPaid['subscription_expires_at']);
+                    if ($cachedExpiry->greaterThan(now())) {
+                        $resolvedExpiry = $cachedExpiry->copy()->addDays($durationDays);
+                    }
+                }
+            } catch (Exception $e) {}
+        }
 
         if ($customerEmail) {
             try {
                 Cache::put('nexumpay_paid_sub_' . strtolower(trim($customerEmail)), [
                     'subscription_plan'       => $planId,
                     'subscription_status'     => 'active',
-                    'subscription_expires_at' => $expiresAt->toDateTimeString(),
+                    'subscription_expires_at' => $resolvedExpiry->toDateTimeString(),
                     'billing_cycle'           => $billingCycle,
                 ], now()->addDays(7));
             } catch (Exception $e) {}
         }
 
-        try {
-            $tenant = null;
-            if ($tenantId) {
-                $tenant = Tenant::find($tenantId);
-            }
-            if (!$tenant && !empty($customerEmail)) {
-                $tenant = Tenant::where('email', $customerEmail)->first();
-            }
-
-            if ($tenant) {
-                $tenant->update([
-                    'subscription_plan'       => $planId,
-                    'subscription_status'     => 'active',
-                    'subscription_expires_at' => $expiresAt,
-                ]);
-
-                Log::info("NexumPay: Activated {$planId} ({$billingCycle}) subscription for Tenant #{$tenant->id} until {$expiresAt}");
-                return $tenant->fresh();
-            }
-        } catch (Exception $e) {
-            Log::warning('NexumPay: Could not update tenant subscription columns: ' . $e->getMessage());
-        }
-
-        return null;
+        return $updatedTenant;
     }
 
     /**
@@ -651,6 +785,8 @@ class NexumPayController extends Controller
                 'subscription_plan'       => $tenant->subscription_plan,
                 'subscription_status'     => $tenant->subscription_status,
                 'subscription_expires_at' => $tenant->subscription_expires_at,
+                'is_subscription_expired' => $tenant->isSubscriptionExpired(),
+                'remaining_days'          => $tenant->remainingSubscriptionDays(),
             ] : null,
         ];
     }

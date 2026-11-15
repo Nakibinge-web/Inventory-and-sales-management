@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import Button from './ui/Button';
 import { formatCurrencyInput, cleanCurrency, parseCurrency } from '../utils/currency';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
 
 const UNITS = [
   'Pieces (pcs)', 'Kilograms (kg)', 'Grams (g)', 'Litres (L)',

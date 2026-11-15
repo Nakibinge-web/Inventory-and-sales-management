@@ -3,10 +3,10 @@ import { usePagination } from '../components/ui/Pagination';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import styles, { supS, custS, focusInputWrap } from '../styles/dashboardStyles';
+import { API_URL as API } from '../config/api';
 
 
 function CustomersTab({ customers, loading, token, user, toast, onCustomerAdded, onCustomerUpdated, onCustomerDeleted, canCreate = true, canEdit = true, canDelete = true }) {
-  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);

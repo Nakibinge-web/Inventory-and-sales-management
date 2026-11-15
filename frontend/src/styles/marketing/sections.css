@@ -3950,4 +3950,27 @@ svg.sp-step-arrow-icon::before {
   border-radius: 0 !important;
 }
 
+/* ==========================================================================
+   AOS SCROLL ANIMATION HARMONIZATION
+   Ensures smooth horizontal overflow clipping and preserves card hover lifts
+   after AOS entrance animations complete.
+   ========================================================================== */
+.sp-hero-overlay-sheet {
+  overflow-x: clip;
+}
+
+.sp-why-card[data-aos].aos-animate:hover,
+.sp-who-card[data-aos].aos-animate:hover {
+  transform: translateY(-2px);
+}
+
+.sp-step-card[data-aos].aos-animate:hover {
+  transform: translateY(-3px) scale(1);
+}
+
+.sp-landing-plan-card[data-aos].aos-animate:hover {
+  transform: translateY(-4px);
+}
+
+
 

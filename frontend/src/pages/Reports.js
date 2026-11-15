@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import styles, { supS } from '../styles/dashboardStyles';
+import { API_URL } from '../config/api';
 
 
 function ReportsTab({ data, loading, token }) {
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
   const [activeReport, setActiveReport] = useState('overview');

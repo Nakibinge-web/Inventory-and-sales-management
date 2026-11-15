@@ -16,7 +16,7 @@ export default function CTASection({
       <div className="sp-container">
         <div className="sp-cta-card">
           {/* Left Column: High-Conversion Copy & Actions */}
-          <div className="sp-cta-content">
+          <div className="sp-cta-content" data-aos="fade-right">
             {eyebrow && (
               <div className="sp-cta-eyebrow">
                 {eyebrow}
@@ -67,7 +67,7 @@ export default function CTASection({
           </div>
 
           {/* Right Column: Clean Operational Assurance Panel (Non-3D) */}
-          <div className="sp-cta-aside">
+          <div className="sp-cta-aside" data-aos="fade-left" data-aos-delay="150">
             <div className="sp-cta-aside-card">
               <div className="sp-cta-aside-tag">RELIABILITY & SPEED</div>
               <h3 className="sp-cta-aside-title">Enterprise precision for every business</h3>

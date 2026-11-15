@@ -103,60 +103,60 @@ export const GUIDE_FEATURES = [
   {
     id: '04',
     icon: CustomersIcon,
-    eyebrow: '04 / Customers & Accounts',
-    title: 'Build repeat business with client histories and credit ledgers.',
-    desc: 'Track individual buyer balances, transaction frequency, and contact details from POS checkout to commercial invoicing. Never lose track of outstanding receivables or which clients drive your highest store revenue.',
-    subheading: 'How to use Customers & Accounts Step-by-Step',
+    eyebrow: '04 / Sales Feature',
+    title: 'View all the history of the sales made with a recipt for each sale',
+    desc: 'This is the feature that helps the business owner to see all the sales made by the business. Once a sale is made, you can check in the Sales Section to see the made sales and generate a receipt for the already made sale',
+    subheading: 'How to use Sales Feature Step-by-Step',
     steps: [
       {
         num: '01',
-        title: 'Register customer profiles',
-        text: 'Save client contact info, business names, email addresses, and account tiers (Retail, Wholesale, Corporate).',
+        title: 'Open Sidebar and click on "Sales"',
+        text: 'Open the sidebar and click on "Sales". A page showing all the sales made in a sales table will be displayed',
       },
       {
         num: '02',
-        title: 'Tag clients during checkout',
-        text: 'Link customer profiles during counter checkout or invoicing using fast phone number or name lookup.',
+        title: 'View Sales by Period(Daily, Weekly or Monthly)',
+        text: 'To view the sales made in either a day, a week or a month, There are four options above the sales table. "Today" for sales made in a day, "This week" for sales in a week and "This Month" for sales in a month',
       },
       {
         num: '03',
-        title: 'Issue credit sales & track receivables',
-        text: 'Allow verified clients to purchase on credit, record partial repayments, and track payment due dates to prevent bad debts.',
+        title: 'Get a receipt of the sale made',
+        text: 'To get a reciept of the sale made, click on the "eye icon" under the actions column in sales table. A receipt of that specific sale will be displayed and you can print it or save it as a file',
       },
       {
         num: '04',
-        title: 'Review purchase histories & statements',
-        text: 'Access complete transaction records, lifetime revenue contribution, and running balance statements for every client.',
+        title: 'Editting or deleting a sale',
+        text: 'If a mistake is made while making a sale, you can edit the sales details by clicking on the "pencil icon" in the actions column of the sales table. For deleting, click on the "dustbin icon" to delete the sale if its unwanted',
       },
     ],
   },
   {
     id: '05',
     icon: ReportsIcon,
-    eyebrow: '05 / Reports & Analytics',
-    title: 'Know your profit, margins, and sales without manual spreadsheets.',
-    desc: 'Replace guesswork with automated end-of-day reconciliation. StockPro generates clean profit-and-loss summaries, inventory valuation audits, and cashier performance breakdowns so you always know the true financial health of your store.',
-    subheading: 'How to use Reports & Analytics Step-by-Step',
+    eyebrow: '05 / Purchases',
+    title: 'This is where purchased goods or services of the business are recorded.',
+    desc: 'Whenever the business owner purchases goods or restocks goods, it is advisable to keep the purchase records in the Purchases section to know how much has been used to purchase new stock. When the Purchase is recorded, the purchased quantity of products is automatically added to the existing quantity before recording the purchase',
+    subheading: 'How to use Purchases Feature Step-by-Step',
     steps: [
       {
         num: '01',
-        title: 'Monitor real-time daily turnover',
-        text: 'View gross revenue, completed receipt counts, and peak counter trading hours across all active terminals throughout the day.',
+        title: 'Open Sidebar and click on "Purchases"',
+        text: 'Open the sidebar and click on "Purchases" and the purchases page will be displayed.',
       },
       {
         num: '02',
-        title: 'Audit cashier shift balancing',
-        text: 'Reconcile recorded drawer cash against physical notes, Mobile Money receipts, and card settlements to identify variances immediately.',
+        title: 'Making the Purchase',
+        text: 'In the purchases page, click on "record purchase" in the top right corner to record the purchase',
       },
       {
         num: '03',
-        title: 'Analyze product gross margins',
-        text: 'Inspect net profit and margin percentages per category and individual SKU to determine what drives store profitability.',
+        title: 'Fill in the purchase details',
+        text: 'when "record purchase" is clicked, a simple section is displayed requiring to fill in the purchase details like product purchased, quantity purchased and unit purchase price',
       },
       {
         num: '04',
-        title: 'Export compliance & tax statements',
-        text: 'Generate one-click PDF summaries and CSV data sheets for bookkeeping, management review, and tax audits.',
+        title: 'View Purchases by Period(Daily, Weekly or Monthly)',
+        text: 'To view the purchases made in either a day, a week or a month, There are four options above the purchases table. "Today" for purchases made in a day, "This week" for purchases in a week and "This Month" for purchases in a month',
       },
     ],
   },
@@ -248,7 +248,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
         <section className="sp-section sp-section-white sp-capability-panel" role="tabpanel" aria-label="Inventory Capability">
           <div className="sp-container">
             <div className="sp-editorial-row">
-              <div className="sp-editorial-text">
+              <div className="sp-editorial-text" data-aos="fade-right">
                 <div className="sp-editorial-eyebrow">
                   <InventoryIcon size={14} />
                   <span>01 / Real-Time Inventory</span>
@@ -275,7 +275,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
                 </ul>
               </div>
 
-              <div className="sp-editorial-visual">
+              <div className="sp-editorial-visual" data-aos="fade-left" data-aos-delay="120">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.02em' }}>
                     CENTRAL CATALOG &bull; STOCK MANAGEMENT
@@ -365,7 +365,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
         <section className="sp-section sp-section-white sp-capability-panel" role="tabpanel" aria-label="Point of Sale Capability">
           <div className="sp-container">
             <div className="sp-editorial-row">
-              <div className="sp-editorial-text">
+              <div className="sp-editorial-text" data-aos="fade-right">
                 <div className="sp-editorial-eyebrow">
                   <PosIcon size={14} />
                   <span>02 / Point of Sale</span>
@@ -392,7 +392,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
                 </ul>
               </div>
 
-              <div className="sp-editorial-visual">
+              <div className="sp-editorial-visual" data-aos="fade-left" data-aos-delay="120">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
                     POS REGISTER #01 &bull; CASHIER TERMINAL
@@ -462,7 +462,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
         <section className="sp-section sp-section-white sp-capability-panel" role="tabpanel" aria-label="Purchases Capability">
           <div className="sp-container">
             <div className="sp-editorial-row">
-              <div className="sp-editorial-text">
+              <div className="sp-editorial-text" data-aos="fade-right">
                 <div className="sp-editorial-eyebrow">
                   <PurchaseIcon size={14} />
                   <span>03 / Purchases &amp; Suppliers</span>
@@ -489,7 +489,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
                 </ul>
               </div>
 
-              <div className="sp-editorial-visual">
+              <div className="sp-editorial-visual" data-aos="fade-left" data-aos-delay="120">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
                     PURCHASE ORDERS &bull; VENDOR DELIVERIES
@@ -566,7 +566,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
         <section className="sp-section sp-section-white sp-capability-panel" role="tabpanel" aria-label="Customers Capability">
           <div className="sp-container">
             <div className="sp-editorial-row">
-              <div className="sp-editorial-text">
+              <div className="sp-editorial-text" data-aos="fade-right">
                 <div className="sp-editorial-eyebrow">
                   <CustomersIcon size={14} />
                   <span>04 / Customers &amp; Accounts</span>
@@ -593,7 +593,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
                 </ul>
               </div>
 
-              <div className="sp-editorial-visual">
+              <div className="sp-editorial-visual" data-aos="fade-left" data-aos-delay="120">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
                     CUSTOMER DIRECTORY &bull; CREDIT LEDGER
@@ -670,7 +670,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
         <section className="sp-section sp-section-white sp-capability-panel" role="tabpanel" aria-label="Reports Capability">
           <div className="sp-container">
             <div className="sp-editorial-row">
-              <div className="sp-editorial-text">
+              <div className="sp-editorial-text" data-aos="fade-right">
                 <div className="sp-editorial-eyebrow">
                   <ReportsIcon size={14} />
                   <span>05 / Reports &amp; Analytics</span>
@@ -697,7 +697,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
                 </ul>
               </div>
 
-              <div className="sp-editorial-visual">
+              <div className="sp-editorial-visual" data-aos="fade-left" data-aos-delay="120">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
                     DAILY AUDIT REPORT &bull; REVENUE &amp; MARGINS
@@ -768,7 +768,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
         <section className="sp-section sp-section-white sp-capability-panel" role="tabpanel" aria-label="Team Access Capability">
           <div className="sp-container">
             <div className="sp-editorial-row">
-              <div className="sp-editorial-text">
+              <div className="sp-editorial-text" data-aos="fade-right">
                 <div className="sp-editorial-eyebrow">
                   <ShieldIcon size={14} />
                   <span>06 / Team Access &amp; Permissions</span>
@@ -795,7 +795,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
                 </ul>
               </div>
 
-              <div className="sp-editorial-visual">
+              <div className="sp-editorial-visual" data-aos="fade-left" data-aos-delay="120">
                 <div style={{ backgroundColor: 'var(--sp-navy-900)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sp-navy-800)' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#FFFFFF' }}>
                     STAFF ACCESS CONTROL &bull; ROLE PERMISSIONS

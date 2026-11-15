@@ -5,14 +5,9 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import EditProductForm from '../components/EditProductForm';
 import styles, { fS, exS } from '../styles/dashboardStyles';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API, API_BASE_URL as API_BASE } from '../config/api';
 
 function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated, toast, canCreate = true, canEdit = true, canDelete = true }) {
-  const API_BASE = process.env.REACT_APP_API_URL
-    ? process.env.REACT_APP_API_URL.replace('/api', '')
-    : 'http://localhost:8000';
-
   const [editingProduct, setEditingProduct] = useState(null);
   const [deletingProduct, setDeletingProduct] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);

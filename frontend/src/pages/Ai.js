@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from '../styles/dashboardStyles';
+import { API_URL } from '../config/api';
 
 function AiTab({ token, data }) {
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 
   const [messages, setMessages] = useState([

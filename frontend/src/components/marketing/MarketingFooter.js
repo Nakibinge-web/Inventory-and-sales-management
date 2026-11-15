@@ -6,7 +6,7 @@ export default function MarketingFooter() {
   return (
     <footer className="sp-footer" role="contentinfo">
       <div className="sp-container">
-        <div className="sp-footer-grid">
+        <div className="sp-footer-grid" data-aos="fade-up" data-aos-offset="40">
           {/* Brand Info */}
           <div className="sp-footer-brand-col">
             <MarketingLink href="/" className="sp-footer-brand" aria-label="StockPro Home">

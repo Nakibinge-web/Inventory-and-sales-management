@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import EmptyState from '../components/ui/EmptyState';
 import styles, { fS } from '../styles/dashboardStyles';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL } from '../config/api';
 
 function StockMovementsTab({ token, products, canCreate = true }) {
   const headers = useMemo(() => ({

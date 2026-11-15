@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 import './styles/marketing/index.css';
 
 // Public Marketing Pages
@@ -12,6 +14,9 @@ import ContactPage from './pages/marketing/ContactPage';
 // Authentication & Dashboard
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
+import { installSubscriptionInterceptor } from './utils/subscription';
+
+installSubscriptionInterceptor();
 
 const DASHBOARD_ROUTES = [
   'overview',
@@ -56,12 +61,24 @@ export default function App() {
 
   // Listen for browser navigation (popstate)
   useEffect(() => {
+    AOS.init({
+      duration: 750,
+      easing: 'ease-out-cubic',
+      once: false,
+      mirror: true,
+      offset: 80,
+      throttleDelay: 16,
+    });
     const handlePopState = () => {
       setCurrentPath(getNormalizedPath());
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    AOS.refresh();
+  }, [currentPath]);
 
   const handleAuthSuccess = useCallback((newUser, newToken) => {
     setUser(newUser);
@@ -91,10 +108,83 @@ export default function App() {
     setCurrentPath('/login');
   }, []);
 
-  const handleUserUpdate = useCallback((updatedUser) => {
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+  const handleUserUpdate = useCallback((updaterOrUser) => {
+    setUser((prevUser) => {
+      const nextUser =
+        typeof updaterOrUser === 'function' ? updaterOrUser(prevUser) : updaterOrUser;
+      try {
+        if (nextUser) {
+          localStorage.setItem('user', JSON.stringify(nextUser));
+        } else {
+          localStorage.removeItem('user');
+        }
+      } catch {
+        // Ignore storage quota / privacy mode errors
+      }
+      return nextUser;
+    });
   }, []);
+
+  // Keep user subscription state synchronized across API responses and checkout renewals
+  useEffect(() => {
+    installSubscriptionInterceptor();
+
+    const handleSubUpdated = (e) => {
+      if (!e?.detail) return;
+      handleUserUpdate((prevUser) => {
+        if (!prevUser) return prevUser;
+        if (e.detail.id || e.detail.email || e.detail.roles) {
+          return e.detail;
+        }
+        return {
+          ...prevUser,
+          tenant: e.detail.tenant
+            ? { ...(prevUser.tenant || {}), ...e.detail.tenant }
+            : { ...(prevUser.tenant || {}), ...e.detail },
+        };
+      });
+    };
+
+    const handleSubExpired = (e) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      handleUserUpdate((prevUser) => {
+        if (!prevUser) return prevUser;
+        const incomingTenant = detail.tenant || {};
+        const subMeta = detail.subscription || {};
+        return {
+          ...prevUser,
+          tenant: {
+            ...(prevUser.tenant || {}),
+            ...incomingTenant,
+            subscription_plan:
+              incomingTenant.subscription_plan ??
+              subMeta.plan ??
+              prevUser.tenant?.subscription_plan ??
+              null,
+            subscription_status:
+              incomingTenant.subscription_status ??
+              subMeta.status ??
+              prevUser.tenant?.subscription_status ??
+              'expired',
+            subscription_expires_at:
+              incomingTenant.subscription_expires_at ??
+              subMeta.expires_at ??
+              prevUser.tenant?.subscription_expires_at ??
+              null,
+            is_subscription_expired: true,
+          },
+        };
+      });
+    };
+
+    window.addEventListener('subscription_updated', handleSubUpdated);
+    window.addEventListener('subscription_expired', handleSubExpired);
+    return () => {
+      window.removeEventListener('subscription_updated', handleSubUpdated);
+      window.removeEventListener('subscription_expired', handleSubExpired);
+    };
+  }, [handleUserUpdate]);
 
   // Determine route type
   const pathSegment = currentPath.replace(/^\//, '').split('/')[0];

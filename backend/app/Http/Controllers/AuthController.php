@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use App\Models\Tenant;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -89,6 +90,27 @@ class AuthController extends Controller
                 ], 403);
             }
             return back()->withErrors(['login' => 'Your account has been disabled.']);
+        }
+
+        // Check tenant existence and whether its subscription period has ended
+        $tenant = Tenant::find($user->tenant_id);
+        if (!$tenant) {
+            if ($isApi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Business account not found. Please contact support.',
+                ], 403);
+            }
+            return back()->withErrors(['login' => 'Business account not found. Please contact support.']);
+        }
+
+        if ($tenant->isSubscriptionExpired()) {
+            RateLimiter::clear($key);
+            $isOwner = $user->hasRole('owner');
+            if ($isApi) {
+                return response()->json($tenant->subscriptionBlockedPayload($isOwner, true), 403);
+            }
+            return back()->withErrors(['login' => $tenant->expiredSubscriptionMessage($isOwner)]);
         }
 
         // Account is active — log the user in and clear the rate limiter
@@ -183,11 +205,11 @@ class AuthController extends Controller
                     ->latest()
                     ->first();
                 if ($paidTx) {
-                    $months = ($paidTx->billing_cycle === 'annual') ? 12 : 1;
+                    $days = \App\Models\Tenant::durationDaysForCycle($paidTx->billing_cycle);
                     $paidSub = [
                         'subscription_plan'       => $paidTx->plan_id,
                         'subscription_status'     => 'active',
-                        'subscription_expires_at' => now()->addMonths($months),
+                        'subscription_expires_at' => now()->addDays($days),
                     ];
                 }
             }

@@ -63,7 +63,7 @@ export default function WhyStockPro() {
     <section className="sp-why-section" aria-labelledby="why-stockpro-heading">
       <div className="sp-container">
         {/* Section Header */}
-        <div className="sp-why-header">
+        <div className="sp-why-header" data-aos="fade-up">
           <div className="sp-why-eyebrow">
             OPERATIONAL SIMPLICITY AND COMPLETE CONTROL
           </div>
@@ -81,8 +81,13 @@ export default function WhyStockPro() {
         <div className="sp-why-grid">
           {/* Left Column (Points 1 - 5) */}
           <div className="sp-why-column">
-            {COLUMN_ONE_POINTS.map((point) => (
-              <div key={point.id} className="sp-why-card">
+            {COLUMN_ONE_POINTS.map((point, index) => (
+              <div
+                key={point.id}
+                className="sp-why-card"
+                data-aos="fade-right"
+                data-aos-delay={index * 75}
+              >
                 <div className="sp-why-marker" aria-hidden="true">
                   <span className="sp-why-chevron">&gt;</span>
                 </div>
@@ -96,8 +101,13 @@ export default function WhyStockPro() {
 
           {/* Right Column (Points 6 - 10) */}
           <div className="sp-why-column">
-            {COLUMN_TWO_POINTS.map((point) => (
-              <div key={point.id} className="sp-why-card">
+            {COLUMN_TWO_POINTS.map((point, index) => (
+              <div
+                key={point.id}
+                className="sp-why-card"
+                data-aos="fade-left"
+                data-aos-delay={index * 75}
+              >
                 <div className="sp-why-marker" aria-hidden="true">
                   <span className="sp-why-chevron">&gt;</span>
                 </div>
@@ -111,7 +121,7 @@ export default function WhyStockPro() {
         </div>
 
         {/* Professional Reassurance & Quick Action Strip */}
-        <div className="sp-why-footer-bar">
+        <div className="sp-why-footer-bar" data-aos="fade-up" data-aos-delay="150">
           <div className="sp-why-footer-text">
             <strong>Ready to take the friction out of your daily business operations?</strong>
             <span style={{ display: 'block', fontSize: 13, color: '#94A3B8', marginTop: 3 }}>

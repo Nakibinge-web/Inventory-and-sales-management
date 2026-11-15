@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../components/ui/Modal';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
+import { API_URL as API } from '../config/api';
 
 
 function PrintableInvoiceModal({ invoice, user, onClose }) {
@@ -286,8 +287,6 @@ function PrintableInvoiceModal({ invoice, user, onClose }) {
 // CREATE CUSTOM INVOICE MODAL
 // ════════════════════════════════════════════════
 function CustomInvoiceCreateModal({ user, customers, token, onClose, onCreated }) {
-  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -1478,8 +1477,6 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
   const [editingInvoice, setEditingInvoice] = useState(null);   // invoice being status-edited
   const [search, setSearch] = useState('');
 
-  const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-
   // Fetch persisted custom invoices from the backend on mount
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -1498,7 +1495,7 @@ function InvoicesTab({ sales, customers, user, token, toast }) {
       }
     };
     fetchInvoices();
-  }, [API, token]);
+  }, [token]);
 
   // Derive invoice rows from sales (sale-based invoices, always present)
   const saleInvoices = (sales || []).map(s => ({

@@ -129,7 +129,7 @@ const EyeOffIcon = () => (
   </svg>
 );
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL } from '../config/api';
 
 function UsersTab({ token, user: currentUser, toast, canCreate = false, canEdit = false, canDelete = false, canViewRoles = false }) {
   const EMPTY_FORM = {

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Dashboard from './Dashboard';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+import { API_URL as API } from '../config/api';
+import NexumPayCheckoutModal from '../components/marketing/NexumPayCheckoutModal';
+import { navigateTo } from '../utils/navigation';
+import { isSubscriptionExpiredResponse } from '../utils/subscription';
 
 /* ── Password strength evaluation ── */
 function getStrength(pwd) {
@@ -110,6 +112,10 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
   const [logoDragOver, setLogoDragOver] = useState(false);
   const logoInputRef = useRef(null);
   const [error, setError] = useState(null);
+  const [expiredSubscription, setExpiredSubscription] = useState(null);
+  const [renewalPrefill, setRenewalPrefill] = useState(null);
+  const [renewalCheckoutOpen, setRenewalCheckoutOpen] = useState(false);
+  const [renewalSuccess, setRenewalSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(() => {
     try {
@@ -231,8 +237,19 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
       try { data = JSON.parse(text); } catch { data = { message: text }; }
 
       if (!res.ok) {
+        if (isSubscriptionExpiredResponse(res.status, data)) {
+          setExpiredSubscription(data);
+          setRenewalPrefill(data);
+        } else {
+          setExpiredSubscription(null);
+        }
+        setRenewalSuccess(null);
         setError(data?.message || `Error ${res.status}`);
       } else if (data.success && data.user && data.token) {
+        setExpiredSubscription(null);
+        setRenewalPrefill(null);
+        setRenewalCheckoutOpen(false);
+        setRenewalSuccess(null);
         setUser(data.user);
         setToken(data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
@@ -280,6 +297,10 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
   const switchMode = newMode => {
     setMode(newMode);
     setError(null);
+    setExpiredSubscription(null);
+    setRenewalPrefill(null);
+    setRenewalCheckoutOpen(false);
+    setRenewalSuccess(null);
     const target = newMode === 'register' ? '/register' : '/login';
     if (window.location.pathname !== target) {
       window.history.pushState(null, '', target);
@@ -405,6 +426,114 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
               </svg>
               <span>{error}</span>
             </div>
+          )}
+
+          {/* Expired subscription renewal prompt */}
+          {expiredSubscription && (
+            <div
+              data-testid="auth-subscription-expired-actions"
+              style={{
+                marginTop: 10,
+                marginBottom: 14,
+                padding: '12px 14px',
+                borderRadius: 10,
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              {expiredSubscription?.tenant?.name && (
+                <div style={{ fontSize: 12, color: '#991b1b', fontWeight: 600 }}>
+                  Workspace: {expiredSubscription.tenant.name}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setRenewalCheckoutOpen(true)}
+                  style={{
+                    padding: '9px 16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    backgroundColor: '#071629',
+                    color: '#ffffff',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  Subscribe Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateTo('/pricing')}
+                  style={{
+                    padding: '9px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  View Pricing Plans
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Subscription renewal confirmation */}
+          {renewalSuccess && (
+            <div
+              role="status"
+              style={{
+                marginBottom: 14,
+                padding: '10px 12px',
+                borderRadius: 8,
+                backgroundColor: '#ecfdf5',
+                border: '1px solid #6ee7b7',
+                color: '#065f46',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              {renewalSuccess}
+            </div>
+          )}
+
+          {(expiredSubscription || renewalCheckoutOpen) && (
+            <NexumPayCheckoutModal
+              isOpen={renewalCheckoutOpen}
+              isModal={true}
+              initialPlanId={
+                (expiredSubscription || renewalPrefill)?.tenant?.subscription_plan === 'business'
+                  ? 'business'
+                  : 'starter'
+              }
+              prefillCustomer={{
+                name: (expiredSubscription || renewalPrefill)?.tenant?.name || '',
+                email: (expiredSubscription || renewalPrefill)?.tenant?.email || '',
+                businessName: (expiredSubscription || renewalPrefill)?.tenant?.name || '',
+                phone: (expiredSubscription || renewalPrefill)?.tenant?.phone || '',
+                renewalToken: (expiredSubscription || renewalPrefill)?.renewal_token || '',
+              }}
+              continueLabel="Sign In to Workspace"
+              onContinue={() => setRenewalCheckoutOpen(false)}
+              onClose={() => setRenewalCheckoutOpen(false)}
+              onPaymentSuccess={() => {
+                setExpiredSubscription(null);
+                setError(null);
+                setRenewalSuccess(
+                  'Subscription activated! Sign in below to access your workspace.'
+                );
+              }}
+            />
           )}
 
           {/* Form */}
