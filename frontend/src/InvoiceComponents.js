@@ -37,7 +37,6 @@ export function getStoredInvoiceSettings(user) {
         signatureUrl: parsed.signatureUrl || tenant.signature_url || defaults.signatureUrl
       };
     }
-    }
   } catch (e) {
     console.error('Failed to load invoice settings', e);
   }
