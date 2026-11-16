@@ -5,6 +5,7 @@ import Modal from '../components/ui/Modal';
 import AddProductForm from '../components/AddProductForm';
 import { ToastContainer, useToast } from '../components/ui/Toast';
 import ErrorBoundary from '../components/ui/ErrorBoundary';
+import InstallPWA from '../components/InstallPWA';
 
 // Independent Page Modules
 import OverviewTab from './Overview';
@@ -51,10 +52,175 @@ function getTabFromPath() {
   return 'overview';
 }
 
+function getSubscriptionBadge(tenant) {
+  if (!tenant) return null;
+
+  const plan = (tenant.subscription_plan || '').toLowerCase();
+  const status = (tenant.subscription_status || '').toLowerCase();
+  const expiresAt = tenant.subscription_expires_at;
+
+  const planTitle =
+    plan === 'business'
+      ? 'Business'
+      : plan === 'enterprise'
+      ? 'Enterprise'
+      : plan === 'starter'
+      ? 'Starter'
+      : status === 'trial'
+      ? 'Trial'
+      : 'Subscription';
+
+  if (!expiresAt) {
+    if (status === 'trial') {
+      return {
+        variant: 'trial',
+        text: 'Free Trial',
+        shortText: 'Trial',
+        subText: '14-day free trial active. Click to choose a plan.',
+      };
+    }
+    if (status === 'active') {
+      return {
+        variant: 'active',
+        text: `${planTitle} Active`,
+        shortText: planTitle,
+        subText: 'Subscription active. Click to manage.',
+      };
+    }
+    return null;
+  }
+
+  const expiryDate = new Date(expiresAt);
+  if (isNaN(expiryDate.getTime())) {
+    return {
+      variant: 'active',
+      text: `${planTitle} Active`,
+      shortText: planTitle,
+      subText: 'Subscription active. Click to manage.',
+    };
+  }
+
+  const now = new Date();
+  const diffMs = expiryDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    const expiredDays = Math.abs(diffDays);
+    return {
+      variant: 'expired',
+      text: `${planTitle} · Expired`,
+      shortText: 'Expired',
+      subText: `Expired ${expiredDays} day${expiredDays === 1 ? '' : 's'} ago. Click to renew.`,
+    };
+  }
+
+  if (diffDays === 0) {
+    return {
+      variant: 'warning',
+      text: `${planTitle} · Expires today`,
+      shortText: 'Expires today',
+      subText: 'Subscription expires today. Click to renew.',
+    };
+  }
+
+  if (diffDays === 1) {
+    return {
+      variant: 'warning',
+      text: `${planTitle} · 1 day left`,
+      shortText: '1 day left',
+      subText: 'Renews tomorrow. Click to manage.',
+    };
+  }
+
+  if (diffDays <= 7) {
+    return {
+      variant: 'warning',
+      text: `${planTitle} · ${diffDays} days left`,
+      shortText: `${diffDays}d left`,
+      subText: `Expires on ${expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}. Click to manage.`,
+    };
+  }
+
+  return {
+    variant: 'active',
+    text: `${planTitle} · ${diffDays} days left`,
+    shortText: `${diffDays}d left`,
+    subText: `Valid until ${expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}. Click to manage.`,
+  };
+}
+
+function getPillColors(variant) {
+  switch (variant) {
+    case 'expired':
+      return {
+        bg: '#fef2f2',
+        border: '#fecaca',
+        color: '#991b1b',
+        dot: '#dc2626',
+      };
+    case 'warning':
+      return {
+        bg: '#fffbeb',
+        border: '#fde68a',
+        color: '#92400e',
+        dot: '#f59e0b',
+      };
+    case 'trial':
+      return {
+        bg: '#f8fafc',
+        border: '#cbd5e1',
+        color: '#334155',
+        dot: '#64748b',
+      };
+    case 'active':
+    default:
+      return {
+        bg: '#f0fdf4',
+        border: '#bbf7d0',
+        color: '#166534',
+        dot: '#22c55e',
+      };
+  }
+}
+
 export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTabState] = useState(getTabFromPath);
+  const [settingsInitialTab, setSettingsInitialTab] = useState('branding');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { toasts, toast, remove } = useToast();
+
+  // Subscription info & pill colors computed from current tenant state
+  const subBadge = getSubscriptionBadge(user?.tenant);
+  const pillColors = subBadge ? getPillColors(subBadge.variant) : null;
+
+  // Sync latest user/tenant profile from server on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API}/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData && resData.success && resData.data && onUserUpdate) {
+          onUserUpdate(resData.data);
+        }
+      })
+      .catch(() => {});
+  }, [token, onUserUpdate]);
+
+  // Listen for real-time subscription update events (from checkout modal or settings)
+  useEffect(() => {
+    const handleSubUpdated = (e) => {
+      if (e.detail && onUserUpdate) {
+        onUserUpdate(e.detail);
+      }
+    };
+    window.addEventListener('subscription_updated', handleSubUpdated);
+    return () => window.removeEventListener('subscription_updated', handleSubUpdated);
+  }, [onUserUpdate]);
 
   const setActiveTab = useCallback((tabId, replace = false) => {
     setActiveTabState(tabId);
@@ -295,7 +461,27 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     setSearchOpen(false);
   };
 
-  const isOwnerOrAdmin = user.roles && user.roles.some(r => ['owner', 'admin'].includes(r.name));
+  const isOwner = Boolean(
+    (user.roles && user.roles.some(r => r.name === 'owner')) ||
+    user.role === 'owner' ||
+    user.is_owner
+  );
+  const isOwnerOrAdmin = isOwner || Boolean(user.roles && user.roles.some(r => ['admin'].includes(r.name)));
+
+  // Tenant enabled modules check
+  const enabledModules = user?.tenant?.enabled_modules || {};
+  const isModuleEnabled = (modId) => {
+    if (modId === 'overview' || modId === 'settings' || modId === 'users' || modId === 'modules') return true;
+    return enabledModules[modId] !== false; // default to true if unconfigured
+  };
+
+  // Redirect to overview if current tab is toggled off
+  useEffect(() => {
+    if (!isModuleEnabled(activeTab)) {
+      setActiveTab('overview');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user?.tenant?.enabled_modules]);
 
   // Returns true if the user has a given permission (via any role) OR is owner/admin
   const hasPermission = (perm) => {
@@ -310,33 +496,34 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
       title: 'Operations',
       items: [
         { id: 'overview', label: 'Overview', icon: '📊' },
-        ...(hasPermission('sales.create') ? [{ id: 'pos', label: 'POS Terminal', icon: '🖥️' }] : []),
-        ...(hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales History', icon: '💰' }] : []),
-        ...(hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄' }] : []),
-        ...(hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒' }] : []),
-        ...(hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄' }] : []),
-        ...(hasPermission('sales.report') || hasPermission('purchases.report') ? [{ id: 'reports', label: 'Analytics & Reports', icon: '📈' }] : []),
+        ...(isModuleEnabled('pos') && hasPermission('sales.create') ? [{ id: 'pos', label: 'POS Terminal', icon: '🖥️' }] : []),
+        ...(isModuleEnabled('sales') && hasPermission('sales.view') ? [{ id: 'sales', label: 'Sales History', icon: '💰' }] : []),
+        ...(isModuleEnabled('invoices') && hasPermission('sales.view') ? [{ id: 'invoices', label: 'Invoices', icon: '📄' }] : []),
+        ...(isModuleEnabled('purchases') && hasPermission('purchases.view') ? [{ id: 'purchases', label: 'Purchases', icon: '🛒' }] : []),
+        ...(isModuleEnabled('stock-movements') && hasPermission('stock.view') ? [{ id: 'stock-movements', label: 'Stock Movements', icon: '🔄' }] : []),
+        ...(isModuleEnabled('reports') && (hasPermission('sales.report') || hasPermission('purchases.report')) ? [{ id: 'reports', label: 'Analytics & Reports', icon: '📈' }] : []),
       ]
     },
     {
       title: 'Catalog & Inventory',
       items: [
-        ...(hasPermission('products.view') ? [{ id: 'products', label: 'Products & Stock', icon: '📦' }] : []),
-        ...(hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️' }] : []),
-        ...(hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭' }] : []),
+        ...(isModuleEnabled('products') && hasPermission('products.view') ? [{ id: 'products', label: 'Products & Stock', icon: '📦' }] : []),
+        ...(isModuleEnabled('categories') && hasPermission('categories.view') ? [{ id: 'categories', label: 'Categories', icon: '🏷️' }] : []),
+        ...(isModuleEnabled('suppliers') && hasPermission('suppliers.view') ? [{ id: 'suppliers', label: 'Suppliers', icon: '🏭' }] : []),
       ]
     },
     {
       title: 'CRM & Relations',
       items: [
-        ...(hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers (CRM)', icon: '👥' }] : []),
+        ...(isModuleEnabled('customers') && hasPermission('customers.view') ? [{ id: 'customers', label: 'Customers (CRM)', icon: '👥' }] : []),
       ]
     },
     {
       title: 'System & Intelligence',
       items: [
-        { id: 'ai', label: 'AI Assistant', icon: '🤖' },
+        ...(isModuleEnabled('ai') ? [{ id: 'ai', label: 'AI Assistant', icon: '🤖' }] : []),
         ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'User Control', icon: '🔑' }] : []),
+        ...(isOwner ? [{ id: 'modules', label: 'Modules', icon: '🧩' }] : []),
         { id: 'settings', label: 'System Settings', icon: '⚙️' }
       ]
     }
@@ -510,6 +697,48 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
         </div>
 
         <div style={styles.headerRight}>
+          {/* Topbar Subscription Days Left Badge */}
+          {subBadge && pillColors && (
+            <button
+              type="button"
+              className="sub-topbar-pill"
+              onClick={() => setActiveTab('settings')}
+              title={subBadge.subText ? `${subBadge.subText} (Click to manage subscription)` : 'Subscription Settings'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '6px 12px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                border: `1px solid ${pillColors.border}`,
+                backgroundColor: pillColors.bg,
+                color: pillColors.color,
+                transition: 'all 0.15s ease',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  backgroundColor: pillColors.dot,
+                  flexShrink: 0,
+                }}
+              />
+              <span className="sub-pill-text-long">{subBadge.text}</span>
+              <span className="sub-pill-text-short">{subBadge.shortText}</span>
+            </button>
+          )}
+          <div className="resp-hide">
+            <InstallPWA variant="nav-item" />
+          </div>
           <div 
             className="resp-hide"
             style={{ ...styles.notificationIcon, color: '#64748b', fontSize: '18px', position: 'relative', cursor: 'pointer' }}
@@ -780,35 +1009,56 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                     }}>
                       {group.title}
                     </p>
-                    {validItems.map(item => (
-                      <button
-                        key={item.id}
-                        style={{
-                          ...styles.menuItem,
-                          ...(activeTab === item.id ? styles.menuItemActive : {})
-                        }}
-                        onClick={() => { setActiveTab(item.id); setMobileNavOpen(false); }}
-                        onMouseEnter={e => {
-                          if (activeTab !== item.id) {
-                            e.currentTarget.style.background = '#f8fafc';
-                            e.currentTarget.style.color = '#0f172a';
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (activeTab !== item.id) {
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.color = '#475569';
-                          }
-                        }}
-                      >
-                        <span style={styles.menuIcon}>{item.icon}</span>
-                        <span style={styles.menuLabel}>{item.label}</span>
-                        {activeTab === item.id && <div style={styles.activeIndicator} />}
-                      </button>
-                    ))}
+                    {validItems.map(item => {
+                      const isItemActive = item.id === 'modules'
+                        ? (activeTab === 'settings' && settingsInitialTab === 'modules')
+                        : item.id === 'settings'
+                          ? (activeTab === 'settings' && settingsInitialTab !== 'modules')
+                          : activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          style={{
+                            ...styles.menuItem,
+                            ...(isItemActive ? styles.menuItemActive : {})
+                          }}
+                          onClick={() => {
+                            if (item.id === 'modules') {
+                              setSettingsInitialTab('modules');
+                              setActiveTab('settings');
+                            } else if (item.id === 'settings') {
+                              setSettingsInitialTab('branding');
+                              setActiveTab('settings');
+                            } else {
+                              setActiveTab(item.id);
+                            }
+                            setMobileNavOpen(false);
+                          }}
+                          onMouseEnter={e => {
+                            if (!isItemActive) {
+                              e.currentTarget.style.background = '#f8fafc';
+                              e.currentTarget.style.color = '#0f172a';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (!isItemActive) {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = '#475569';
+                            }
+                          }}
+                        >
+                          <span style={styles.menuIcon}>{item.icon}</span>
+                          <span style={styles.menuLabel}>{item.label}</span>
+                          {isItemActive && <div style={styles.activeIndicator} />}
+                        </button>
+                      );
+                    })}
                   </div>
                 );
               })}
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <InstallPWA variant="sidebar-banner" />
             </div>
           </div> 
         </nav>
@@ -1039,7 +1289,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               }}
             />
           )}
-          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} user={user} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
@@ -1050,7 +1300,15 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               canViewRoles={isOwnerOrAdmin || hasPermission('roles.view')} />
           )}
           {activeTab === 'settings' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (
-            <Settings user={user} token={token} toast={toast} onBusinessInfoUpdate={onUserUpdate} />
+            <Settings
+              user={user}
+              token={token}
+              toast={toast}
+              onBusinessInfoUpdate={onUserUpdate}
+              initialTab={settingsInitialTab}
+              onTabChange={setSettingsInitialTab}
+              isOwner={isOwner}
+            />
           )}
                   </ErrorBoundary>
         </main>
@@ -1089,7 +1347,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
             <span>📊</span>
             <span>Home</span>
           </button>
-          {hasPermission('sales.create') && (
+          {isModuleEnabled('pos') && hasPermission('sales.create') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'pos' ? ' active' : ''}`}
               onClick={() => setActiveTab('pos')}
@@ -1099,7 +1357,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <span>POS</span>
             </button>
           )}
-          {hasPermission('products.view') && (
+          {isModuleEnabled('products') && hasPermission('products.view') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'products' ? ' active' : ''}`}
               onClick={() => setActiveTab('products')}
@@ -1109,7 +1367,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <span>Products</span>
             </button>
           )}
-          {hasPermission('sales.view') && (
+          {isModuleEnabled('sales') && hasPermission('sales.view') && (
             <button
               className={`mob-bottom-nav-item${activeTab === 'sales' ? ' active' : ''}`}
               onClick={() => setActiveTab('sales')}

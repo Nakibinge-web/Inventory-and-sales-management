@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -11,12 +12,7 @@ root.render(
   </React.StrictMode>
 );
 
-if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch((err) => {
-      console.log('SW registration failed: ', err);
-    });
-  });
-}
+// Register service worker to enable PWA installation and offline capabilities on PC and mobile
+serviceWorkerRegistration.register();
 
 reportWebVitals();

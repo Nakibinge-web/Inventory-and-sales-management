@@ -215,4 +215,54 @@ class AuthControllerTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonStructure(['token']);
     }
+
+    /** Test 12: Registration rejects malicious base64 mime types (e.g., PHP executable) */
+    public function test_register_rejects_malicious_base64_mime_type_for_logo(): void
+    {
+        $payload = [
+            'name'                  => 'Hacker Bob',
+            'email'                 => 'bob@example.com',
+            'username'              => 'hacker_bob',
+            'password'              => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'business_name'         => 'Exploit Corp',
+            'logo'                  => 'data:image/php;base64,PD9waHAgcGhwaW5mbygpOyA/Pg==',
+        ];
+
+        $response = $this->postJson('/api/register', $payload);
+
+        $response->assertStatus(422)
+                 ->assertJsonValidationErrors(['logo']);
+    }
+
+    /** Test 13: Registration accepts valid base64 image and saves with safe extension */
+    public function test_register_accepts_valid_base64_image_for_logo_and_saves_with_safe_extension(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        // 1x1 transparent PNG pixel in base64
+        $pngBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+        $payload = [
+            'name'                  => 'Valid User',
+            'email'                 => 'valid@example.com',
+            'username'              => 'valid_user',
+            'password'              => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'business_name'         => 'Valid Business',
+            'logo'                  => $pngBase64,
+        ];
+
+        $response = $this->postJson('/api/register', $payload);
+
+        $response->assertStatus(201)
+                 ->assertJsonPath('success', true);
+
+        $tenant = Tenant::where('name', 'Valid Business')->first();
+        $this->assertNotNull($tenant);
+        $this->assertNotNull($tenant->logo_path);
+        $this->assertStringEndsWith('.png', $tenant->logo_path);
+        $this->assertStringStartsNotWith('logos/..', $tenant->logo_path);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($tenant->logo_path);
+    }
 }

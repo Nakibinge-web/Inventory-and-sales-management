@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
+import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 import styles, { posS } from '../styles/dashboardStyles';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 
@@ -119,6 +120,7 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
 
   const [submitting, setSubmitting] = useState(false);
   const [saleError, setSaleError] = useState(null);
+  const [receiptThemeOverride, setReceiptThemeOverride] = useState('');
 
   // Receipt Modal state (supports single and batch)
   const [viewingBatchSales, setViewingBatchSales] = useState(null); // Array of sales
@@ -1258,7 +1260,7 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
           <div id="batch-all-receipts-container">
             {viewingBatchSales.map((sale, idx) => (
               <div key={sale.id || idx} className="batch-receipt-page">
-                <SaleReceipt sale={sale} user={user} elementId={`batch-receipt-item-${idx}`} />
+                <SaleReceipt sale={sale} user={user} elementId={`batch-receipt-item-${idx}`} colorTheme={receiptThemeOverride || user?.tenant?.receipt_color} />
               </div>
             ))}
           </div>
@@ -1272,90 +1274,92 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
           onClose={() => setViewingBatchSales(null)}
           title=""
           size="md"
-          footer={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-              {/* Stepper controls if multiple receipts exist */}
-              {viewingBatchSales.length > 1 && (
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: '#f8fafc',
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: '1px solid #e2e8f0',
-                }}>
-                  <button
-                    type="button"
-                    onClick={() => setBatchReceiptIndex(prev => Math.max(0, prev - 1))}
-                    disabled={batchReceiptIndex === 0}
-                    style={{
-                      padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1',
-                      background: batchReceiptIndex === 0 ? '#f1f5f9' : '#ffffff',
-                      color: batchReceiptIndex === 0 ? '#94a3b8' : '#0f172a',
-                      fontSize: 12, fontWeight: 600, cursor: batchReceiptIndex === 0 ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    ← Previous
-                  </button>
+          footer={(() => {
+            const activeReceiptTheme = getReceiptTheme(receiptThemeOverride || user?.tenant?.receipt_color || 'rose');
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+                {/* Stepper controls if multiple receipts exist */}
+                {viewingBatchSales.length > 1 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#f8fafc',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #e2e8f0',
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setBatchReceiptIndex(prev => Math.max(0, prev - 1))}
+                      disabled={batchReceiptIndex === 0}
+                      style={{
+                        padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1',
+                        background: batchReceiptIndex === 0 ? '#f1f5f9' : '#ffffff',
+                        color: batchReceiptIndex === 0 ? '#94a3b8' : '#0f172a',
+                        fontSize: 12, fontWeight: 600, cursor: batchReceiptIndex === 0 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      ← Previous
+                    </button>
 
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                    Receipt {batchReceiptIndex + 1} of {viewingBatchSales.length}
-                    <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b', marginLeft: 6 }}>
-                      (Sale #{currentModalSale.id})
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                      Receipt {batchReceiptIndex + 1} of {viewingBatchSales.length}
+                      <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b', marginLeft: 6 }}>
+                        (Sale #{currentModalSale.id})
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setBatchReceiptIndex(prev => Math.min(viewingBatchSales.length - 1, prev + 1))}
+                      disabled={batchReceiptIndex === viewingBatchSales.length - 1}
+                      style={{
+                        padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1',
+                        background: batchReceiptIndex === viewingBatchSales.length - 1 ? '#f1f5f9' : '#ffffff',
+                        color: batchReceiptIndex === viewingBatchSales.length - 1 ? '#94a3b8' : '#0f172a',
+                        fontSize: 12, fontWeight: 600, cursor: batchReceiptIndex === viewingBatchSales.length - 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 22, color: activeReceiptTheme.primary }}>✓</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: activeReceiptTheme.primary }}>
+                      {viewingBatchSales.length > 1
+                        ? `Batch of ${viewingBatchSales.length} Sales Completed!`
+                        : 'Sale Completed Successfully!'}
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setBatchReceiptIndex(prev => Math.min(viewingBatchSales.length - 1, prev + 1))}
-                    disabled={batchReceiptIndex === viewingBatchSales.length - 1}
-                    style={{
-                      padding: '5px 12px', borderRadius: 6, border: '1px solid #cbd5e1',
-                      background: batchReceiptIndex === viewingBatchSales.length - 1 ? '#f1f5f9' : '#ffffff',
-                      color: batchReceiptIndex === viewingBatchSales.length - 1 ? '#94a3b8' : '#0f172a',
-                      fontSize: 12, fontWeight: 600, cursor: batchReceiptIndex === viewingBatchSales.length - 1 ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    Next →
-                  </button>
-                </div>
-              )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button variant="secondary" onClick={() => setViewingBatchSales(null)}>
+                      Close
+                    </Button>
 
-              {/* Action buttons */}
-              <div style={{ display: 'flex', gap: 10, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 22 }}>✓</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#be123c' }}>
-                    {viewingBatchSales.length > 1
-                      ? `Batch of ${viewingBatchSales.length} Sales Completed!`
-                      : 'Sale Completed Successfully!'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Button variant="secondary" onClick={() => setViewingBatchSales(null)}>
-                    Close
-                  </Button>
-
-                  {/* Print Active Receipt */}
-                  <Button
-                    variant="success"
-                    style={{ background: '#be123c', borderColor: '#be123c' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#881337'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#be123c'}
-                    onClick={() => {
-                      const src = document.getElementById('pos-receipt-content');
-                      if (!src) {
-                        alert('Receipt content not found. Please try again.');
-                        return;
-                      }
-                      const win = window.open('', '_blank', 'width=800,height=900');
-                      if (!win) {
-                        alert('Pop-up blocked. Please allow pop-ups for this site.');
-                        return;
-                      }
-                      win.document.write(`<!DOCTYPE html>
+                    {/* Print Active Receipt */}
+                    <Button
+                      variant="success"
+                      style={{ background: activeReceiptTheme.primary, borderColor: activeReceiptTheme.primary }}
+                      onMouseEnter={e => e.currentTarget.style.background = activeReceiptTheme.dark}
+                      onMouseLeave={e => e.currentTarget.style.background = activeReceiptTheme.primary}
+                      onClick={() => {
+                        const src = document.getElementById('pos-receipt-content');
+                        if (!src) {
+                          alert('Receipt content not found. Please try again.');
+                          return;
+                        }
+                        const win = window.open('', '_blank', 'width=800,height=900');
+                        if (!win) {
+                          alert('Pop-up blocked. Please allow pop-ups for this site.');
+                          return;
+                        }
+                        win.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -1393,36 +1397,65 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
 </head>
 <body>${src.innerHTML}</body>
 </html>`);
-                      win.document.close();
-                      win.addEventListener('load', () => {
-                        setTimeout(() => {
-                          win.focus();
-                          win.print();
-                        }, 500);
-                      });
-                    }}
-                  >
-                    🖨️ {viewingBatchSales.length > 1 ? `Print This (#${currentModalSale.id})` : 'Print / Save PDF'}
-                  </Button>
-
-                  {/* Print All Receipts (when batch > 1) */}
-                  {viewingBatchSales.length > 1 && (
-                    <Button
-                      variant="primary"
-                      style={{ background: '#4f46e5', borderColor: '#4f46e5' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
-                      onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}
-                      onClick={() => printBatchReceipts(viewingBatchSales)}
+                        win.document.close();
+                        win.addEventListener('load', () => {
+                          setTimeout(() => {
+                            win.focus();
+                            win.print();
+                          }, 500);
+                        });
+                      }}
                     >
-                      📑 Print All ({viewingBatchSales.length})
+                      🖨️ {viewingBatchSales.length > 1 ? `Print This (#${currentModalSale.id})` : 'Print / Save PDF'}
                     </Button>
-                  )}
+
+                    {/* Print All Receipts (when batch > 1) */}
+                    {viewingBatchSales.length > 1 && (
+                      <Button
+                        variant="primary"
+                        style={{ background: '#4f46e5', borderColor: '#4f46e5' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#4338ca'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#4f46e5'}
+                        onClick={() => printBatchReceipts(viewingBatchSales)}
+                      >
+                        📑 Print All ({viewingBatchSales.length})
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          }
+            );
+          })()}
         >
-          <SaleReceipt sale={currentModalSale} user={user} elementId="pos-receipt-content" />
+          {/* Quick theme selector pill bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Receipt Color:</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {THEME_OPTIONS.map(t => {
+                const isSelected = (receiptThemeOverride || user?.tenant?.receipt_color || 'rose') === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setReceiptThemeOverride(t.id)}
+                    title={t.name}
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: t.primary,
+                      border: isSelected ? '2px solid #0f172a' : '2px solid transparent',
+                      cursor: 'pointer',
+                      transform: isSelected ? 'scale(1.25)' : 'scale(1)',
+                      boxShadow: isSelected ? '0 0 0 2px #ffffff' : 'none',
+                      transition: 'all 0.12s'
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <SaleReceipt sale={currentModalSale} user={user} elementId="pos-receipt-content" colorTheme={receiptThemeOverride || user?.tenant?.receipt_color} />
         </Modal>
       )}
     </div>

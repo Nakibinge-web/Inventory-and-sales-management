@@ -5,7 +5,9 @@ import './styles/marketing/index.css';
 import LandingPage from './pages/marketing/LandingPage';
 import HowItWorksPage from './pages/marketing/HowItWorksPage';
 import PricingPage from './pages/marketing/PricingPage';
+import CheckoutPage from './pages/marketing/CheckoutPage';
 import ContactPage from './pages/marketing/ContactPage';
+
 
 // Authentication & Dashboard
 import AuthPage from './pages/AuthPage';
@@ -178,6 +180,11 @@ export default function App() {
   if (currentPath === '/pricing' || currentPath.startsWith('/pricing/')) {
     return <PricingPage />;
   }
+
+  if (currentPath === '/checkout' || currentPath.startsWith('/checkout/')) {
+    return <CheckoutPage />;
+  }
+
 
   if (currentPath === '/how-it-works' || currentPath.startsWith('/how-it-works/')) {
     return <HowItWorksPage />;

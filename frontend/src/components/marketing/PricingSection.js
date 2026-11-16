@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MarketingLink } from '../../utils/navigation';
 import { CheckIcon, ArrowRightIcon } from './Icons';
+import NexumPayCheckoutModal from './NexumPayCheckoutModal';
 
 const PRICING_PLANS = [
   {
@@ -32,12 +33,12 @@ const PRICING_PLANS = [
     badge: 'Solo Retailers',
     badgeType: 'neutral',
     tagline: 'For boutique shops, electronics counters, and solo store owners.',
-    monthlyPrice: 'UGX 75,000',
-    annualPrice: 'UGX 64,000',
+    monthlyPrice: 'UGX 1,000',
+    annualPrice: 'UGX 1,000',
     period: '/ month',
     featured: false,
-    ctaText: 'Get Started',
-    ctaHref: '/register',
+    ctaText: 'Subscribe with NexumPay',
+    ctaHref: '/checkout?plan=starter',
     btnVariant: 'sp-btn-secondary',
     features: [
       'Up to 1,000 catalog items',
@@ -56,12 +57,12 @@ const PRICING_PLANS = [
     badge: 'Most Popular',
     badgeType: 'popular',
     tagline: 'For supermarkets, high-traffic retailers, and wholesale depots.',
-    monthlyPrice: 'UGX 180,000',
-    annualPrice: 'UGX 150,000',
+    monthlyPrice: 'UGX 2,000',
+    annualPrice: 'UGX 2,000',
     period: '/ month',
     featured: true,
     ctaText: 'Start Business Plan',
-    ctaHref: '/register',
+    ctaHref: '/checkout?plan=business',
     btnVariant: 'sp-btn-primary',
     features: [
       'Unlimited catalog items',
@@ -102,6 +103,13 @@ const PRICING_PLANS = [
 
 export default function PricingSection() {
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [checkoutPlan, setCheckoutPlan] = useState(null);
+
+  const handleSelectPlan = (plan) => {
+    if (plan.id === 'starter' || plan.id === 'business') {
+      setCheckoutPlan(plan.id);
+    }
+  };
 
   return (
     <section className="sp-landing-pricing-section" aria-labelledby="pricing-plans-heading">
@@ -117,7 +125,7 @@ export default function PricingSection() {
           </h2>
 
           <p className="sp-pricing-desc">
-            Choose the plan that fits your current operational scale. Upgrade, downgrade, or cancel anytime with zero hidden fees.
+            Choose the plan that fits your current operational scale. Pay instantly with MTN Mobile Money or Airtel Money via NexumPay.
           </p>
 
           {/* Billing Cycle Toggle */}
@@ -169,7 +177,7 @@ export default function PricingSection() {
                     <span className="sp-plan-period">{plan.period}</span>
                   </div>
                   {billingCycle === 'annual' && plan.id !== 'trial' && plan.id !== 'enterprise' && (
-                    <div className="sp-plan-billing-note">Billed annually</div>
+                    <div className="sp-plan-billing-note">Billed annually via NexumPay</div>
                   )}
                   {plan.id === 'trial' && (
                     <div className="sp-plan-billing-note">Zero risk, no card required</div>
@@ -178,13 +186,24 @@ export default function PricingSection() {
 
                 {/* CTA Button */}
                 <div className="sp-plan-cta-wrap">
-                  <MarketingLink
-                    href={plan.ctaHref}
-                    className={`sp-btn ${plan.btnVariant} sp-plan-btn`}
-                  >
-                    <span>{plan.ctaText}</span>
-                    <ArrowRightIcon size={14} />
-                  </MarketingLink>
+                  {plan.id === 'starter' || plan.id === 'business' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPlan(plan)}
+                      className={`sp-btn ${plan.btnVariant} sp-plan-btn`}
+                    >
+                      <span>{plan.ctaText}</span>
+                      <ArrowRightIcon size={14} />
+                    </button>
+                  ) : (
+                    <MarketingLink
+                      href={plan.ctaHref}
+                      className={`sp-btn ${plan.btnVariant} sp-plan-btn`}
+                    >
+                      <span>{plan.ctaText}</span>
+                      <ArrowRightIcon size={14} />
+                    </MarketingLink>
+                  )}
                 </div>
 
                 {/* Feature List */}
@@ -215,6 +234,15 @@ export default function PricingSection() {
           </MarketingLink>
         </div>
       </div>
+
+      {/* Custom NexumPay Subscription Checkout Modal */}
+      <NexumPayCheckoutModal
+        isOpen={Boolean(checkoutPlan)}
+        isModal={true}
+        initialPlanId={checkoutPlan || 'starter'}
+        initialBillingCycle={billingCycle}
+        onClose={() => setCheckoutPlan(null)}
+      />
     </section>
   );
 }

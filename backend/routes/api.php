@@ -16,11 +16,33 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\MomoPaymentController;
+use App\Http\Controllers\NexumPayController;
 
 // Public routes — no token required
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
 Route::post('/contact', [ContactController::class, 'submit']);
+
+// NexumPay Payment Gateway routes (Subscription & Mobile Money Collections)
+Route::prefix('nexumpay')->group(function () {
+    Route::get('/plans', [NexumPayController::class, 'plans']);
+    Route::get('/config-check', [NexumPayController::class, 'configCheck']);
+    Route::post('/initiate', [NexumPayController::class, 'initiate']);
+    Route::get('/status/{reference}', [NexumPayController::class, 'status']);
+    Route::post('/simulate/{reference}', [NexumPayController::class, 'simulate']);
+    Route::post('/webhook', [NexumPayController::class, 'webhook']);
+});
+
+// MTN MoMo Direct Payment Gateway routes
+Route::prefix('momo')->group(function () {
+    Route::get('/plans', [MomoPaymentController::class, 'plans']);
+    Route::get('/config-check', [MomoPaymentController::class, 'configCheck']);
+    Route::post('/initiate', [MomoPaymentController::class, 'initiate']);
+    Route::get('/status/{referenceId}', [MomoPaymentController::class, 'status']);
+    Route::post('/webhook', [MomoPaymentController::class, 'webhook']);
+});
+
 
 // All other routes require a valid Sanctum token + tenant resolution
 Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
@@ -158,10 +180,11 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // (sales.create, sales.view, sales.report).
     Route::prefix('sales')->group(function () {
         // Report routes must be declared before /{sale} wildcard
-        Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
-        Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
-        Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
-        Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
+        Route::get('/daily-report',    [SaleController::class, 'getDailyReport']);
+        Route::get('/weekly-report',   [SaleController::class, 'getWeeklyReport']);
+        Route::get('/monthly-report',  [SaleController::class, 'getMonthlySalesReport']);
+        Route::get('/yearly-report',   [SaleController::class, 'getYearlyReport']);
+        Route::get('/revenue-profit',  [SaleController::class, 'getRevenueProfitAnalytics']);
 
         Route::post('/bulk',   [SaleController::class, 'bulkStore']);
         Route::get('/',        [SaleController::class, 'index']);
@@ -207,9 +230,20 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // Report Preferences
     Route::apiResource('report-preferences', \App\Http\Controllers\ReportPreferenceController::class);
 
+    // Report Exports & Analytics
+    Route::prefix('reports')->group(function () {
+        Route::get('/revenue-profit', [SaleController::class, 'getRevenueProfitAnalytics']);
+        Route::get('/generated', [\App\Http\Controllers\ReportExportController::class, 'listGeneratedReports']);
+        Route::get('/generated/{id}/export', [\App\Http\Controllers\ReportExportController::class, 'exportGeneratedReport'])->name('reports.export-generated');
+        Route::match(['get', 'post'], '/overview/export', [\App\Http\Controllers\ReportExportController::class, 'exportOverviewReport']);
+        Route::match(['get', 'post'], '/sales/export', [\App\Http\Controllers\ReportExportController::class, 'exportSalesReport']);
+        Route::match(['get', 'post'], '/purchases/export', [\App\Http\Controllers\ReportExportController::class, 'exportPurchasesReport']);
+    });
+
     // Business Settings
     Route::prefix('settings')->group(function () {
         Route::get('/business', [\App\Http\Controllers\SettingsController::class, 'getBusinessInfo']);
-        Route::put('/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
+        Route::match(['put', 'post'], '/business', [\App\Http\Controllers\SettingsController::class, 'updateBusinessInfo']);
+        Route::match(['put', 'post'], '/modules', [\App\Http\Controllers\SettingsController::class, 'updateModules']);
     });
 });
