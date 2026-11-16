@@ -392,7 +392,21 @@ class SaleController extends Controller
 
         $validated = $request->validate(['date' => 'required|date']);
 
-        return response()->json(['success' => true, 'data' => $reportService->getDailySalesReport($validated['date'])]);
+        $sales = Sale::whereDate('sale_date', $validated['date'])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
+                     ->get();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
+        return response()->json(['success' => true, 'data' => [
+            'date'               => $validated['date'],
+            'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
+            'total_transactions' => $sales->count(),
+            'sales'              => $sales,
+        ]]);
     }
 
     public function getWeeklyReport(Request $request, \App\Services\ReportService $reportService): JsonResponse
@@ -408,7 +422,44 @@ class SaleController extends Controller
 
         $validated = $request->validate(['date' => 'required|date']);
 
-        return response()->json(['success' => true, 'data' => $reportService->getWeeklySalesReport($validated['date'])]);
+        $date      = \Carbon\Carbon::parse($validated['date']);
+        $weekStart = $date->copy()->startOfWeek(\Carbon\Carbon::MONDAY);
+        $weekEnd   = $date->copy()->endOfWeek(\Carbon\Carbon::SUNDAY);
+
+        $sales = Sale::whereBetween('sale_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+                     ->with(['user', 'customer', 'saleItems.product.category'])
+                     ->orderBy('sale_date')
+                     ->get();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
+        // Daily breakdown within the week
+        $byDay = [];
+        for ($d = $weekStart->copy(); $d->lte($weekEnd); $d->addDay()) {
+            $dayStr   = $d->toDateString();
+            $daySales = $sales->filter(fn($s) => \Carbon\Carbon::parse($s->sale_date)->toDateString() === $dayStr);
+            $dayCost  = $daySales->sum('cost');
+            $byDay[]  = [
+                'date'         => $dayStr,
+                'day'          => $d->format('D'),
+                'total'        => $daySales->sum('total_amount'),
+                'cost'         => round($dayCost, 2),
+                'profit'       => round($daySales->sum('total_amount') - $dayCost, 2),
+                'transactions' => $daySales->count(),
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => [
+            'week_start'         => $weekStart->toDateString(),
+            'week_end'           => $weekEnd->toDateString(),
+            'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
+            'total_transactions' => $sales->count(),
+            'by_day'             => $byDay,
+            'sales'              => $sales,
+        ]]);
     }
 
     public function getMonthlySalesReport(Request $request, \App\Services\ReportService $reportService): JsonResponse
@@ -424,7 +475,53 @@ class SaleController extends Controller
 
         $validated = $request->validate(['month' => 'required|date_format:Y-m']);
 
-        return response()->json(['success' => true, 'data' => $reportService->getMonthlySalesReport($validated['month'])]);
+        [$year, $month] = explode('-', $validated['month']);
+
+        $sales = Sale::whereYear('sale_date', $year)
+                     ->whereMonth('sale_date', $month)
+                     ->with(['user', 'customer', 'saleItems.product.category'])
+                     ->orderBy('sale_date')
+                     ->get();
+
+        ['total_cost' => $totalCost, 'total_profit' => $totalProfit, 'sales' => $sales] =
+            $this->calcProfitForSales($sales);
+
+        // Day-by-day breakdown
+        $daysInMonth = \Carbon\Carbon::createFromDate($year, $month, 1)->daysInMonth;
+        $byDay = [];
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $dayStr   = sprintf('%04d-%02d-%02d', $year, $month, $d);
+            $daySales = $sales->filter(fn($s) => \Carbon\Carbon::parse($s->sale_date)->toDateString() === $dayStr);
+            if ($daySales->count() > 0) {
+                $dayCost = $daySales->sum('cost');
+                $byDay[] = [
+                    'date'         => $dayStr,
+                    'total'        => $daySales->sum('total_amount'),
+                    'cost'         => round($dayCost, 2),
+                    'profit'       => round($daySales->sum('total_amount') - $dayCost, 2),
+                    'transactions' => $daySales->count(),
+                ];
+            }
+        }
+
+        // Payment method breakdown
+        $byPayment = $sales->groupBy('payment_method')->map(fn($g) => [
+            'method' => $g->first()->payment_method,
+            'total'  => $g->sum('total_amount'),
+            'profit' => round($g->sum('profit'), 2),
+            'count'  => $g->count(),
+        ])->values();
+
+        return response()->json(['success' => true, 'data' => [
+            'month'              => $validated['month'],
+            'total_sales'        => $sales->sum('total_amount'),
+            'total_cost'         => $totalCost,
+            'total_profit'       => $totalProfit,
+            'total_transactions' => $sales->count(),
+            'by_day'             => $byDay,
+            'by_payment'         => $byPayment,
+            'sales'              => $sales,
+        ]]);
     }
 
     public function getYearlyReport(Request $request, \App\Services\ReportService $reportService): JsonResponse

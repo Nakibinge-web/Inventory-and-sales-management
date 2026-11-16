@@ -4,7 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class Tenant extends Model
 {
@@ -20,18 +22,46 @@ class Tenant extends Model
         'contacts',
         'address',
         'logo_path',
+        'signature_path',
+        'tagline',
+        'tin',
+        'website',
+        'bank_name',
+        'account_name',
+        'account_number',
+        'mobile_money_number',
+        'mobile_money_name',
+        'payment_terms',
+        'invoice_notes',
+        'enabled_modules',
         'subscription_plan',
         'subscription_status',
         'subscription_expires_at',
     ];
 
+    public const DEFAULT_MODULES = [
+        'pos' => true,
+        'products' => true,
+        'categories' => true,
+        'suppliers' => true,
+        'customers' => true,
+        'sales' => true,
+        'invoices' => true,
+        'purchases' => true,
+        'stock-movements' => true,
+        'reports' => true,
+        'ai' => true,
+    ];
+
     protected $casts = [
         'contacts'                => 'array',
+        'enabled_modules'         => 'array',
         'subscription_expires_at' => 'datetime',
     ];
 
     protected $appends = [
         'logo_url',
+        'signature_url',
         'is_subscription_expired',
     ];
 
@@ -90,7 +120,7 @@ class Tenant extends Model
         $durationDays = self::durationDaysForCycle($billingCycle);
         $currentPlan  = strtolower(trim((string) $this->subscription_plan));
         $targetPlan   = strtolower(trim($planId));
-        $now          = now();
+        $now          = Carbon::now();
 
         if (
             !$this->isSubscriptionExpired()
@@ -99,7 +129,7 @@ class Tenant extends Model
             && $this->subscription_expires_at !== null
             && $this->subscription_expires_at->greaterThan($now)
         ) {
-            return $this->subscription_expires_at->copy()->addDays($durationDays);
+            return Carbon::parse($this->subscription_expires_at)->addDays($durationDays);
         }
 
         return $now->copy()->addDays($durationDays);
@@ -173,17 +203,44 @@ class Tenant extends Model
         return $payload;
     }
 
+    public function getEnabledModulesAttribute($value)
+    {
+        if (empty($value)) {
+            return self::DEFAULT_MODULES;
+        }
+
+        $decoded = is_string($value) ? json_decode($value, true) : $value;
+        if (!is_array($decoded)) {
+            return self::DEFAULT_MODULES;
+        }
+
+        return array_merge(self::DEFAULT_MODULES, $decoded);
+    }
+
     public function getLogoUrlAttribute(): ?string
     {
-        if (!$this->logo_path) {
+        return $this->resolvePublicFileUrl($this->logo_path);
+    }
+
+    public function getSignatureUrlAttribute(): ?string
+    {
+        return $this->resolvePublicFileUrl($this->signature_path);
+    }
+
+    private function resolvePublicFileUrl(?string $path): ?string
+    {
+        if (!$path) {
             return null;
         }
 
-        if (filter_var($this->logo_path, FILTER_VALIDATE_URL) || str_starts_with($this->logo_path, 'data:image/')) {
-            return $this->logo_path;
+        if (filter_var($path, FILTER_VALIDATE_URL) || str_starts_with($path, 'data:image/')) {
+            return $path;
         }
 
-        return \Illuminate\Support\Facades\Storage::disk('public')->url($this->logo_path);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return $disk->url($path);
     }
 
     // Relationships
