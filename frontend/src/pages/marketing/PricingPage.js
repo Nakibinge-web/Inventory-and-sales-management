@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 import MarketingHeader from '../../components/marketing/MarketingHeader';
 import MarketingFooter from '../../components/marketing/MarketingFooter';
 import SectionHeading from '../../components/marketing/SectionHeading';
@@ -86,6 +88,16 @@ export default function PricingPage() {
   const [checkoutPlan, setCheckoutPlan] = useState(null);
 
   useEffect(() => {
+    AOS.init({
+      duration: 750,
+      easing: 'ease-out-cubic',
+      once: false,
+      mirror: true,
+      offset: 80,
+      throttleDelay: 16,
+    });
+    AOS.refresh();
+
     const scrollToFaq = () => {
       if (window.location.hash === '#faq') {
         const el = document.getElementById('faq');
@@ -116,39 +128,49 @@ export default function PricingPage() {
 
       <main id="main-content">
         {/* Hero Section */}
-        <section className="sp-section sp-section-white" style={{ paddingBottom: 32 }} aria-labelledby="pricing-heading">
+        <section className="sp-section sp-section-white sp-pricing-hero-section" aria-labelledby="pricing-heading">
           <div className="sp-container">
-            <SectionHeading
-              eyebrow="TRANSPARENT PLANS"
-              title="Predictable pricing for every stage of your business."
-              subtitle="No hidden setup charges or surprise fees. Choose your tier and pay securely via NexumPay Mobile Money."
-              align="center"
-            />
+            <div data-aos="fade-up">
+              <SectionHeading
+                eyebrow="TRANSPARENT PLANS"
+                title="Pricing for different business packages."
+                subtitle="No setup charges. Choose your business package and pay securely via Mobile Money."
+                align="center"
+                maxWidth="100%"
+                className="sp-pricing-page-heading"
+              />
+            </div>
 
-            {/* Monthly / Annual Toggle */}
-            <div className="sp-billing-toggle" role="group" aria-label="Billing frequency selection">
-              <div className="sp-toggle-pill">
-                <button
-                  type="button"
-                  className={`sp-toggle-btn ${billingCycle === 'monthly' ? 'active' : ''}`}
-                  onClick={() => setBillingCycle('monthly')}
-                >
-                  Monthly billing
-                </button>
-                <button
-                  type="button"
-                  className={`sp-toggle-btn ${billingCycle === 'annual' ? 'active' : ''}`}
-                  onClick={() => setBillingCycle('annual')}
-                >
-                  Annual billing
-                </button>
+            {/* Monthly / Annually Toggle Container */}
+            <div className="sp-pricing-billing-wrap" data-aos="fade-up" data-aos-delay="100">
+              <div className="sp-pricing-billing-box" role="group" aria-label="Billing frequency selection">
+                <div className="sp-pricing-billing-banner">
+                  Save 15% on Annual Billing
+                </div>
+                <div className="sp-pricing-billing-options">
+                  <button
+                    type="button"
+                    aria-pressed={billingCycle === 'monthly'}
+                    className={`sp-pricing-billing-btn ${billingCycle === 'monthly' ? 'active' : ''}`}
+                    onClick={() => setBillingCycle('monthly')}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={billingCycle === 'annual'}
+                    className={`sp-pricing-billing-btn ${billingCycle === 'annual' ? 'active' : ''}`}
+                    onClick={() => setBillingCycle('annual')}
+                  >
+                    Annually
+                  </button>
+                </div>
               </div>
-              <span className="sp-save-tag">Save 15% on Annual</span>
             </div>
 
             {/* Pricing Cards Grid - Software Specification Format */}
             <div className="sp-pricing-grid" role="list" aria-label="Subscription Plans">
-              {PLANS.map((plan) => {
+              {PLANS.map((plan, index) => {
                 const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
                 const isPayablePlan = plan.id === 'starter' || plan.id === 'business';
 
@@ -157,6 +179,8 @@ export default function PricingPage() {
                     key={plan.id}
                     className={`sp-pricing-doc-card ${plan.featured ? 'featured' : ''}`}
                     role="listitem"
+                    data-aos="fade-up"
+                    data-aos-delay={index * 110}
                   >
                     <div className="sp-doc-header">
                       <div className="sp-doc-tier">
@@ -208,82 +232,6 @@ export default function PricingPage() {
                   </div>
                 );
               })}
-            </div>
-
-            {/* Feature Comparison Matrix */}
-            <div className="sp-comparison-table-wrap">
-              <table className="sp-comparison-table" aria-label="Detailed Plan Comparison">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40%' }}>Core Capabilities</th>
-                    <th style={{ width: '20%' }}>Starter</th>
-                    <th style={{ width: '20%' }}>Business</th>
-                    <th style={{ width: '20%' }}>Enterprise</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>Catalog Items Limit</strong></td>
-                    <td className="sp-num">Up to 500 items</td>
-                    <td className="sp-num">Unlimited</td>
-                    <td className="sp-num">Unlimited</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Point of Sale (POS) Terminals</strong></td>
-                    <td>1 Register</td>
-                    <td>Multi-Register</td>
-                    <td>Multi-Branch</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Staff Accounts Included</strong></td>
-                    <td>2 Users</td>
-                    <td>Up to 10 Users</td>
-                    <td>Unlimited Users</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Custom Roles &amp; Permissions</strong></td>
-                    <td>Standard</td>
-                    <td>Full Granular Control</td>
-                    <td>Custom Enterprise Matrix</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Stock Movements Audit Trail</strong></td>
-                    <td><CheckIcon size={14} /> Basic</td>
-                    <td><CheckIcon size={14} /> Full Reason Codes</td>
-                    <td><CheckIcon size={14} /> Full Reason Codes</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Supplier Orders &amp; Purchasing</strong></td>
-                    <td>Standard logging</td>
-                    <td>Full Supplier Ledger</td>
-                    <td>Full Supplier Ledger</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Invoicing (Proforma &amp; Tax)</strong></td>
-                    <td>Thermal receipts</td>
-                    <td>Receipts &amp; Invoices</td>
-                    <td>Custom Branded Invoices</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Financial &amp; Shift Reports</strong></td>
-                    <td>Daily sales</td>
-                    <td>Daily, Weekly, Monthly</td>
-                    <td>Custom Exports &amp; Reports</td>
-                  </tr>
-                  <tr>
-                    <td><strong>AI Business Assistant</strong></td>
-                    <td>&mdash;</td>
-                    <td><CheckIcon size={14} /> Included</td>
-                    <td><CheckIcon size={14} /> Custom Prompts</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Data Partitioning &amp; Security</strong></td>
-                    <td>Tenant Partitioned</td>
-                    <td>Tenant Partitioned</td>
-                    <td>Dedicated Isolation</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
 
           </div>

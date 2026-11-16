@@ -155,7 +155,7 @@ function StockMovementsTab({ token, products, canCreate = true }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                {['Date', 'Product', 'Type', 'Quantity', 'Reference', 'Source'].map(h => (
+                {['Date', 'Product', 'Type', 'Quantity', 'Source'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                 ))}
               </tr>
@@ -182,9 +182,6 @@ function StockMovementsTab({ token, products, canCreate = true }) {
                   </td>
                   <td style={{ padding: '13px 14px', fontWeight: 700, fontSize: 14, color: m.type === 'IN' ? '#16a34a' : m.type === 'OUT' ? '#dc2626' : '#7c3aed' }}>
                     {m.type === 'IN' ? '+' : m.type === 'OUT' ? '-' : '⇒'}{m.quantity}
-                  </td>
-                  <td style={{ padding: '13px 14px', color: '#475569', fontSize: 13 }}>
-                    #{m.reference_id || '—'}
                   </td>
                   <td style={{ padding: '13px 14px' }}>
                     <span style={{

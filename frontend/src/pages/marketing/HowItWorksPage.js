@@ -4,7 +4,7 @@ import MarketingFooter from '../../components/marketing/MarketingFooter';
 import CTASection from '../../components/marketing/CTASection';
 import QuickStartSteps from '../../components/marketing/QuickStartSteps';
 import TrustStrip from '../../components/marketing/TrustStrip';
-import { GUIDE_FEATURES } from '../../components/marketing/FeatureShowcase';
+import { GUIDE_FEATURES, GuideFeatureContent } from '../../components/marketing/FeatureShowcase';
 import { usePageMeta } from '../../utils/seo';
 
 export default function HowItWorksPage() {
@@ -57,40 +57,7 @@ export default function HowItWorksPage() {
     };
   }, []);
 
-  const renderFeatureContent = (feature) => {
-    const IconComp = feature.icon;
-    return (
-      <div className="sp-container">
-        <div className="sp-guide-card-content">
-          {/* Eyebrow */}
-          <div className="sp-editorial-eyebrow">
-            <IconComp size={14} />
-            <span>{feature.eyebrow}</span>
-          </div>
-
-          {/* Title */}
-          <h2 className="sp-editorial-title">{feature.title}</h2>
-
-          {/* Description */}
-          <p className="sp-editorial-body">{feature.desc}</p>
-
-          {/* Subheading: How to use [Feature] Step-by-Step */}
-          <h3 className="sp-guide-step-subheading">{feature.subheading}</h3>
-
-          {/* 2x2 Grid of Step Cards */}
-          <div className="sp-guide-steps-grid">
-            {feature.steps.map((step) => (
-              <div key={step.num} className="sp-guide-step-card">
-                <div className="sp-guide-step-badge">STEP {step.num}</div>
-                <h4 className="sp-guide-step-title">{step.title}</h4>
-                <p className="sp-guide-step-text">{step.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderFeatureContent = (feature) => <GuideFeatureContent feature={feature} />;
 
   return (
     <div className="marketing-root">
@@ -130,6 +97,7 @@ export default function HowItWorksPage() {
           <TrustStrip
             activeId={activeFeatureId}
             onSelect={handleSelectFeature}
+            showExtendedRow
           />
 
           {/* Card Viewport: only ONE section shown at a time */}

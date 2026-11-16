@@ -901,6 +901,106 @@
 /* ==========================================================================
    7. PRICING PAGE
    ========================================================================== */
+.sp-section.sp-pricing-hero-section {
+  padding-top: 36px;
+  padding-bottom: 72px;
+}
+
+@media (min-width: 640px) {
+  .sp-pricing-page-heading .sp-section-title {
+    font-size: clamp(21px, 3.3vw, 42px);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .sp-section.sp-pricing-hero-section {
+    padding-top: 28px;
+    padding-bottom: 56px;
+  }
+}
+
+.sp-pricing-billing-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 48px;
+}
+
+.sp-pricing-billing-box {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 340px;
+  border: 1px solid var(--sp-navy-800, #102A43);
+  background-color: var(--sp-navy-950, #071629);
+  border-radius: 0;
+  overflow: hidden;
+  font-family: var(--sp-font-content, 'Poppins', sans-serif);
+}
+
+.sp-pricing-billing-banner {
+  background-color: #800020;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--sp-navy-800, #102A43);
+}
+
+.sp-pricing-billing-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.sp-pricing-billing-btn {
+  position: relative;
+  padding: 13px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--sp-font-content, 'Poppins', sans-serif);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sp-pricing-billing-btn + .sp-pricing-billing-btn {
+  border-left: 1px solid var(--sp-navy-800, #102A43);
+}
+
+.sp-pricing-billing-btn:hover {
+  color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.sp-pricing-billing-btn.active {
+  background-color: #FFFFFF;
+  color: var(--sp-navy-950, #071629);
+  font-weight: 700;
+}
+
+.sp-pricing-billing-btn.active::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #800020;
+  pointer-events: none;
+}
+
+.sp-pricing-billing-btn.active:hover {
+  background-color: #FFFFFF;
+  color: var(--sp-navy-950, #071629);
+}
+
 .sp-billing-toggle {
   display: flex;
   align-items: center;
@@ -1133,7 +1233,7 @@
 .sp-faq-item {
   background-color: var(--sp-white);
   border: 1px solid var(--sp-border);
-  border-radius: var(--sp-radius-md);
+  border-radius: 0;
   overflow: hidden;
   transition: border-color 0.15s ease;
 }
@@ -2133,10 +2233,19 @@
   padding: 0;
 }
 
+.sp-spec-rows {
+  display: flex;
+  flex-direction: column;
+}
+
 .sp-spec-bar {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   border-left: 1px solid var(--sp-border);
+}
+
+.sp-spec-bar-secondary {
+  border-top: 1px solid var(--sp-border);
 }
 
 .sp-spec-col {
@@ -2988,6 +3097,32 @@
   line-height: 1.65;
   color: var(--sp-text-muted);
   margin-bottom: 32px;
+}
+
+.sp-guide-body-paragraph {
+  margin: 0;
+}
+
+.sp-guide-desc-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sp-guide-desc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sp-guide-desc-marker {
+  font-family: 'DM Mono', monospace;
+  font-weight: 700;
+  color: var(--sp-accent);
+  flex-shrink: 0;
 }
 
 .sp-guide-step-subheading {
@@ -3862,6 +3997,9 @@ svg.sp-step-arrow-icon::before {
   .sp-spec-bar {
     grid-template-columns: repeat(3, 1fr);
   }
+  .sp-spec-col:not(.active) {
+    box-shadow: inset 0 -1px 0 var(--sp-border);
+  }
   .sp-editorial-row,
   .sp-editorial-row.reverse {
     grid-template-columns: 1fr;
@@ -3937,6 +4075,7 @@ svg.sp-step-arrow-icon::before {
 .sp-landing-plan-card,
 .sp-pricing-card,
 .sp-pricing-doc-card,
+.sp-faq-item,
 .sp-feature-card,
 .sp-contact-card,
 .sp-navy-card,

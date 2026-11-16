@@ -51,13 +51,15 @@ export default function FAQAccordion({ items = DEFAULT_FAQS, title = 'Frequently
   return (
     <section id="faq" className="sp-section sp-section-soft" aria-labelledby="faq-section-heading">
       <div className="sp-container">
-        <SectionHeading
-          id="faq-section-heading"
-          eyebrow="QUESTIONS &amp; ANSWERS"
-          title={title}
-          subtitle={subtitle}
-          align="center"
-        />
+        <div data-aos="fade-up">
+          <SectionHeading
+            id="faq-section-heading"
+            eyebrow="QUESTIONS &amp; ANSWERS"
+            title={title}
+            subtitle={subtitle}
+            align="center"
+          />
+        </div>
 
         <div className="sp-faq-container" role="presentation">
           {items.map((item, index) => {
@@ -66,7 +68,12 @@ export default function FAQAccordion({ items = DEFAULT_FAQS, title = 'Frequently
             const panelId = `faq-p-${index}`;
 
             return (
-              <div key={index} className="sp-faq-item">
+              <div
+                key={index}
+                className="sp-faq-item"
+                data-aos="fade-up"
+                data-aos-delay={Math.min(index * 45, 225)}
+              >
                 <button
                   type="button"
                   id={headingId}

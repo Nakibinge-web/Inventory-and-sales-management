@@ -6,9 +6,11 @@ export default function SectionHeading({
   subtitle,
   align = 'left',
   inverted = false,
+  maxWidth,
   className = '',
 }) {
   const isCenter = align === 'center';
+  const resolvedMaxWidth = maxWidth !== undefined ? maxWidth : (isCenter ? 740 : '100%');
 
   return (
     <div
@@ -16,7 +18,7 @@ export default function SectionHeading({
       style={{
         textAlign: align,
         marginBottom: subtitle ? 48 : 36,
-        maxWidth: isCenter ? 740 : '100%',
+        maxWidth: resolvedMaxWidth,
         marginLeft: isCenter ? 'auto' : 0,
         marginRight: isCenter ? 'auto' : 0,
       }}

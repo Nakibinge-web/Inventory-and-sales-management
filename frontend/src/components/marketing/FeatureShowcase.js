@@ -7,6 +7,10 @@ import {
   CustomersIcon,
   ReportsIcon,
   ShieldIcon,
+  StockMovementsIcon,
+  SuppliersIcon,
+  SparklesIcon,
+  SettingsIcon,
 } from './Icons';
 
 export const GUIDE_FEATURES = [
@@ -163,41 +167,285 @@ export const GUIDE_FEATURES = [
   {
     id: '06',
     icon: ShieldIcon,
-    eyebrow: '06 / Team Access & Permissions',
-    title: 'Control staff permissions while protecting sensitive store data.',
-    desc: 'Give cashiers, store managers, and accountants exactly the access they need without exposing supplier costs, net profit totals, or store-wide administrative controls. Every transaction and stock count is stamped with staff accountability.',
-    subheading: 'How to use Team Access & Permissions Step-by-Step',
+    eyebrow: '06 / Users Control',
+    title: 'Manage staff accounts, roles, and access permissions.',
+    desc: 'User Control lets business owners and administrators add staff members, assign predefined or custom permission roles, and control who can access sales, inventory, purchases, reports, and system settings. You can also enable, disable, edit, or delete user accounts anytime.',
+    subheading: 'How to use User Control Step-by-Step',
     steps: [
       {
         num: '01',
-        title: 'Invite staff members',
-        text: 'Add employee profiles by name, email, and designated store branch or terminal.',
+        title: 'Open Sidebar and click on "User Control"',
+        text: 'Open the sidebar under System & Intelligence and click on "User Control" to view all registered staff accounts, their usernames, emails, statuses, and assigned roles.',
       },
       {
         num: '02',
-        title: 'Assign role-based access tiers',
-        text: 'Select from preset permission roles (Owner / Super Admin, Store Manager, Cashier) to control system privileges strictly.',
+        title: 'Click "+ Add User" and Enter Staff Details',
+        text: 'Click "+ Add User" in the top-right corner, enter the Staff Full Name, provide a Staff Username (or Email Address) for login, set Account Access Status to Enabled or Disabled, and assign an 8+ character password (use the eye icon to verify it).',
       },
       {
         num: '03',
-        title: 'Protect sensitive commercial data',
-        text: 'Mask supplier purchase prices, discount limits, and store-wide profit figures from front-counter cashiers.',
+        title: 'Assign Predefined or Custom Roles',
+        text: 'Pick a predefined role (Owner, Admin, Manager, or Cashier) or switch to "Custom Role" (for owners) to name a new role and select exact permissions across products, sales, purchases, stock, and reports before clicking "Add User".',
       },
       {
         num: '04',
-        title: 'Audit user accountability logs',
-        text: 'Review timestamps and staff attribution for every receipt, voided sale, price override, and shift handoff.',
+        title: 'Edit, Disable, Enable, or Delete Users & Roles',
+        text: 'Use the search bar to find staff, click "Edit" to update user details or custom role permissions, click "Disable" or "Enable" to pause or restore access immediately, or review and remove custom roles in the Roles table below.',
+      },
+    ],
+  },
+  {
+    id: '07',
+    icon: StockMovementsIcon,
+    eyebrow: '07 / Stock Movements',
+    title: 'Track every unit moving in, out, or adjusted across your store.',
+    desc: {
+      intro:
+        'Stock Movements section is where all stock changes are recorded. There are three types of Stock movements that is "Stock In", "Stock Out" and "Stock Adjustments".',
+      points: [
+        '"Stock In" means that products are being added to the business(Purchase).',
+        '"Stock Out" means that stock is going out of business(sale).',
+        '"Stock Adjustment" means setting the level of available stock to a new level.',
+      ],
+      outro:
+        '"Stock Adjustment" helps you to record damaged goods, stock count correction or direct restocks without losing accountability and this is done in the Stock movements section',
+    },
+    subheading: 'How to use Stock Movements Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "Stock Movements"',
+        text: 'Open the sidebar under Operations and click on "Stock Movements" to view summary totals (Total Movements, Stock In, Stock Out) and your full inventory movement ledger.',
+      },
+      {
+        num: '02',
+        title: 'Search and Filter Movement Records',
+        text: 'Search by product name or filter the movement table by type (Stock In, Stock Out, or Adjustment) and specific product to trace the source of any stock change.',
+      },
+      {
+        num: '03',
+        title: 'Use the "Adjust Stock" Form',
+        text: 'Scroll to the Adjust Stock panel, pick a Product, and select an Adjustment Type: "Stock In" to add units, "Stock Out" to remove units, or "Set Level" to set an exact stock count.',
+      },
+      {
+        num: '04',
+        title: 'Enter Quantity, Reason & Apply Adjustment',
+        text: 'Fill in the quantity, an optional reason (such as damaged goods or stock count correction) and date, then click "Apply Adjustment". Stock levels and low-stock alerts update immediately.',
+      },
+    ],
+  },
+  {
+    id: '08',
+    icon: ReportsIcon,
+    eyebrow: '08 / Reports & Analytics',
+    title: 'Understand your revenue, costs, net profit, and top performers.',
+    desc: 'Reports & Analytics turns your daily sales, purchases, and inventory into clear financial summaries. View your profit margins, top-selling products, and automate scheduled reports from the Reports and Analytics section.',
+    subheading: 'How to use Reports & Analytics Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "Analytics & Reports"',
+        text: 'Open the sidebar and click on "Analytics & Reports" to view the Overview dashboard showing Total Revenue, Total Costs, Net Profit, Low Stock count, payment breakdowns, and top products and suppliers.',
+      },
+      {
+        num: '02',
+        title: 'Generate Period Reports',
+        text: 'Switch between Daily Sales, Weekly Sales, Monthly Sales, Yearly Report, and Daily Purchases tabs, select your date, month, or year, and click "Generate Report" to view transactions and profit margins.',
+      },
+      {
+        num: '03',
+        title: 'Export Data to CSV Spreadsheets',
+        text: 'Use the export buttons in the top-right corner ("Export Overview", "Export Sales", "Export Purchases", and "Export Inventory") to download CSV files for accounting and audits.',
+      },
+      {
+        num: '04',
+        title: 'Automate & Review Saved Reports',
+        text: 'Click "Automate ... report generation" inside a sales report tab like "Daily Sales" to schedule report generation (interval, daily, weekly, or monthly) and view compiled reports anytime in "Saved Reports".',
+      },
+    ],
+  },
+  {
+    id: '09',
+    icon: CustomersIcon,
+    eyebrow: '09 / Customers',
+    title: 'Keep customer contacts organized and link buyers directly in the POS.',
+    desc: 'The Customers (CRM) section helps you build and maintain a clean directory of regular buyers and business clients. Store phone numbers and emails, control active account status, and keep active customers ready for selection in the POS terminal.',
+    subheading: 'How to use Customers Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "Customers (CRM)"',
+        text: 'Open the sidebar under CRM & Relations and click on "Customers (CRM)" to view all registered customers, their contact details, and how many accounts are active.',
+      },
+      {
+        num: '02',
+        title: 'Click on "+ Add Customer"',
+        text: 'Click "+ Add Customer" in the top right header to open the customer form, then fill in the Customer Full Name (required), Phone Number, and Email Address.',
+      },
+      {
+        num: '03',
+        title: 'Set Account Status & Save Profile',
+        text: 'Select "Active" or "Inactive" for Account Status (inactive customers are hidden from POS customer selection) and click "Add Customer" to save the customer record.',
+      },
+      {
+        num: '04',
+        title: 'Search, Edit, or Remove Customers',
+        text: 'Use the search box to find customers by name, phone, or email. Click "Edit" on any customer card to update contact information or status, or click "Delete" to remove a record.',
+      },
+    ],
+  },
+  {
+    id: '10',
+    icon: SuppliersIcon,
+    eyebrow: '10 / Suppliers',
+    title: 'Manage all your product vendors and procurement contacts.',
+    desc: 'The Suppliers section keeps every vendor\'s company name, phone number, email, and physical address organized for fast restocking. Keeping an updated supplier directory ensures your Purchases records stay accurate and easy to audit.',
+    subheading: 'How to use Suppliers Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "Suppliers"',
+        text: 'Open the sidebar under Catalog & Inventory and click on "Suppliers" to view all saved vendors with their phone numbers, emails, and physical addresses.',
+      },
+      {
+        num: '02',
+        title: 'Click on "+ Add Supplier"',
+        text: 'Click "+ Add Supplier" in the top right header to open the supplier form, then enter the Supplier Company Name along with phone number, email, and physical address.',
+      },
+      {
+        num: '03',
+        title: 'Search & Connect Vendors to Purchases',
+        text: 'Use the search bar to locate a supplier by name, email, or phone. Saved suppliers can then be selected directly when recording a purchase in the Purchases section.',
+      },
+      {
+        num: '04',
+        title: 'Edit or Delete Supplier Records',
+        text: 'Click "Edit" on a supplier card whenever vendor phone numbers, emails, or addresses change, or click "Delete" to remove vendors you no longer purchase from.',
+      },
+    ],
+  },
+  {
+    id: '11',
+    icon: SparklesIcon,
+    eyebrow: '11 / AI Assistant',
+    title: 'Ask plain language questions about your live sales, stock, and profits.',
+    desc: 'The AI Business Assistant reads a live snapshot of your store\'s sales, purchases, products, transactions, and low-stock alerts so you can get instant performance summaries, revenue forecasts, and reorder advice without manually crunching numbers.',
+    subheading: 'How to use AI Assistant Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "AI Assistant"',
+        text: 'Open the sidebar under System & Intelligence and click on "AI Assistant" to open the chat assistant alongside your live "Data in Context" business summary panel.',
+      },
+      {
+        num: '02',
+        title: 'Pick a Quick Question to Start',
+        text: 'Tap any Quick Question shortcut such as Sales performance, Top products, Forecast, Low stock alert, Profit analysis, or Busiest days to generate an instant data backed answer.',
+      },
+      {
+        num: '03',
+        title: 'Ask Custom Business Questions',
+        text: 'Type your own question in the message input box at the bottom and press Enter (or click the send arrow) to get insights tailored directly to your live store records.',
+      },
+      {
+        num: '04',
+        title: 'Follow Up or Clear the Conversation',
+        text: 'Review the AI response and ask follow up questions to explore trends further, or click "Clear Chat" in the side panel whenever you want to begin a fresh session.',
+      },
+    ],
+  },
+  {
+    id: '12',
+    icon: SettingsIcon,
+    eyebrow: '12 / System Settings',
+    title: 'Configure your business profile, contacts, and subscription plan.',
+    desc: 'System Settings lets you keep your official business details and billing status up to date. Edit the business name, email, phone contacts, and address shown on invoices and receipts, and renew or upgrade your StockPro subscription via NexumPay.',
+    subheading: 'How to use System Settings Step-by-Step',
+    steps: [
+      {
+        num: '01',
+        title: 'Open Sidebar and click on "System Settings"',
+        text: 'Open the sidebar under System & Intelligence and click on "System Settings" to inspect your Business Information card and current Subscription & Billing details.',
+      },
+      {
+        num: '02',
+        title: 'Click "Edit Information" to Update Business Details',
+        text: 'Click "Edit Information" in the top-right corner to update your Business Name, Business Email, and Business Address that appear on customer invoices and printed documents.',
+      },
+      {
+        num: '03',
+        title: 'Manage Multiple Contact Numbers & Save',
+        text: 'In edit mode, click "+ Add Contact" to add Mobile, Office, Landline, or WhatsApp numbers, remove old entries if needed, and click "Save Changes" to apply updates everywhere.',
+      },
+      {
+        num: '04',
+        title: 'Manage or Renew Your Subscription Plan',
+        text: 'Scroll to Subscription & Billing (NexumPay), toggle Monthly or Annual billing, and click Subscribe or Renew on your chosen plan to pay with MTN Mobile Money or Airtel Money.',
       },
     ],
   },
 ];
+
+export function GuideFeatureContent({ feature }) {
+  if (!feature) return null;
+  const IconComp = feature.icon;
+  const { desc } = feature;
+
+  return (
+    <div className="sp-container">
+      <div className="sp-guide-card-content">
+        {/* Eyebrow */}
+        <div className="sp-editorial-eyebrow">
+          <IconComp size={14} />
+          <span>{feature.eyebrow}</span>
+        </div>
+
+        {/* Title */}
+        <h2 className="sp-editorial-title">{feature.title}</h2>
+
+        {/* Description */}
+        {typeof desc === 'string' ? (
+          <p className="sp-editorial-body">{desc}</p>
+        ) : (
+          <div className="sp-editorial-body sp-guide-body-structured">
+            {desc?.intro && <p className="sp-guide-body-paragraph">{desc.intro}</p>}
+            {Array.isArray(desc?.points) && desc.points.length > 0 && (
+              <ul className="sp-guide-desc-list">
+                {desc.points.map((point, idx) => (
+                  <li key={idx} className="sp-guide-desc-item">
+                    <span className="sp-guide-desc-marker" aria-hidden="true">&gt;</span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {desc?.outro && <p className="sp-guide-body-paragraph">{desc.outro}</p>}
+          </div>
+        )}
+
+        {/* Subheading: How to use [Feature] Step-by-Step */}
+        <h3 className="sp-guide-step-subheading">{feature.subheading}</h3>
+
+        {/* 2x2 Grid of Step Cards */}
+        <div className="sp-guide-steps-grid">
+          {feature.steps.map((step) => (
+            <div key={step.num} className="sp-guide-step-card">
+              <div className="sp-guide-step-badge">STEP {step.num}</div>
+              <h4 className="sp-guide-step-title">{step.title}</h4>
+              <p className="sp-guide-step-text">{step.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
   // If textOnly mode (StockPro Guide on How It Works page):
   if (textOnly) {
     const guideItem = GUIDE_FEATURES.find((item) => item.id === activeId);
     if (!guideItem) return null;
-    const IconComp = guideItem.icon;
 
     return (
       <div id="features" aria-label="System Capabilities">
@@ -206,35 +454,7 @@ export default function FeatureShowcase({ activeId = '01', textOnly = false }) {
           role="tabpanel"
           aria-label={guideItem.eyebrow}
         >
-          <div className="sp-container">
-            <div className="sp-guide-card-content">
-              {/* Eyebrow */}
-              <div className="sp-editorial-eyebrow">
-                <IconComp size={14} />
-                <span>{guideItem.eyebrow}</span>
-              </div>
-
-              {/* Title */}
-              <h2 className="sp-editorial-title">{guideItem.title}</h2>
-
-              {/* Description */}
-              <p className="sp-editorial-body">{guideItem.desc}</p>
-
-              {/* Subheading: How to use [Feature] Step-by-Step */}
-              <h3 className="sp-guide-step-subheading">{guideItem.subheading}</h3>
-
-              {/* 2x2 Grid of Step Cards */}
-              <div className="sp-guide-steps-grid">
-                {guideItem.steps.map((step) => (
-                  <div key={step.num} className="sp-guide-step-card">
-                    <div className="sp-guide-step-badge">STEP {step.num}</div>
-                    <h4 className="sp-guide-step-title">{step.title}</h4>
-                    <p className="sp-guide-step-text">{step.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <GuideFeatureContent feature={guideItem} />
         </section>
       </div>
     );
