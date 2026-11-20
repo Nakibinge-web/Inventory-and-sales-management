@@ -5,9 +5,15 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use App\Jobs\SendPasswordResetOtpJob;
+use App\Mail\PasswordResetOtpMailable;
+use App\Models\PasswordResetOtp;
 use App\Models\Tenant;
 use App\Models\User;
 
@@ -285,5 +291,319 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect('/');
+    }
+
+    /**
+     * Resolve a business owner account and its tenant by email address.
+     *
+     * @return array{0: ?User, 1: ?Tenant, 2: ?string, 3: int}
+     */
+    private function resolveOwnerByEmail(string $rawEmail): array
+    {
+        $email = strtolower(trim($rawEmail));
+
+        $user = User::withoutGlobalScopes()
+            ->where('email', $email)
+            ->first();
+
+        if (!$user) {
+            $tenantByEmail = Tenant::where('email', $email)->first();
+            if ($tenantByEmail) {
+                $user = User::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantByEmail->id)
+                    ->whereHas('roles', fn ($q) => $q->where('name', 'owner'))
+                    ->first()
+                    ?? User::withoutGlobalScopes()
+                        ->where('tenant_id', $tenantByEmail->id)
+                        ->whereNull('created_by')
+                        ->orderBy('id')
+                        ->first();
+            }
+        }
+
+        if (!$user) {
+            return [null, null, 'We could not find a business owner account with that email address.', 404];
+        }
+
+        $isOwner = $user->hasRole('owner') || (!$user->roles()->exists() && $user->created_by === null);
+        if (!$isOwner) {
+            return [
+                null,
+                null,
+                'Password reset via email OTP is only available for business owner accounts. Please ask your business owner to reset your password.',
+                403,
+            ];
+        }
+
+        $tenant = Tenant::find($user->tenant_id);
+        if (!$tenant) {
+            return [null, null, 'Business account not found.', 404];
+        }
+
+        return [$user, $tenant, null, 200];
+    }
+
+    /**
+     * Step 1: Send a 6-digit password reset OTP to the business owner's email.
+     * POST /api/forgot-password/send-otp
+     */
+    public function sendForgotPasswordOtp(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email|max:255',
+        ]);
+
+        $normalizedEmail = strtolower(trim($request->email));
+        $rateKey = 'forgot-otp-send:' . $request->ip() . ':' . $normalizedEmail;
+
+        if (RateLimiter::tooManyAttempts($rateKey, 5)) {
+            $seconds = RateLimiter::availableIn($rateKey);
+            return response()->json([
+                'success' => false,
+                'message' => "Too many OTP requests. Please try again in {$seconds} seconds.",
+            ], 429);
+        }
+
+        [$user, $tenant, $errorMessage, $status] = $this->resolveOwnerByEmail($normalizedEmail);
+        if (!$user || !$tenant) {
+            RateLimiter::hit($rateKey, 60);
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage,
+            ], $status);
+        }
+
+        // Remove any previous unused OTPs for THIS tenant's owner only (strict tenant isolation)
+        PasswordResetOtp::where('tenant_id', $tenant->id)
+            ->where('user_id', $user->id)
+            ->whereNull('used_at')
+            ->delete();
+
+        // Generate a 6-digit OTP that does not collide with any active OTP on another tenant
+        $activeOtherOtps = PasswordResetOtp::where('tenant_id', '!=', $tenant->id)
+            ->whereNull('used_at')
+            ->where('expires_at', '>', now())
+            ->get();
+
+        $genAttempts = 0;
+        do {
+            $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $collision = false;
+            foreach ($activeOtherOtps as $other) {
+                if ($other->matchesOtpForTenant((int) $other->tenant_id, (int) $other->user_id, $otp)) {
+                    $collision = true;
+                    break;
+                }
+            }
+            $genAttempts++;
+        } while ($collision && $genAttempts < 10);
+
+        $otpRecord = PasswordResetOtp::create([
+            'tenant_id'  => $tenant->id,
+            'user_id'    => $user->id,
+            'email'      => $normalizedEmail,
+            'otp_hash'   => PasswordResetOtp::hashForTenant((int) $tenant->id, (int) $user->id, $otp),
+            'attempts'   => 0,
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        RateLimiter::hit($rateKey, 60);
+
+        try {
+            SendPasswordResetOtpJob::dispatch(
+                (int) $tenant->id,
+                (int) $user->id,
+                $normalizedEmail,
+                $otp,
+                (string) $user->name,
+                (string) $tenant->name,
+                10,
+                (int) $otpRecord->id
+            );
+        } catch (\Exception $e) {
+            Log::error('Failed to queue/send password reset OTP email: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not send the OTP email. Please check your mail configuration and try again.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success'   => true,
+            'queued'    => true,
+            'message'   => 'A 6-digit OTP has been sent to your email address.',
+            'tenant_id' => $tenant->id,
+        ]);
+    }
+
+    /**
+     * Step 2: Verify the 6-digit OTP for the owner's tenant before unlocking the new password form.
+     * POST /api/forgot-password/verify-otp
+     */
+    public function verifyForgotPasswordOtp(Request $request)
+    {
+        $request->validate([
+            'email'     => 'required|string|email|max:255',
+            'otp'       => 'required|string|size:6',
+            'tenant_id' => 'nullable|integer',
+        ]);
+
+        $normalizedEmail = strtolower(trim($request->email));
+        $otpInput = trim($request->otp);
+
+        [$user, $tenant, $errorMessage, $status] = $this->resolveOwnerByEmail($normalizedEmail);
+        if (!$user || !$tenant) {
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage,
+            ], $status);
+        }
+
+        // Enforce tenant data isolation if tenant_id is supplied
+        if ($request->filled('tenant_id') && (int) $request->input('tenant_id') !== (int) $tenant->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid OTP code for this business account.',
+            ], 403);
+        }
+
+        $otpRecord = PasswordResetOtp::where('tenant_id', $tenant->id)
+            ->where('user_id', $user->id)
+            ->where('email', $normalizedEmail)
+            ->whereNull('used_at')
+            ->latest('id')
+            ->first();
+
+        if (!$otpRecord || $otpRecord->isExpired()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired OTP code. Please request a new OTP.',
+            ], 422);
+        }
+
+        if ($otpRecord->attempts >= 5) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many incorrect OTP attempts. Please request a new OTP.',
+            ], 429);
+        }
+
+        if (!$otpRecord->matchesOtpForTenant((int) $tenant->id, (int) $user->id, $otpInput)) {
+            $otpRecord->increment('attempts');
+            return response()->json([
+                'success' => false,
+                'message' => 'The OTP entered is incorrect. Please check your email and try again.',
+            ], 422);
+        }
+
+        $resetToken = Str::random(64);
+        $otpRecord->update([
+            'verified_at'      => now(),
+            'reset_token_hash' => PasswordResetOtp::hashForTenant((int) $tenant->id, (int) $user->id, $resetToken),
+        ]);
+
+        return response()->json([
+            'success'     => true,
+            'message'     => 'OTP verified successfully. Please enter your new password.',
+            'reset_token' => $resetToken,
+            'tenant_id'   => $tenant->id,
+        ]);
+    }
+
+    /**
+     * Step 3: Reset the business owner's password after a verified tenant-isolated OTP.
+     * POST /api/forgot-password/reset-password
+     */
+    public function resetForgotPassword(Request $request)
+    {
+        $request->validate([
+            'email'       => 'required|string|email|max:255',
+            'otp'         => 'required|string|size:6',
+            'reset_token' => 'nullable|string',
+            'tenant_id'   => 'nullable|integer',
+            'password'    => 'required|string|min:8|confirmed',
+        ]);
+
+        $normalizedEmail = strtolower(trim($request->email));
+        $otpInput = trim($request->otp);
+
+        [$user, $tenant, $errorMessage, $status] = $this->resolveOwnerByEmail($normalizedEmail);
+        if (!$user || !$tenant) {
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage,
+            ], $status);
+        }
+
+        // Enforce tenant data isolation if tenant_id is supplied
+        if ($request->filled('tenant_id') && (int) $request->input('tenant_id') !== (int) $tenant->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid OTP code for this business account.',
+            ], 403);
+        }
+
+        $otpRecord = PasswordResetOtp::where('tenant_id', $tenant->id)
+            ->where('user_id', $user->id)
+            ->where('email', $normalizedEmail)
+            ->whereNull('used_at')
+            ->latest('id')
+            ->first();
+
+        if (!$otpRecord || $otpRecord->isExpired()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired OTP code. Please request a new OTP.',
+            ], 422);
+        }
+
+        if ($otpRecord->attempts >= 5) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Too many incorrect OTP attempts. Please request a new OTP.',
+            ], 429);
+        }
+
+        if (!$otpRecord->isVerified()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You must verify your OTP before setting a new password.',
+            ], 403);
+        }
+
+        if (!$otpRecord->matchesOtpForTenant((int) $tenant->id, (int) $user->id, $otpInput)) {
+            $otpRecord->increment('attempts');
+            return response()->json([
+                'success' => false,
+                'message' => 'The OTP entered is incorrect.',
+            ], 422);
+        }
+
+        if ($request->filled('reset_token') && !$otpRecord->matchesResetTokenForTenant((int) $tenant->id, (int) $user->id, (string) $request->input('reset_token'))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid password reset token for this business account.',
+            ], 403);
+        }
+
+        // Update password strictly scoped to both user_id and tenant_id
+        User::withoutGlobalScopes()
+            ->where('id', $user->id)
+            ->where('tenant_id', $tenant->id)
+            ->update([
+                'password' => Hash::make($request->password),
+            ]);
+
+        $otpRecord->update([
+            'used_at' => now(),
+        ]);
+
+        // Revoke any existing sessions/tokens for this user
+        $user->tokens()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset successfully. You can now sign in with your new password.',
+        ]);
     }
 }

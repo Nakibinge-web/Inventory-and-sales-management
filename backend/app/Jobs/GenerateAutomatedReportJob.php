@@ -94,6 +94,10 @@ class GenerateAutomatedReportJob implements ShouldQueue
                 'start' => $now->copy()->startOfMonth()->toDateString(),
                 'end'   => $now->copy()->endOfMonth()->toDateString(),
             ],
+            'yearly_sales' => [
+                'start' => $now->copy()->startOfYear()->toDateString(),
+                'end'   => $now->copy()->endOfYear()->toDateString(),
+            ],
             default => [
                 'start' => $now->toDateString(),
                 'end'   => $now->toDateString(),
@@ -107,6 +111,7 @@ class GenerateAutomatedReportJob implements ShouldQueue
             'daily_sales'       => $reportService->getDailySalesReport($period['start']),
             'weekly_sales'      => $reportService->getWeeklySalesReport($period['start']),
             'monthly_sales'     => $reportService->getMonthlySalesReport(Carbon::parse($period['start'])->format('Y-m')),
+            'yearly_sales'      => $reportService->getYearlySalesReport((int) Carbon::parse($period['start'])->format('Y')),
             'daily_purchases'   => $reportService->getDailyPurchasesReport($period['start']),
             'monthly_purchases' => $reportService->getMonthlyPurchasesReport(Carbon::parse($period['start'])->format('Y-m')),
             default => throw new \Exception("Unsupported report type: {$preference->report_type}"),

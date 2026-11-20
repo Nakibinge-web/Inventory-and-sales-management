@@ -49,6 +49,379 @@ function ReportsTab({ data, loading, token }) {
   // Report Preview Modal
   const [viewingReport, setViewingReport] = useState(null);
 
+  // Expanded sold-items dropdown state keyed by sale row key
+  const [expandedSales, setExpandedSales] = useState({});
+
+  const toggleSaleItems = (saleKey) => {
+    setExpandedSales(prev => ({
+      ...prev,
+      [saleKey]: !prev[saleKey],
+    }));
+  };
+
+  const formatSaleItemsSummary = (sale) => {
+    const items = sale?.sale_items || sale?.saleItems || sale?.items || [];
+    if (!items.length) return 'No items';
+    return items
+      .map((item, idx) => {
+        const name = item.product?.name || item.product_name || item.name || `Product #${item.product_id || idx + 1}`;
+        const qty = Number(item.quantity || 0);
+        const price = parseFloat(item.price ?? item.unit_price ?? item.product?.price ?? 0);
+        return `${name} x${qty} (@ UGX ${price.toLocaleString()})`;
+      })
+      .join('; ');
+  };
+
+  const renderSaleItemsCell = (s, saleKey) => {
+    const items = s?.sale_items || s?.saleItems || s?.items || [];
+    const isExpanded = !!expandedSales[saleKey];
+    const totalUnits = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+        <button
+          type="button"
+          onClick={() => toggleSaleItems(saleKey)}
+          aria-expanded={isExpanded}
+          data-testid={`sale-items-toggle-${s?.id ?? saleKey}`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '5px 11px',
+            borderRadius: 8,
+            border: isExpanded ? '1.5px solid #4f46e5' : '1px solid #cbd5e1',
+            background: isExpanded ? '#eef2ff' : '#f8fafc',
+            color: isExpanded ? '#4338ca' : '#1e293b',
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span>
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+            {totalUnits > 0 ? ` (${totalUnits} qty)` : ''}
+          </span>
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'inline-block',
+              fontSize: 10,
+              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease',
+            }}
+          >
+            ▼
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div
+            data-testid={`sale-items-dropdown-${s?.id ?? saleKey}`}
+            style={{
+              marginTop: 8,
+              width: '100%',
+              minWidth: 320,
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: 10,
+              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '7px 12px',
+                background: '#f1f5f9',
+                borderBottom: '1px solid #e2e8f0',
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#475569',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span>Sold Items &amp; Details</span>
+              <span>{totalUnits} {totalUnits === 1 ? 'unit' : 'units'}</span>
+            </div>
+
+            {items.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8' }}>
+                No sold item details recorded for this sale.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Item</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'center', color: '#64748b', fontWeight: 600 }}>Qty</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'right', color: '#64748b', fontWeight: 600 }}>Unit Price</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'right', color: '#64748b', fontWeight: 600 }}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => {
+                    const productName =
+                      item.product?.name ||
+                      item.product_name ||
+                      item.name ||
+                      `Product #${item.product_id || idx + 1}`;
+                    const sku = item.product?.sku || item.sku || null;
+                    const categoryName = item.product?.category?.name || item.category_name || null;
+                    const unit = item.product?.unit || item.unit || '';
+                    const qty = Number(item.quantity || 0);
+                    const unitPrice = parseFloat(item.price ?? item.unit_price ?? item.product?.price ?? 0);
+                    const subtotal = parseFloat(
+                      item.subtotal !== undefined && item.subtotal !== null
+                        ? item.subtotal
+                        : qty * unitPrice
+                    );
+
+                    return (
+                      <tr
+                        key={item.id || `${item.product_id || 'item'}-${idx}`}
+                        style={{ borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none' }}
+                      >
+                        <td style={{ padding: '7px 10px', color: '#0f172a', fontWeight: 600 }}>
+                          <div>{productName}</div>
+                          {(sku || categoryName) && (
+                            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 2 }}>
+                              {sku ? `SKU: ${sku}` : ''}
+                              {sku && categoryName ? ' · ' : ''}
+                              {categoryName || ''}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '7px 10px', textAlign: 'center', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {qty}{unit ? ` ${unit}` : ''}
+                        </td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap' }}>
+                          UGX {unitPrice.toLocaleString()}
+                        </td>
+                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          UGX {subtotal.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const aggregateSoldProducts = (sales = []) => {
+    const productMap = new Map();
+
+    (sales || []).forEach((sale) => {
+      const items = sale?.sale_items || sale?.saleItems || sale?.items || [];
+      const saleItemsRevenueSum = items.reduce((sum, it) => {
+        const q = Number(it.quantity || 0);
+        const p = parseFloat(it.price ?? it.unit_price ?? it.product?.price ?? 0);
+        const sub = parseFloat(it.subtotal !== undefined && it.subtotal !== null ? it.subtotal : q * p);
+        return sum + sub;
+      }, 0);
+      const saleCost = parseFloat(sale?.cost ?? 0);
+
+      items.forEach((item, idx) => {
+        const productName =
+          item.product?.name ||
+          item.product_name ||
+          item.name ||
+          `Product #${item.product_id || idx + 1}`;
+        const key = String(item.product_id ?? item.product?.id ?? productName);
+        const sku = item.product?.sku || item.sku || null;
+        const categoryName = item.product?.category?.name || item.category_name || null;
+        const unit = item.product?.unit || item.unit || null;
+        const qty = Number(item.quantity || 0);
+        const unitPrice = parseFloat(item.price ?? item.unit_price ?? item.product?.price ?? 0);
+        const subtotal = parseFloat(
+          item.subtotal !== undefined && item.subtotal !== null
+            ? item.subtotal
+            : qty * unitPrice
+        );
+
+        let itemCost = 0;
+        const rawUnitCost = item.product?.cost_price ?? item.cost_price;
+        if (rawUnitCost !== undefined && rawUnitCost !== null) {
+          itemCost = qty * parseFloat(rawUnitCost || 0);
+        } else if (saleCost > 0 && saleItemsRevenueSum > 0) {
+          itemCost = (subtotal / saleItemsRevenueSum) * saleCost;
+        }
+        const itemProfit = subtotal - itemCost;
+
+        if (!productMap.has(key)) {
+          productMap.set(key, {
+            key,
+            name: productName,
+            sku,
+            category: categoryName,
+            unit,
+            quantity: 0,
+            unitPrice,
+            totalRevenue: 0,
+            totalCost: 0,
+            totalProfit: 0,
+          });
+        }
+
+        const entry = productMap.get(key);
+        entry.quantity += qty;
+        entry.totalRevenue += subtotal;
+        entry.totalCost += itemCost;
+        entry.totalProfit += itemProfit;
+        if (entry.quantity > 0) {
+          entry.unitPrice = Math.round((entry.totalRevenue / entry.quantity) * 100) / 100;
+        }
+      });
+    });
+
+    return Array.from(productMap.values()).sort((a, b) => b.totalRevenue - a.totalRevenue);
+  };
+
+  const renderProductsSoldSection = (sales = [], scopeKey = 'report') => {
+    const productsSold = aggregateSoldProducts(sales);
+    const totalUnitsSold = productsSold.reduce((sum, p) => sum + p.quantity, 0);
+    const totalRevenueSum = productsSold.reduce((sum, p) => sum + p.totalRevenue, 0);
+    const totalProfitSum = productsSold.reduce((sum, p) => sum + p.totalProfit, 0);
+
+    return (
+      <div
+        data-testid={`products-sold-summary-${scopeKey}`}
+        style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}
+      >
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid #f1f5f9',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Products Sold</h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+              Aggregated units sold, unit price, total revenue, and profit per product
+            </p>
+          </div>
+          {productsSold.length > 0 && (
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#4f46e5',
+                background: '#eef2ff',
+                border: '1px solid #c7d2fe',
+                borderRadius: 20,
+                padding: '3px 10px',
+              }}
+            >
+              {productsSold.length} {productsSold.length === 1 ? 'product' : 'products'} &bull;{' '}
+              {totalUnitsSold} {totalUnitsSold === 1 ? 'unit' : 'units'} sold
+            </span>
+          )}
+        </div>
+
+        {productsSold.length === 0 ? (
+          <p style={{ padding: 20, color: '#94a3b8', fontSize: 14, margin: 0 }}>
+            No products sold in this period.
+          </p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                {['Product', 'Units Sold', 'Unit Price', 'Total Revenue', 'Profit'].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: '10px 16px',
+                      textAlign: 'left',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#64748b',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {productsSold.map((prod) => (
+                <tr key={prod.key} style={{ borderTop: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                    <div>{prod.name}</div>
+                    {(prod.sku || prod.category) && (
+                      <div style={{ fontSize: 11, fontWeight: 400, color: '#64748b', marginTop: 2 }}>
+                        {prod.sku ? `SKU: ${prod.sku}` : ''}
+                        {prod.sku && prod.category ? ' · ' : ''}
+                        {prod.category || ''}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#334155' }}>
+                    {prod.quantity} {prod.quantity === 1 ? 'unit' : 'units'} sold
+                    {prod.unit ? ` (${prod.quantity} ${prod.unit})` : ''}
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>
+                    UGX {parseFloat(prod.unitPrice || 0).toLocaleString()}
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                    UGX {parseFloat(prod.totalRevenue || 0).toLocaleString()}
+                  </td>
+                  <td
+                    style={{
+                      padding: '12px 16px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: prod.totalProfit >= 0 ? '#16a34a' : '#dc2626',
+                    }}
+                  >
+                    UGX {Math.round(prod.totalProfit).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Total</td>
+                <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                  {totalUnitsSold} {totalUnitsSold === 1 ? 'unit' : 'units'} sold
+                </td>
+                <td style={{ padding: '10px 16px', fontSize: 13, color: '#64748b' }}>—</td>
+                <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                  UGX {parseFloat(totalRevenueSum || 0).toLocaleString()}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 16px',
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: totalProfitSum >= 0 ? '#16a34a' : '#dc2626',
+                  }}
+                >
+                  UGX {Math.round(totalProfitSum).toLocaleString()}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+    );
+  };
+
   const formatCountdown = (sec) => {
     if (sec === null || sec === undefined) return '--:--';
     if (sec <= 0) return '00:00';
@@ -143,9 +516,11 @@ function ReportsTab({ data, loading, token }) {
           }
         }
         fetchSavedReports(automationType);
+        setTimeout(() => fetchSavedReports(automationType), 2000);
+        setTimeout(() => fetchSavedReports(automationType), 4500);
         setAutomationAlert({
           type: 'success',
-          text: `⚡ Automated report #${json.data?.id || ''} compiled & saved to database at ${new Date().toLocaleTimeString()}! Countdown restarted for next report.`,
+          text: `⚡ Automated report job queued & saving to database at ${new Date().toLocaleTimeString()}! Countdown restarted for next report.`,
         });
       }
     } catch (err) {
@@ -320,7 +695,7 @@ function ReportsTab({ data, loading, token }) {
         return;
       }
 
-      setAutomationAlert({ type: 'success', text: 'Report generated and saved to database successfully!' });
+      setAutomationAlert({ type: 'success', text: 'Report generation job queued! Once completed, it is automatically saved to the database.' });
       if (json.preference) {
         setAutomationPref(json.preference);
         if (json.preference.next_run_at) {
@@ -329,6 +704,8 @@ function ReportsTab({ data, loading, token }) {
         }
       }
       fetchSavedReports(automationType);
+      setTimeout(() => fetchSavedReports(automationType), 2000);
+      setTimeout(() => fetchSavedReports(automationType), 4500);
       if (json.data) {
         setViewingReport(json.data);
       }
@@ -418,7 +795,8 @@ function ReportsTab({ data, loading, token }) {
       total_amount: sale.total_amount,
       discount: sale.discount_amount || 0,
       tax: sale.tax_amount || 0,
-      items_count: (sale.sale_items || []).length
+      items_count: (sale.sale_items || sale.saleItems || []).length,
+      sold_items: formatSaleItemsSummary(sale),
     }));
     exportToCSV(salesData, 'sales_report');
   };
@@ -486,6 +864,7 @@ function ReportsTab({ data, loading, token }) {
     setReportLoading(true);
     setReportError(null);
     setReportData(null);
+    setExpandedSales({});
     try {
       let url;
       if (activeReport === 'daily') url = `${API_URL}/sales/daily-report?date=${dailyDate}`;
@@ -626,7 +1005,7 @@ function ReportsTab({ data, loading, token }) {
       {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #f1f5f9', paddingBottom: 0 }}>
         {tabs.map(t => (
-          <button key={t.id} onClick={() => { setActiveReport(t.id); setReportData(null); setReportError(null); }} style={{
+          <button key={t.id} onClick={() => { setActiveReport(t.id); setReportData(null); setReportError(null); setExpandedSales({}); }} style={{
             padding: '9px 18px', border: 'none', background: 'none', cursor: 'pointer',
             fontSize: 14, fontWeight: 600,
             color: activeReport === t.id ? '#4f46e5' : '#64748b',
@@ -842,6 +1221,10 @@ function ReportsTab({ data, loading, token }) {
                   </p>
                 </div>
               </div>
+
+              {/* Products Sold Summary */}
+              {renderProductsSoldSection(reportData.sales, 'daily')}
+
               <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
@@ -858,8 +1241,8 @@ function ReportsTab({ data, loading, token }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.sales?.map(s => (
-                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      {reportData.sales?.map((s, idx) => (
+                        <tr key={s.id ?? idx} style={{ borderTop: '1px solid #f1f5f9', verticalAlign: 'top' }}>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.created_at).toLocaleTimeString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
                           <td style={{ padding: '12px 16px' }}>
@@ -867,7 +1250,9 @@ function ReportsTab({ data, loading, token }) {
                               {s.payment_method?.replace('_', ' ')}
                             </span>
                           </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>
+                            {renderSaleItemsCell(s, `daily-${s.id ?? idx}`)}
+                          </td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
@@ -959,6 +1344,9 @@ function ReportsTab({ data, loading, token }) {
                 </div>
               </div>
 
+              {/* Products Sold Summary */}
+              {renderProductsSoldSection(reportData.sales, 'weekly')}
+
               {/* Daily breakdown bar chart */}
               {reportData.by_day && reportData.by_day.length > 0 && (
                 <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 22 }}>
@@ -1012,8 +1400,8 @@ function ReportsTab({ data, loading, token }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.sales?.map(s => (
-                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      {reportData.sales?.map((s, idx) => (
+                        <tr key={s.id ?? idx} style={{ borderTop: '1px solid #f1f5f9', verticalAlign: 'top' }}>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
@@ -1022,7 +1410,9 @@ function ReportsTab({ data, loading, token }) {
                               {s.payment_method?.replace(/_/g, ' ')}
                             </span>
                           </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>
+                            {renderSaleItemsCell(s, `weekly-${s.id ?? idx}`)}
+                          </td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
@@ -1113,6 +1503,9 @@ function ReportsTab({ data, loading, token }) {
                 </div>
               </div>
 
+              {/* Products Sold Summary */}
+              {renderProductsSoldSection(reportData.sales, 'monthly')}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 {/* Payment method breakdown */}
                 {reportData.by_payment && reportData.by_payment.length > 0 && (
@@ -1191,8 +1584,8 @@ function ReportsTab({ data, loading, token }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.sales?.map(s => (
-                        <tr key={s.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      {reportData.sales?.map((s, idx) => (
+                        <tr key={s.id ?? idx} style={{ borderTop: '1px solid #f1f5f9', verticalAlign: 'top' }}>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
@@ -1201,7 +1594,9 @@ function ReportsTab({ data, loading, token }) {
                               {s.payment_method?.replace(/_/g, ' ')}
                             </span>
                           </td>
-                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{(s.sale_items || s.saleItems || []).length}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>
+                            {renderSaleItemsCell(s, `monthly-${s.id ?? idx}`)}
+                          </td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
                           <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
@@ -1290,6 +1685,9 @@ function ReportsTab({ data, loading, token }) {
                   </div>
                 )}
               </div>
+
+              {/* Products Sold Summary */}
+              {Array.isArray(reportData.sales) && renderProductsSoldSection(reportData.sales, 'yearly')}
 
               {/* ── Monthly bar chart ── */}
               <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24 }}>
@@ -1387,6 +1785,48 @@ function ReportsTab({ data, loading, token }) {
                       ));
                     })()}
                   </div>
+                </div>
+              )}
+
+              {/* ── Yearly Sales Transactions table ── */}
+              {Array.isArray(reportData.sales) && (
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Sales Transactions</h3>
+                  </div>
+                  {reportData.sales.length === 0 ? (
+                    <p style={{ padding: 20, color: '#94a3b8', fontSize: 14 }}>No sales this year.</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          {['Date', 'Cashier', 'Customer', 'Payment', 'Items', 'Amount', 'Cost', 'Profit'].map(h => (
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.sales.map((s, idx) => (
+                          <tr key={s.id ?? idx} style={{ borderTop: '1px solid #f1f5f9', verticalAlign: 'top' }}>
+                            <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{new Date(s.sale_date).toLocaleDateString()}</td>
+                            <td style={{ padding: '12px 16px', fontSize: 14, color: '#0f172a' }}>{s.user?.name || '—'}</td>
+                            <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>{s.customer?.name || 'Walk-in'}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: getPayColor(s.payment_method) + '18', color: getPayColor(s.payment_method), border: `1px solid ${getPayColor(s.payment_method)}40`, textTransform: 'capitalize' }}>
+                                {s.payment_method?.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: 14, color: '#475569' }}>
+                              {renderSaleItemsCell(s, `yearly-${s.id ?? idx}`)}
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>UGX {parseFloat(s.total_amount || 0).toLocaleString()}</td>
+                            <td style={{ padding: '12px 16px', fontSize: 14, color: '#64748b' }}>UGX {parseFloat(s.cost || 0).toLocaleString()}</td>
+                            <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: parseFloat(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>UGX {parseFloat(s.profit || 0).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
 
@@ -2663,6 +3103,9 @@ function ReportsTab({ data, loading, token }) {
                   ))}
                 </div>
 
+                {/* Products Sold Summary in Saved Report Preview */}
+                {Array.isArray(viewingReport.data?.sales) && renderProductsSoldSection(viewingReport.data.sales, 'preview')}
+
                 {/* Payment Methods breakdown */}
                 {viewingReport.data?.payment_breakdown && (
                   <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16 }}>
@@ -2698,12 +3141,14 @@ function ReportsTab({ data, loading, token }) {
                       </thead>
                       <tbody>
                         {viewingReport.data.sales.map((s, idx) => (
-                          <tr key={s.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <tr key={s.id || idx} style={{ borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' }}>
                             <td style={{ padding: '8px 12px', color: '#64748b' }}>#{idx + 1}</td>
                             <td style={{ padding: '8px 12px', color: '#334155' }}>{new Date(s.created_at).toLocaleTimeString()}</td>
                             <td style={{ padding: '8px 12px', color: '#0f172a', fontWeight: 600 }}>{s.user?.name || 'Walk-in'}</td>
                             <td style={{ padding: '8px 12px', textTransform: 'capitalize', color: '#475569' }}>{(s.payment_method || '').replace(/_/g, ' ')}</td>
-                            <td style={{ padding: '8px 12px', color: '#64748b' }}>{(s.sale_items || s.saleItems || []).length}</td>
+                            <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                              {renderSaleItemsCell(s, `preview-${s.id ?? idx}`)}
+                            </td>
                             <td style={{ padding: '8px 12px', fontWeight: 700, color: '#0f172a' }}>UGX {Number(s.total_amount || 0).toLocaleString()}</td>
                             <td style={{ padding: '8px 12px', color: '#64748b' }}>UGX {Number(s.cost || 0).toLocaleString()}</td>
                             <td style={{ padding: '8px 12px', fontWeight: 700, color: Number(s.profit || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
@@ -2759,6 +3204,8 @@ function ReportsTab({ data, loading, token }) {
                       time: s.created_at,
                       cashier: s.user?.name || 'Walk-in',
                       payment_method: s.payment_method,
+                      items_count: (s.sale_items || s.saleItems || []).length,
+                      sold_items: formatSaleItemsSummary(s),
                       total_amount: s.total_amount,
                       cost: s.cost || 0,
                       profit: s.profit || 0,

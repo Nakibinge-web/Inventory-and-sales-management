@@ -266,6 +266,29 @@ export default function App() {
     );
   }
 
+  if (currentPath === '/forgot-password' || currentPath.startsWith('/forgot-password/')) {
+    if (user && token) {
+      const target = sessionStorage.getItem('redirect_after_login') || '/overview';
+      sessionStorage.removeItem('redirect_after_login');
+      window.history.replaceState(null, '', target);
+      return (
+        <Dashboard
+          user={user}
+          token={token}
+          onLogout={handleLogout}
+          onUserUpdate={handleUserUpdate}
+        />
+      );
+    }
+    return (
+      <AuthPage
+        initialMode="forgot-password"
+        onAuthSuccess={handleAuthSuccess}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   // 3. Public Marketing Routes
   if (currentPath === '/pricing' || currentPath.startsWith('/pricing/')) {
     return <PricingPage />;

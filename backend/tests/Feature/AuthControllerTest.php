@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\PasswordResetOtpMailable;
+use App\Models\PasswordResetOtp;
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AuthControllerTest extends TestCase
@@ -264,5 +268,219 @@ class AuthControllerTest extends TestCase
         $this->assertStringEndsWith('.png', $tenant->logo_path);
         $this->assertStringStartsNotWith('logos/..', $tenant->logo_path);
         \Illuminate\Support\Facades\Storage::disk('public')->assertExists($tenant->logo_path);
+    }
+
+    // ── FORGOT PASSWORD (MULTI-STEP OTP & TENANT ISOLATION) TESTS ──
+
+    /** Test 14: Full 3-step owner forgot password flow (send OTP -> verify OTP -> reset password) */
+    public function test_owner_can_complete_three_step_forgot_password_flow(): void
+    {
+        Mail::fake();
+
+        $owner = $this->createUser([
+            'email'    => 'owner@acmeretail.com',
+            'username' => 'acme_owner',
+            'password' => Hash::make('OldPassword1!'),
+        ]);
+
+        // Step 1: Send OTP
+        $sendRes = $this->postJson('/api/forgot-password/send-otp', [
+            'email' => 'owner@acmeretail.com',
+        ]);
+
+        $sendRes->assertStatus(200)
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('tenant_id', $owner->tenant_id);
+
+        $capturedOtp = null;
+        Mail::assertSent(PasswordResetOtpMailable::class, function (PasswordResetOtpMailable $mail) use (&$capturedOtp) {
+            $capturedOtp = $mail->otp;
+            return $mail->hasTo('owner@acmeretail.com');
+        });
+        $this->assertNotNull($capturedOtp);
+
+        // Step 2: Verify OTP
+        $verifyRes = $this->postJson('/api/forgot-password/verify-otp', [
+            'email'     => 'owner@acmeretail.com',
+            'otp'       => $capturedOtp,
+            'tenant_id' => $owner->tenant_id,
+        ]);
+
+        $verifyRes->assertStatus(200)
+                  ->assertJsonPath('success', true)
+                  ->assertJsonStructure(['reset_token']);
+
+        $resetToken = $verifyRes->json('reset_token');
+
+        // Step 3: Reset Password
+        $resetRes = $this->postJson('/api/forgot-password/reset-password', [
+            'email'                 => 'owner@acmeretail.com',
+            'otp'                   => $capturedOtp,
+            'reset_token'           => $resetToken,
+            'tenant_id'             => $owner->tenant_id,
+            'password'              => 'NewPassword1!',
+            'password_confirmation' => 'NewPassword1!',
+        ]);
+
+        $resetRes->assertStatus(200)
+                 ->assertJsonPath('success', true);
+
+        // Verify login works with the new password
+        $this->postJson('/api/login', [
+            'login'    => 'owner@acmeretail.com',
+            'password' => 'NewPassword1!',
+        ])->assertStatus(200);
+    }
+
+    /** Test 15: Wrong OTP is rejected in step 2 and restricts access to step 3 password reset */
+    public function test_wrong_otp_is_rejected_and_blocks_password_reset(): void
+    {
+        Mail::fake();
+
+        $owner = $this->createUser([
+            'email'    => 'owner2@example.com',
+            'username' => 'owner2',
+            'password' => Hash::make('OldPassword1!'),
+        ]);
+
+        $this->postJson('/api/forgot-password/send-otp', [
+            'email' => 'owner2@example.com',
+        ])->assertStatus(200);
+
+        // Wrong OTP in Step 2 -> 422
+        $this->postJson('/api/forgot-password/verify-otp', [
+            'email'     => 'owner2@example.com',
+            'otp'       => '000000',
+            'tenant_id' => $owner->tenant_id,
+        ])->assertStatus(422)
+          ->assertJsonPath('success', false);
+
+        // Attempting Step 3 without verified OTP -> 403
+        $this->postJson('/api/forgot-password/reset-password', [
+            'email'                 => 'owner2@example.com',
+            'otp'                   => '000000',
+            'tenant_id'             => $owner->tenant_id,
+            'password'              => 'HackedPass1!',
+            'password_confirmation' => 'HackedPass1!',
+        ])->assertStatus(403)
+          ->assertJsonPath('success', false);
+
+        $owner->refresh();
+        $this->assertTrue(Hash::check('OldPassword1!', $owner->password));
+    }
+
+    /** Test 16: Tenant data isolation — OTP sent to Tenant A cannot be used by Tenant B */
+    public function test_otp_sent_to_one_tenant_cannot_be_used_by_another_tenant(): void
+    {
+        Mail::fake();
+
+        $tenantA = Tenant::create(['name' => 'Tenant Alpha', 'email' => 'alpha@example.com']);
+        $ownerA = User::create([
+            'tenant_id' => $tenantA->id,
+            'name'      => 'Alpha Owner',
+            'email'     => 'alpha@example.com',
+            'username'  => 'alpha_owner',
+            'password'  => Hash::make('AlphaPass1!'),
+        ]);
+
+        $tenantB = Tenant::create(['name' => 'Tenant Beta', 'email' => 'beta@example.com']);
+        $ownerB = User::create([
+            'tenant_id' => $tenantB->id,
+            'name'      => 'Beta Owner',
+            'email'     => 'beta@example.com',
+            'username'  => 'beta_owner',
+            'password'  => Hash::make('BetaPass1!'),
+        ]);
+
+        // Request OTP for Tenant A
+        $this->postJson('/api/forgot-password/send-otp', [
+            'email' => 'alpha@example.com',
+        ])->assertStatus(200);
+
+        $tenantAOtp = null;
+        Mail::assertSent(PasswordResetOtpMailable::class, function (PasswordResetOtpMailable $mail) use (&$tenantAOtp) {
+            if ($mail->hasTo('alpha@example.com')) {
+                $tenantAOtp = $mail->otp;
+                return true;
+            }
+            return false;
+        });
+        $this->assertNotNull($tenantAOtp);
+
+        // Also request OTP for Tenant B so Tenant B has an active OTP session
+        $this->postJson('/api/forgot-password/send-otp', [
+            'email' => 'beta@example.com',
+        ])->assertStatus(200);
+
+        // 1. Tenant B tries to verify using Tenant A's OTP -> must fail (422)
+        $this->postJson('/api/forgot-password/verify-otp', [
+            'email'     => 'beta@example.com',
+            'otp'       => $tenantAOtp,
+            'tenant_id' => $tenantB->id,
+        ])->assertStatus(422)
+          ->assertJsonPath('success', false);
+
+        // 2. Passing Tenant A's tenant_id with Tenant B's email -> must fail (403)
+        $this->postJson('/api/forgot-password/verify-otp', [
+            'email'     => 'beta@example.com',
+            'otp'       => $tenantAOtp,
+            'tenant_id' => $tenantA->id,
+        ])->assertStatus(403)
+          ->assertJsonPath('success', false);
+
+        // 3. Even after Tenant A verifies its own OTP and gets a reset_token,
+        //    that OTP + reset_token cannot be used to reset Tenant B's password
+        $verifyARes = $this->postJson('/api/forgot-password/verify-otp', [
+            'email'     => 'alpha@example.com',
+            'otp'       => $tenantAOtp,
+            'tenant_id' => $tenantA->id,
+        ])->assertStatus(200);
+
+        $tenantAResetToken = $verifyARes->json('reset_token');
+
+        $this->postJson('/api/forgot-password/reset-password', [
+            'email'                 => 'beta@example.com',
+            'otp'                   => $tenantAOtp,
+            'reset_token'           => $tenantAResetToken,
+            'password'              => 'CrossTenantHack1!',
+            'password_confirmation' => 'CrossTenantHack1!',
+        ])->assertStatus(403)
+          ->assertJsonPath('success', false);
+
+        $ownerB->refresh();
+        $this->assertTrue(Hash::check('BetaPass1!', $ownerB->password));
+    }
+
+    /** Test 17: Non-owner staff user cannot use the owner forgot password OTP endpoint */
+    public function test_non_owner_staff_user_cannot_request_owner_forgot_password_otp(): void
+    {
+        Mail::fake();
+
+        $owner = $this->createUser([
+            'email'    => 'boss@shop.com',
+            'username' => 'boss_user',
+        ]);
+
+        $cashierRole = Role::create([
+            'name'       => 'cashier',
+            'is_default' => true,
+        ]);
+
+        $staff = User::create([
+            'tenant_id'  => $owner->tenant_id,
+            'name'       => 'Staff Cashier',
+            'email'      => 'cashier@shop.com',
+            'username'   => 'cashier_user',
+            'password'   => Hash::make('CashierPass1!'),
+            'created_by' => $owner->id,
+        ]);
+        $staff->roles()->attach($cashierRole->id);
+
+        $this->postJson('/api/forgot-password/send-otp', [
+            'email' => 'cashier@shop.com',
+        ])->assertStatus(403)
+          ->assertJsonPath('success', false);
+
+        Mail::assertNothingSent();
     }
 }

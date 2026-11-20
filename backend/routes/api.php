@@ -25,6 +25,13 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
 Route::post('/contact', [ContactController::class, 'submit']);
 
+// Owner Forgot Password (Multi-step OTP flow with Tenant Isolation)
+Route::prefix('forgot-password')->group(function () {
+    Route::post('/send-otp', [AuthController::class, 'sendForgotPasswordOtp']);
+    Route::post('/verify-otp', [AuthController::class, 'verifyForgotPasswordOtp']);
+    Route::post('/reset-password', [AuthController::class, 'resetForgotPassword']);
+});
+
 // NexumPay Payment Gateway routes (Subscription & Mobile Money Collections)
 Route::prefix('nexumpay')->group(function () {
     Route::get('/plans', [NexumPayController::class, 'plans']);

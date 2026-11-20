@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use App\Jobs\ProcessNexumPayPaymentJob;
 use App\Models\NexumPayTransaction;
 use App\Models\Tenant;
 use App\Services\NexumPayService;
@@ -213,19 +214,38 @@ class NexumPayController extends Controller
 
         $this->saveCachedTransaction($referenceId, $clientRef, $cachedRecord);
 
+        $isSimulation = !$this->nexumPay->isConfigured();
+
         try {
-            $gatewayResult = $this->nexumPay->requestPayment(
-                $localPhone,
-                $amountUgx,
-                $narration,
-                $clientRef
-            );
+            ProcessNexumPayPaymentJob::dispatch(array_merge($cachedRecord, [
+                'phone_number' => $localPhone,
+                'narration'    => $narration,
+            ]), 'initiate');
+
+            // If running on sync queue and the job immediately marked it FAILED, return 400
+            $latestTx = $transaction?->fresh();
+            $latestCache = $this->getCachedTransaction($referenceId);
+            $latestStatus = strtoupper((string) ($latestTx?->status ?? $latestCache['status'] ?? 'PENDING'));
+
+            if ($latestStatus === 'FAILED') {
+                $failMsg = $latestTx?->failure_reason ?? $latestCache['failure_reason'] ?? 'Payment initiation failed.';
+                return response()->json([
+                    'success'      => false,
+                    'message'      => $failMsg,
+                    'reference_id' => $referenceId,
+                    'client_ref'   => $clientRef,
+                    'status'       => 'FAILED',
+                ], 400);
+            }
 
             return response()->json([
                 'success'        => true,
+                'queued'         => true,
                 'gateway'        => 'NexumPay',
-                'mode'           => $gatewayResult['mode'] ?? 'live',
-                'message'        => $gatewayResult['message'] ?? "Payment prompt sent to {$localPhone}. Enter your Mobile Money PIN to complete payment.",
+                'mode'           => $isSimulation ? 'simulation' : 'live',
+                'message'        => $isSimulation
+                    ? "Simulation mode: Payment request queued for {$localPhone}. Use the simulator controls or wait for confirmation."
+                    : "Payment prompt sent to {$localPhone}. Enter your Mobile Money PIN to complete payment.",
                 'reference_id'   => $referenceId,
                 'client_ref'     => $clientRef,
                 'status'         => 'PENDING',
@@ -541,44 +561,27 @@ class NexumPayController extends Controller
             return response()->json(['status' => 'Fail', 'message' => 'Transaction not found'], 404);
         }
 
-        $rawStatus   = strtoupper((string) ($details['status'] ?? $payload['status'] ?? ''));
-        $internalRef = $details['internal_ref'] ?? $payload['internal_ref'] ?? null;
+        $jobPayload = [
+            'reference_id'   => $transaction?->reference_id ?? ($cached['reference_id'] ?? $clientRef),
+            'client_ref'     => $transaction?->client_ref ?? ($cached['client_ref'] ?? $clientRef),
+            'tenant_id'      => $transaction?->tenant_id ?? ($cached['tenant_id'] ?? null),
+            'user_id'        => $transaction?->user_id ?? ($cached['user_id'] ?? null),
+            'customer_name'  => $transaction?->customer_name ?? ($cached['customer_name'] ?? ''),
+            'customer_email' => $transaction?->customer_email ?? ($cached['customer_email'] ?? ''),
+            'business_name'  => $transaction?->business_name ?? ($cached['business_name'] ?? ''),
+            'phone_number'   => $transaction?->phone_number ?? ($cached['customer_phone'] ?? ''),
+            'msisdn'         => $transaction?->msisdn ?? ($cached['msisdn'] ?? ''),
+            'network'        => $transaction?->network ?? ($cached['network'] ?? 'MTN'),
+            'plan_id'        => $transaction?->plan_id ?? ($cached['plan_id'] ?? 'starter'),
+            'plan_name'      => $transaction?->plan_name ?? ($cached['plan_name'] ?? 'Starter Plan'),
+            'billing_cycle'  => $transaction?->billing_cycle ?? ($cached['billing_cycle'] ?? 'monthly'),
+            'amount'         => (float) ($transaction?->amount ?? ($cached['amount'] ?? 0)),
+            'narration'      => $transaction?->narration ?? 'StockPro Subscription',
+        ];
 
-        if (in_array($rawStatus, ['SUCCESS', 'SUCCESSFUL', 'OK', 'COMPLETED'], true)) {
-            $this->finalizeSuccessfulTransaction(
-                $transaction,
-                $cached,
-                [
-                    'status'           => 'SUCCESSFUL',
-                    'internal_ref'     => $internalRef,
-                    'charge'           => (float) ($details['charge'] ?? 0.00),
-                    'transaction_date' => $details['transaction_date'] ?? now(),
-                    'webhook_payload'  => $payload,
-                ],
-                [
-                    'status'                   => 'SUCCESSFUL',
-                    'financial_transaction_id' => $internalRef,
-                    'internal_ref'             => $internalRef,
-                ]
-            );
+        ProcessNexumPayPaymentJob::dispatch($jobPayload, 'webhook', $payload);
 
-        } elseif (in_array($rawStatus, ['FAILED', 'FAIL', 'REJECTED', 'CANCELLED'], true)) {
-            $reason = $payload['message'] ?? $details['message'] ?? 'Payment failed on Mobile Money network.';
-            if ($transaction) {
-                $transaction->update([
-                    'status'          => 'FAILED',
-                    'failure_reason'  => $reason,
-                    'webhook_payload' => $payload,
-                ]);
-            }
-            if ($cached) {
-                $cached['status']         = 'FAILED';
-                $cached['failure_reason'] = $reason;
-                $this->saveCachedTransaction($cached['reference_id'], $clientRef, $cached);
-            }
-        }
-
-        return response()->json(['status' => 'OK', 'message' => 'Webhook processed']);
+        return response()->json(['status' => 'OK', 'queued' => true, 'message' => 'Webhook queued for processing']);
     }
 
     /**

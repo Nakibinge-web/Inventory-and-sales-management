@@ -38,13 +38,16 @@ const EyeOffIcon = () => (
 );
 
 /* ── Password field with visibility toggle ── */
-function PasswordField({ name, label, placeholder, value, onChange, showStrength }) {
+function PasswordField({ name, label, placeholder, value, onChange, showStrength, labelExtra }) {
   const [visible, setVisible] = useState(false);
   const strength = getStrength(value);
 
   return (
     <div className="field-group">
-      <label className="field-label" htmlFor={name}>{label}</label>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <label className="field-label" htmlFor={name}>{label}</label>
+        {labelExtra}
+      </div>
       <div className="pw-wrap">
         <input
           id={name}
@@ -90,6 +93,7 @@ function getPathMode() {
   if (typeof window === 'undefined') return 'login';
   const rawPath = window.location.pathname.replace(/[\\/]+/g, '/').toLowerCase();
   if (rawPath === '/register' || rawPath.startsWith('/register/')) return 'register';
+  if (rawPath === '/forgot-password' || rawPath.startsWith('/forgot-password/')) return 'forgot-password';
   return 'login';
 }
 
@@ -117,6 +121,17 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
   const [renewalCheckoutOpen, setRenewalCheckoutOpen] = useState(false);
   const [renewalSuccess, setRenewalSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  /* ── Multi-step Forgot Password State (Owner OTP Flow) ── */
+  const [forgotStep, setForgotStep] = useState(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotTenantId, setForgotTenantId] = useState(null);
+  const [forgotResetToken, setForgotResetToken] = useState(null);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState('');
+  const [forgotPasswordConfirmation, setForgotPasswordConfirmation] = useState('');
+  const [forgotSuccessMessage, setForgotSuccessMessage] = useState(null);
   const [user, setUser] = useState(() => {
     try {
       const u = localStorage.getItem('user');
@@ -294,6 +309,18 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
     setMode('login');
   };
 
+  const resetForgotState = (prefillEmail = '') => {
+    setForgotStep(1);
+    setForgotEmail(prefillEmail);
+    setForgotOtp('');
+    setForgotTenantId(null);
+    setForgotResetToken(null);
+    setOtpVerified(false);
+    setForgotPassword('');
+    setForgotPasswordConfirmation('');
+    setForgotSuccessMessage(null);
+  };
+
   const switchMode = newMode => {
     setMode(newMode);
     setError(null);
@@ -301,10 +328,187 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
     setRenewalPrefill(null);
     setRenewalCheckoutOpen(false);
     setRenewalSuccess(null);
-    const target = newMode === 'register' ? '/register' : '/login';
+    if (newMode === 'forgot-password') {
+      const candidate = (form.login || form.email || '').trim();
+      resetForgotState(candidate.includes('@') ? candidate : '');
+    } else {
+      resetForgotState('');
+    }
+    const target =
+      newMode === 'register'
+        ? '/register'
+        : newMode === 'forgot-password'
+          ? '/forgot-password'
+          : '/login';
     if (window.location.pathname !== target) {
       window.history.pushState(null, '', target);
       window.dispatchEvent(new Event('popstate'));
+    }
+  };
+
+  /* ── Step 1: Send OTP to Owner Email ── */
+  const handleSendOtp = async (e) => {
+    if (e) e.preventDefault();
+    setError(null);
+    setForgotSuccessMessage(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const trimmedEmail = forgotEmail.trim();
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid owner email address');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/forgot-password/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail }),
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { message: text }; }
+
+      if (!res.ok || !data?.success) {
+        setError(data?.message || `Error ${res.status}`);
+        return;
+      }
+
+      setForgotTenantId(data.tenant_id ?? null);
+      setForgotOtp('');
+      setOtpVerified(false);
+      setForgotResetToken(null);
+      setForgotSuccessMessage(data.message || 'A 6-digit OTP has been sent to your email address.');
+      setForgotStep(2);
+    } catch {
+      setError('Could not reach the server. Please verify the backend is running.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ── Step 2: Verify OTP for Owner's Tenant ── */
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setForgotSuccessMessage(null);
+
+    const cleanedOtp = forgotOtp.trim();
+    if (!/^\d{6}$/.test(cleanedOtp)) {
+      setOtpVerified(false);
+      setForgotResetToken(null);
+      setError('Please enter a valid 6-digit OTP code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        email: forgotEmail.trim(),
+        otp: cleanedOtp,
+      };
+      if (forgotTenantId !== null) {
+        payload.tenant_id = forgotTenantId;
+      }
+
+      const res = await fetch(`${API}/forgot-password/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { message: text }; }
+
+      if (!res.ok || !data?.success) {
+        // Restrict user from accessing Step 3 when OTP is wrong
+        setOtpVerified(false);
+        setForgotResetToken(null);
+        setForgotStep(2);
+        setError(data?.message || 'Invalid OTP code. Please try again.');
+        return;
+      }
+
+      setOtpVerified(true);
+      setForgotResetToken(data.reset_token || null);
+      if (data.tenant_id !== undefined) {
+        setForgotTenantId(data.tenant_id);
+      }
+      setForgotSuccessMessage(data.message || 'OTP verified! Please enter your new password.');
+      setForgotStep(3);
+    } catch {
+      setOtpVerified(false);
+      setError('Could not reach the server. Please verify the backend is running.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ── Step 3: Set New Password after OTP Verification ── */
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setForgotSuccessMessage(null);
+
+    if (!otpVerified || forgotStep !== 3) {
+      setError('Please verify your OTP before setting a new password.');
+      setForgotStep(2);
+      return;
+    }
+
+    if (!forgotPassword || forgotPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (forgotPassword !== forgotPasswordConfirmation) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        email: forgotEmail.trim(),
+        otp: forgotOtp.trim(),
+        reset_token: forgotResetToken,
+        password: forgotPassword,
+        password_confirmation: forgotPasswordConfirmation,
+      };
+      if (forgotTenantId !== null) {
+        payload.tenant_id = forgotTenantId;
+      }
+
+      const res = await fetch(`${API}/forgot-password/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { message: text }; }
+
+      if (!res.ok || !data?.success) {
+        setError(data?.message || `Error ${res.status}`);
+        return;
+      }
+
+      const resetEmail = forgotEmail.trim();
+      setForm(f => ({ ...f, login: resetEmail, email: resetEmail, password: '' }));
+      resetForgotState('');
+      setMode('login');
+      if (window.location.pathname !== '/login') {
+        window.history.pushState(null, '', '/login');
+        window.dispatchEvent(new Event('popstate'));
+      }
+      setRenewalSuccess(
+        data.message || 'Password reset successfully! Please sign in with your new password.'
+      );
+    } catch {
+      setError('Could not reach the server. Please verify the backend is running.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -322,7 +526,14 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
     const path = rawPath.toLowerCase();
 
     if (user && token) {
-      if (path === '/login' || path.startsWith('/login/') || path === '/register' || path.startsWith('/register/')) {
+      if (
+        path === '/login' ||
+        path.startsWith('/login/') ||
+        path === '/register' ||
+        path.startsWith('/register/') ||
+        path === '/forgot-password' ||
+        path.startsWith('/forgot-password/')
+      ) {
         const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/overview';
         sessionStorage.removeItem('redirect_after_login');
         window.history.replaceState(null, '', savedRedirect);
@@ -342,6 +553,8 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
     } else {
       if (path === '/register' || path.startsWith('/register/')) {
         setMode('register');
+      } else if (path === '/forgot-password' || path.startsWith('/forgot-password/')) {
+        setMode('forgot-password');
       } else if (path === '/login' || path.startsWith('/login/')) {
         setMode('login');
       }
@@ -351,10 +564,11 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
   if (user && token) return <Dashboard user={user} token={token} onLogout={logout} onUserUpdate={setUser} />;
 
   const isLogin = mode === 'login';
+  const isForgot = mode === 'forgot-password';
 
   return (
     <div className="auth-page">
-      <div className={`auth-container ${!isLogin ? 'register-mode' : ''}`}>
+      <div className={`auth-container ${mode === 'register' ? 'register-mode' : ''}`}>
         {/* Brand header */}
         <div className="auth-brand-header">
           <a
@@ -382,37 +596,108 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
 
         {/* Card */}
         <div className="auth-card">
-          {/* Segmented control tabs */}
-          <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isLogin}
-              className={`auth-tab ${isLogin ? 'active' : ''}`}
-              onClick={() => switchMode('login')}
+          {/* Segmented control tabs (Sign in / Register) */}
+          {!isForgot && (
+            <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isLogin}
+                className={`auth-tab ${isLogin ? 'active' : ''}`}
+                onClick={() => switchMode('login')}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'register'}
+                className={`auth-tab ${mode === 'register' ? 'active' : ''}`}
+                onClick={() => switchMode('register')}
+              >
+                Register business
+              </button>
+            </div>
+          )}
+
+          {/* Multi-step progress indicator for Forgot Password */}
+          {isForgot && (
+            <div
+              data-testid="forgot-password-stepper"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 8,
+                padding: '10px 12px',
+                background: '#f8fafc',
+                borderRadius: 10,
+                border: '1px solid #e2e8f0',
+              }}
             >
-              Sign in
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!isLogin}
-              className={`auth-tab ${!isLogin ? 'active' : ''}`}
-              onClick={() => switchMode('register')}
-            >
-              Register business
-            </button>
-          </div>
+              {[
+                { step: 1, label: '1. Email' },
+                { step: 2, label: '2. Verify OTP' },
+                { step: 3, label: '3. New Password' },
+              ].map((item) => {
+                const isCurrent = forgotStep === item.step;
+                const isDone =
+                  forgotStep > item.step || (item.step === 2 && otpVerified && forgotStep === 3);
+                return (
+                  <div
+                    key={item.step}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '6px 8px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: isCurrent || isDone ? 700 : 500,
+                      backgroundColor: isCurrent
+                        ? '#4f46e5'
+                        : isDone
+                          ? '#ecfdf5'
+                          : 'transparent',
+                      color: isCurrent
+                        ? '#ffffff'
+                        : isDone
+                          ? '#059669'
+                          : '#64748b',
+                      border: isDone && !isCurrent ? '1px solid #a7f3d0' : '1px solid transparent',
+                      textAlign: 'center',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {item.label}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Form Header */}
           <div className="auth-header">
             <h1 className="auth-title">
-              {isLogin ? 'Sign in to your account' : 'Register your business'}
+              {isForgot
+                ? forgotStep === 1
+                  ? 'Reset owner password'
+                  : forgotStep === 2
+                    ? 'Enter verification OTP'
+                    : 'Create new password'
+                : isLogin
+                  ? 'Sign in to your account'
+                  : 'Register your business'}
             </h1>
             <p className="auth-subtitle">
-              {isLogin
-                ? 'Enter your email or username and password to access your workspace.'
-                : 'Create a business profile and your primary administrator account.'}
+              {isForgot
+                ? forgotStep === 1
+                  ? 'Enter the email address associated with your business owner account to receive a one-time password (OTP).'
+                  : forgotStep === 2
+                    ? `Enter the 6-digit OTP sent to ${forgotEmail}.`
+                    : 'Your OTP has been verified. Enter and confirm your new owner password below.'
+                : isLogin
+                  ? 'Enter your email or username and password to access your workspace.'
+                  : 'Create a business profile and your primary administrator account.'}
             </p>
           </div>
 
@@ -425,6 +710,24 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* Forgot password step confirmation notice */}
+          {isForgot && forgotSuccessMessage && (
+            <div
+              role="status"
+              style={{
+                padding: '10px 12px',
+                borderRadius: 8,
+                backgroundColor: '#ecfdf5',
+                border: '1px solid #6ee7b7',
+                color: '#065f46',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              {forgotSuccessMessage}
             </div>
           )}
 
@@ -536,217 +839,351 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
             />
           )}
 
-          {/* Form */}
-          <form onSubmit={submit} className="auth-form" noValidate>
-            {!isLogin && (
-              <div className="field-group">
-                <label className="field-label" htmlFor="name">Full name</label>
-                <input
-                  id="name"
-                  className="field-input"
-                  name="name"
-                  placeholder="e.g. John Doe"
-                  value={form.name}
-                  onChange={handle}
-                  required
-                />
-              </div>
-            )}
-
-            {isLogin ? (
-              <div className="field-group">
-                <label className="field-label" htmlFor="login">Email or Username</label>
-                <input
-                  id="login"
-                  className="field-input"
-                  name="login"
-                  type="text"
-                  placeholder="Enter your email or username"
-                  value={form.login || ''}
-                  onChange={handle}
-                  autoComplete="username"
-                  required
-                />
-              </div>
-            ) : (
-              <div className="field-group">
-                <label className="field-label" htmlFor="email">Email address</label>
-                <input
-                  id="email"
-                  className="field-input"
-                  name="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={form.email}
-                  onChange={handle}
-                  required
-                />
-              </div>
-            )}
-
-            <PasswordField
-              name="password"
-              label="Password"
-              placeholder={isLogin ? 'Enter your password' : 'Create a secure password (min. 8 chars)'}
-              value={form.password}
-              onChange={handle}
-              showStrength={!isLogin}
-            />
-
-            {!isLogin && (
-              <>
-                <PasswordField
-                  name="password_confirmation"
-                  label="Confirm password"
-                  placeholder="Repeat your password"
-                  value={form.password_confirmation}
-                  onChange={handle}
-                  showStrength={false}
-                />
-
-                <div className="auth-section-divider">
-                  <span>Business Profile</span>
-                </div>
-
-                {/* Username */}
-                <div className="field-group">
-                  <label className="field-label" htmlFor="username">Username</label>
-                  <input
-                    id="username"
-                    className="field-input"
-                    name="username"
-                    type="text"
-                    placeholder="e.g. john_doe (3-30 chars, letters/numbers/underscores)"
-                    value={form.username}
-                    onChange={handle}
-                    required
-                    minLength={3}
-                    maxLength={30}
-                    pattern="^[a-zA-Z0-9_]+$"
-                  />
-                </div>
-
-                {/* Logo upload */}
-                <div className="field-group">
-                  <label className="field-label">Business logo (optional)</label>
-                  <div
-                    onClick={() => logoInputRef.current?.click()}
-                    onDragOver={e => { e.preventDefault(); setLogoDragOver(true); }}
-                    onDragLeave={() => setLogoDragOver(false)}
-                    onDrop={e => {
-                      e.preventDefault();
-                      setLogoDragOver(false);
-                      const f = e.dataTransfer.files[0];
-                      if (f && f.type.startsWith('image/')) handleLogoChange(f);
-                    }}
-                    style={{
-                      border: `2px dashed ${logoDragOver ? '#4f46e5' : '#e2e8f0'}`,
-                      borderRadius: 12,
-                      padding: '20px 16px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 10,
-                      background: logoDragOver ? '#eef2ff' : '#fafafa',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {logoPreview ? (
-                      <>
-                        <img
-                          src={logoPreview}
-                          alt="Logo preview"
-                          style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 10 }}
-                        />
-                        <span style={{ fontSize: 12, color: '#4f46e5', fontWeight: 600 }}>{logoFile?.name}</span>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>Click to change</span>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{
-                          width: 48, height: 48, borderRadius: 12,
-                          background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <polyline points="21 15 16 10 5 21" />
-                          </svg>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Upload your logo</span>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>PNG, JPG, SVG · max 2 MB · drag or click</span>
-                      </>
-                    )}
+          {/* Multi-step Forgot Password Form */}
+          {isForgot ? (
+            <>
+              {forgotStep === 1 && (
+                <form onSubmit={handleSendOtp} className="auth-form" noValidate data-testid="forgot-step-1-form">
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="forgot_email">Owner Email Address</label>
+                    <input
+                      id="forgot_email"
+                      className="field-input"
+                      name="forgot_email"
+                      type="email"
+                      placeholder="Enter your owner email address"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
                   </div>
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={e => handleLogoChange(e.target.files[0])}
+
+                  <button className="submit-btn" type="submit" disabled={loading}>
+                    {loading && <span className="btn-spinner" />}
+                    {loading ? 'Sending OTP...' : 'Send OTP'}
+                  </button>
+                </form>
+              )}
+
+              {forgotStep === 2 && (
+                <form onSubmit={handleVerifyOtp} className="auth-form" noValidate data-testid="forgot-step-2-form">
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="forgot_otp">One-Time Password (OTP)</label>
+                    <input
+                      id="forgot_otp"
+                      className="field-input mono"
+                      name="forgot_otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Enter 6-digit OTP"
+                      value={forgotOtp}
+                      onChange={e => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      style={{ letterSpacing: '0.3em', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700 }}
+                      required
+                    />
+                  </div>
+
+                  <button className="submit-btn" type="submit" disabled={loading}>
+                    {loading && <span className="btn-spinner" />}
+                    {loading ? 'Verifying OTP...' : 'Verify OTP'}
+                  </button>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="auth-toggle-link"
+                      style={{ fontSize: '0.8rem' }}
+                      disabled={loading}
+                      onClick={() => {
+                        setError(null);
+                        setForgotSuccessMessage(null);
+                        setOtpVerified(false);
+                        setForgotResetToken(null);
+                        setForgotStep(1);
+                      }}
+                    >
+                      &larr; Change email
+                    </button>
+                    <button
+                      type="button"
+                      className="auth-toggle-link"
+                      style={{ fontSize: '0.8rem' }}
+                      disabled={loading}
+                      onClick={handleSendOtp}
+                    >
+                      Resend OTP
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotStep === 3 && otpVerified && (
+                <form onSubmit={handleResetPassword} className="auth-form" noValidate data-testid="forgot-step-3-form">
+                  <PasswordField
+                    name="forgot_password"
+                    label="New password"
+                    placeholder="Create a new password (min. 8 chars)"
+                    value={forgotPassword}
+                    onChange={e => setForgotPassword(e.target.value)}
+                    showStrength={true}
                   />
-                </div>
 
-                <div className="field-group">
-                  <label className="field-label" htmlFor="business_name">Business or store name</label>
-                  <input
-                    id="business_name"
-                    className="field-input"
-                    name="business_name"
-                    placeholder="e.g. Acme Retail Ltd."
-                    value={form.business_name}
-                    onChange={handle}
-                    required
+                  <PasswordField
+                    name="forgot_password_confirmation"
+                    label="Confirm new password"
+                    placeholder="Repeat your new password"
+                    value={forgotPasswordConfirmation}
+                    onChange={e => setForgotPasswordConfirmation(e.target.value)}
+                    showStrength={false}
                   />
-                </div>
 
-                <div className="field-group">
-                  <label className="field-label" htmlFor="phone">Phone number (optional)</label>
-                  <input
-                    id="phone"
-                    className="field-input"
-                    name="phone"
-                    type="tel"
-                    placeholder="+256 700 000 000"
-                    value={form.phone}
-                    onChange={handle}
-                  />
-                </div>
+                  <button className="submit-btn" type="submit" disabled={loading}>
+                    {loading && <span className="btn-spinner" />}
+                    {loading ? 'Resetting password...' : 'Reset password'}
+                  </button>
+                </form>
+              )}
 
-                <div className="field-group">
-                  <label className="field-label" htmlFor="address">Business address (optional)</label>
-                  <textarea
-                    id="address"
-                    className="field-input"
-                    name="address"
-                    placeholder="Plot, Street, City, Country"
-                    value={form.address}
-                    onChange={handle}
-                  />
-                </div>
-              </>
-            )}
+              <p className="auth-toggle">
+                Remembered your password?{' '}
+                <button
+                  type="button"
+                  className="auth-toggle-link"
+                  onClick={() => switchMode('login')}
+                >
+                  Sign in here
+                </button>
+              </p>
+            </>
+          ) : (
+            <>
+              {/* Login / Register Form */}
+              <form onSubmit={submit} className="auth-form" noValidate>
+                {!isLogin && (
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="name">Full name</label>
+                    <input
+                      id="name"
+                      className="field-input"
+                      name="name"
+                      placeholder="e.g. John Doe"
+                      value={form.name}
+                      onChange={handle}
+                      required
+                    />
+                  </div>
+                )}
 
-            <button className="submit-btn" type="submit" disabled={loading}>
-              {loading && <span className="btn-spinner" />}
-              {loading
-                ? (isLogin ? 'Signing in...' : 'Creating account...')
-                : (isLogin ? 'Sign in' : 'Create business account')}
-            </button>
-          </form>
+                {isLogin ? (
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="login">Email or Username</label>
+                    <input
+                      id="login"
+                      className="field-input"
+                      name="login"
+                      type="text"
+                      placeholder="Enter your email or username"
+                      value={form.login || ''}
+                      onChange={handle}
+                      autoComplete="username"
+                      required
+                    />
+                  </div>
+                ) : (
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="email">Email address</label>
+                    <input
+                      id="email"
+                      className="field-input"
+                      name="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={form.email}
+                      onChange={handle}
+                      required
+                    />
+                  </div>
+                )}
 
-          {/* Toggle helper */}
-          <p className="auth-toggle">
-            {isLogin ? "Don't have an account yet? " : 'Already registered? '}
-            <button
-              type="button"
-              className="auth-toggle-link"
-              onClick={() => switchMode(isLogin ? 'register' : 'login')}
-            >
-              {isLogin ? 'Register your business' : 'Sign in here'}
-            </button>
-          </p>
+                <PasswordField
+                  name="password"
+                  label="Password"
+                  placeholder={isLogin ? 'Enter your password' : 'Create a secure password (min. 8 chars)'}
+                  value={form.password}
+                  onChange={handle}
+                  showStrength={!isLogin}
+                  labelExtra={
+                    isLogin ? (
+                      <button
+                        type="button"
+                        className="auth-toggle-link"
+                        style={{ fontSize: '0.78rem' }}
+                        onClick={() => switchMode('forgot-password')}
+                      >
+                        Forgot password?
+                      </button>
+                    ) : null
+                  }
+                />
+
+                {!isLogin && (
+                  <>
+                    <PasswordField
+                      name="password_confirmation"
+                      label="Confirm password"
+                      placeholder="Repeat your password"
+                      value={form.password_confirmation}
+                      onChange={handle}
+                      showStrength={false}
+                    />
+
+                    <div className="auth-section-divider">
+                      <span>Business Profile</span>
+                    </div>
+
+                    {/* Username */}
+                    <div className="field-group">
+                      <label className="field-label" htmlFor="username">Username</label>
+                      <input
+                        id="username"
+                        className="field-input"
+                        name="username"
+                        type="text"
+                        placeholder="e.g. john_doe (3-30 chars, letters/numbers/underscores)"
+                        value={form.username}
+                        onChange={handle}
+                        required
+                        minLength={3}
+                        maxLength={30}
+                        pattern="^[a-zA-Z0-9_]+$"
+                      />
+                    </div>
+
+                    {/* Logo upload */}
+                    <div className="field-group">
+                      <label className="field-label">Business logo (optional)</label>
+                      <div
+                        onClick={() => logoInputRef.current?.click()}
+                        onDragOver={e => { e.preventDefault(); setLogoDragOver(true); }}
+                        onDragLeave={() => setLogoDragOver(false)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setLogoDragOver(false);
+                          const f = e.dataTransfer.files[0];
+                          if (f && f.type.startsWith('image/')) handleLogoChange(f);
+                        }}
+                        style={{
+                          border: `2px dashed ${logoDragOver ? '#4f46e5' : '#e2e8f0'}`,
+                          borderRadius: 12,
+                          padding: '20px 16px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 10,
+                          background: logoDragOver ? '#eef2ff' : '#fafafa',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {logoPreview ? (
+                          <>
+                            <img
+                              src={logoPreview}
+                              alt="Logo preview"
+                              style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 10 }}
+                            />
+                            <span style={{ fontSize: 12, color: '#4f46e5', fontWeight: 600 }}>{logoFile?.name}</span>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>Click to change</span>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{
+                              width: 48, height: 48, borderRadius: 12,
+                              background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <polyline points="21 15 16 10 5 21" />
+                              </svg>
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Upload your logo</span>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>PNG, JPG, SVG · max 2 MB · drag or click</span>
+                          </>
+                        )}
+                      </div>
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={e => handleLogoChange(e.target.files[0])}
+                      />
+                    </div>
+
+                    <div className="field-group">
+                      <label className="field-label" htmlFor="business_name">Business or store name</label>
+                      <input
+                        id="business_name"
+                        className="field-input"
+                        name="business_name"
+                        placeholder="e.g. Acme Retail Ltd."
+                        value={form.business_name}
+                        onChange={handle}
+                        required
+                      />
+                    </div>
+
+                    <div className="field-group">
+                      <label className="field-label" htmlFor="phone">Phone number (optional)</label>
+                      <input
+                        id="phone"
+                        className="field-input"
+                        name="phone"
+                        type="tel"
+                        placeholder="+256 700 000 000"
+                        value={form.phone}
+                        onChange={handle}
+                      />
+                    </div>
+
+                    <div className="field-group">
+                      <label className="field-label" htmlFor="address">Business address (optional)</label>
+                      <textarea
+                        id="address"
+                        className="field-input"
+                        name="address"
+                        placeholder="Plot, Street, City, Country"
+                        value={form.address}
+                        onChange={handle}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <button className="submit-btn" type="submit" disabled={loading}>
+                  {loading && <span className="btn-spinner" />}
+                  {loading
+                    ? (isLogin ? 'Signing in...' : 'Creating account...')
+                    : (isLogin ? 'Sign in' : 'Create business account')}
+                </button>
+              </form>
+
+              {/* Toggle helper */}
+              <p className="auth-toggle">
+                {isLogin ? "Don't have an account yet? " : 'Already registered? '}
+                <button
+                  type="button"
+                  className="auth-toggle-link"
+                  onClick={() => switchMode(isLogin ? 'register' : 'login')}
+                >
+                  {isLogin ? 'Register your business' : 'Sign in here'}
+                </button>
+              </p>
+            </>
+          )}
         </div>
 
         {/* High-trust footer */}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GeneratedReport;
 use App\Models\ReportPreference;
 use App\Jobs\GenerateAutomatedReportJob;
 use App\Services\ReportService;
@@ -194,7 +195,8 @@ class ReportPreferenceController extends Controller
 
     /**
      * Trigger generation when scheduled countdown finishes.
-     * Automatically saves to database and advances countdown for next interval (continuous).
+     * Dispatches a queued background job that compiles and saves the report to generated_reports
+     * and advances the countdown for the next interval.
      */
     public function executeDue(Request $request, $id, ReportService $reportService, ReportDeliveryService $deliveryService): JsonResponse
     {
@@ -209,11 +211,7 @@ class ReportPreferenceController extends Controller
             ], 400);
         }
 
-        // Run job synchronously to save report in DB
-        $job = new GenerateAutomatedReportJob($preference->id, 'automated');
-        $savedReport = $job->handle($reportService, $deliveryService);
-
-        // Advance next_run_at for continuous loop
+        // Advance next_run_at for continuous loop immediately so countdown restarts without waiting
         $interval = (int) ($preference->interval_minutes ?: 5);
         $nextRunAt = Carbon::now()->addMinutes($interval);
 
@@ -222,16 +220,25 @@ class ReportPreferenceController extends Controller
             'next_run_at'  => $nextRunAt,
         ]);
 
+        // Dispatch queued background job to compile and save report in generated_reports
+        GenerateAutomatedReportJob::dispatch($preference->id, 'automated');
+
+        $savedReport = GeneratedReport::where('tenant_id', $user->tenant_id)
+            ->where('report_type', $preference->report_type)
+            ->latest('id')
+            ->first();
+
         return response()->json([
             'success'    => true,
-            'message'    => 'Automated report compiled and saved to database successfully.',
+            'queued'     => true,
+            'message'    => 'Automated report job queued and saving to database.',
             'data'       => $savedReport,
             'preference' => $preference->fresh(),
         ]);
     }
 
     /**
-     * Check any due reports for this tenant and execute them.
+     * Check any due reports for this tenant and queue them as background jobs.
      */
     public function checkDue(Request $request, ReportService $reportService, ReportDeliveryService $deliveryService): JsonResponse
     {
@@ -245,17 +252,22 @@ class ReportPreferenceController extends Controller
 
         $generated = [];
         foreach ($duePreferences as $preference) {
-            $job = new GenerateAutomatedReportJob($preference->id, 'automated');
-            $saved = $job->handle($reportService, $deliveryService);
-
             $interval = (int) ($preference->interval_minutes ?: 5);
             $preference->update([
                 'last_sent_at' => Carbon::now(),
                 'next_run_at'  => Carbon::now()->addMinutes($interval),
             ]);
 
+            GenerateAutomatedReportJob::dispatch($preference->id, 'automated');
+
+            $saved = GeneratedReport::where('tenant_id', $user->tenant_id)
+                ->where('report_type', $preference->report_type)
+                ->latest('id')
+                ->first();
+
             $generated[] = [
                 'report_type'  => $preference->report_type,
+                'queued'       => true,
                 'saved_report' => $saved,
                 'next_run_at'  => $preference->next_run_at,
             ];
@@ -268,16 +280,13 @@ class ReportPreferenceController extends Controller
     }
 
     /**
-     * Instantly trigger report generation for this preference on-demand.
+     * Queue report generation for this preference on-demand in the background.
      */
     public function runNow(Request $request, $id, ReportService $reportService, ReportDeliveryService $deliveryService): JsonResponse
     {
         $user = $this->authorizePermission();
 
         $preference = ReportPreference::where('tenant_id', $user->tenant_id)->findOrFail($id);
-
-        $job = new GenerateAutomatedReportJob($preference->id, 'manual_trigger');
-        $savedReport = $job->handle($reportService, $deliveryService);
 
         // If high-frequency, reset countdown to full interval from now
         if ($preference->interval_minutes && $preference->interval_minutes > 0) {
@@ -287,9 +296,18 @@ class ReportPreferenceController extends Controller
             ]);
         }
 
+        // Dispatch queued background job to compile and save report in generated_reports
+        GenerateAutomatedReportJob::dispatch($preference->id, 'manual_trigger');
+
+        $savedReport = GeneratedReport::where('tenant_id', $user->tenant_id)
+            ->where('report_type', $preference->report_type)
+            ->latest('id')
+            ->first();
+
         return response()->json([
             'success'    => true,
-            'message'    => 'Report generated and saved to database successfully.',
+            'queued'     => true,
+            'message'    => 'Report generation job queued and saving to database.',
             'data'       => $savedReport,
             'preference' => $preference->fresh(),
         ]);
