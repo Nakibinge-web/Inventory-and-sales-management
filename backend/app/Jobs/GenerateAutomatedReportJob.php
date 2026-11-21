@@ -19,11 +19,13 @@ class GenerateAutomatedReportJob implements ShouldQueue
 
     protected $preferenceId;
     protected $source;
+    protected bool $queueEmail;
 
-    public function __construct($preferenceId, string $source = 'automated')
+    public function __construct($preferenceId, string $source = 'automated', bool $queueEmail = false)
     {
         $this->preferenceId = $preferenceId;
         $this->source = $source;
+        $this->queueEmail = $queueEmail;
     }
 
     public function handle(ReportService $reportService, ReportDeliveryService $deliveryService)
@@ -31,11 +33,11 @@ class GenerateAutomatedReportJob implements ShouldQueue
         $preference = ReportPreference::find($this->preferenceId);
 
         if (!$preference || (!$preference->is_enabled && $this->source === 'automated')) {
-            return;
+            return null;
         }
 
         if ($preference->tenant && $preference->tenant->isSubscriptionExpired()) {
-            return;
+            return null;
         }
 
         // Establish tenant context
@@ -50,7 +52,8 @@ class GenerateAutomatedReportJob implements ShouldQueue
                 $data,
                 $period['start'],
                 $period['end'],
-                $this->source
+                $this->source,
+                $this->queueEmail
             );
 
             Log::info("Successfully generated and saved automated report #{$savedReport->id}", [
@@ -58,11 +61,22 @@ class GenerateAutomatedReportJob implements ShouldQueue
                 'report_type' => $preference->report_type,
             ]);
 
-            $interval = (int) ($preference->interval_minutes ?: 5);
-            $preference->update([
-                'last_sent_at' => now(),
-                'next_run_at'  => Carbon::now()->addMinutes($interval),
-            ]);
+            if ($this->source === 'automated') {
+                $updates = [
+                    'last_sent_at' => now(),
+                    'next_run_at'  => $preference->computeNextRunAfterExecution(),
+                ];
+                if ($preference->frequency === 'scheduled_once') {
+                    $updates['is_enabled'] = false;
+                }
+                $preference->update($updates);
+            } else {
+                $updates = ['last_sent_at' => now()];
+                if ($preference->is_enabled && $preference->isLoopSchedule()) {
+                    $updates['next_run_at'] = Carbon::now()->addMinutes($preference->resolveLoopMinutes());
+                }
+                $preference->update($updates);
+            }
 
             return $savedReport;
         } catch (\Exception $e) {

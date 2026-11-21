@@ -634,6 +634,136 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     );
   };
 
+  const reportsModuleEnabled = isModuleEnabled('reports');
+  const canRunReportAutomation =
+    isOwnerOrAdmin ||
+    hasPermission('reports.configure_automation') ||
+    hasPermission('sales.report');
+
+  // Global background report automation scheduler so scheduled/looped reports
+  // execute on time regardless of which Dashboard tab is currently active.
+  useEffect(() => {
+    if (!token || isSubscriptionBlocked || !reportsModuleEnabled || !canRunReportAutomation) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let inFlight = false;
+    let exactTimer = null;
+
+    const clearExactTimer = () => {
+      if (exactTimer) {
+        clearTimeout(exactTimer);
+        exactTimer = null;
+      }
+    };
+
+    const runCheckDue = async () => {
+      if (cancelled || inFlight) return false;
+      inFlight = true;
+      try {
+        const res = await fetch(`${API}/report-preferences/check-due`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        if (!res.ok || cancelled) return false;
+
+        const json = await res.json();
+        if (cancelled) return false;
+
+        const generated = Array.isArray(json?.generated) ? json.generated : [];
+        if (generated.length > 0) {
+          const labelList = generated
+            .map((g) => g.saved_report?.title || String(g.report_type || 'Report').replace(/_/g, ' '))
+            .join(', ');
+          toast.success(
+            'Automated Report Saved',
+            `${labelList} generated and added to Saved Reports.`
+          );
+          window.dispatchEvent(
+            new CustomEvent('automated_reports_generated', { detail: generated })
+          );
+        }
+        return true;
+      } catch (err) {
+        console.error('Background automation check failed:', err);
+        return false;
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const scheduleNextFromPreferences = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`${API}/report-preferences`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        if (!res.ok || cancelled) return;
+
+        const json = await res.json();
+        if (cancelled || !Array.isArray(json?.data)) return;
+
+        const activeTimestamps = json.data
+          .filter((p) => p.is_enabled && p.next_run_at)
+          .map((p) => new Date(p.next_run_at).getTime())
+          .filter((ms) => !Number.isNaN(ms));
+
+        clearExactTimer();
+        if (activeTimestamps.length === 0) return;
+
+        const earliestMs = Math.min(...activeTimestamps);
+        const delayMs = earliestMs - Date.now();
+        // Wait at least 500ms if already due to prevent tight retry loops; max ~24.8 days for setTimeout.
+        const safeWaitMs = Math.min(Math.max(delayMs + 350, 500), 2147483647);
+
+        exactTimer = setTimeout(async () => {
+          const ok = await runCheckDue();
+          if (ok && !cancelled) {
+            scheduleNextFromPreferences();
+          }
+        }, safeWaitMs);
+      } catch (err) {
+        console.error('Failed to schedule next automated report check:', err);
+      }
+    };
+
+    const handlePrefsUpdated = () => {
+      scheduleNextFromPreferences();
+    };
+
+    window.addEventListener('report_preferences_updated', handlePrefsUpdated);
+
+    runCheckDue().then((ok) => {
+      if (ok && !cancelled) {
+        scheduleNextFromPreferences();
+      } else if (!cancelled) {
+        scheduleNextFromPreferences();
+      }
+    });
+
+    const pollInterval = setInterval(async () => {
+      const ok = await runCheckDue();
+      if (ok && !cancelled) {
+        scheduleNextFromPreferences();
+      }
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearExactTimer();
+      clearInterval(pollInterval);
+      window.removeEventListener('report_preferences_updated', handlePrefsUpdated);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isSubscriptionBlocked, reportsModuleEnabled, canRunReportAutomation]);
+
   const menuGroups = [
     {
       title: 'Operations',
@@ -1425,7 +1555,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               }}
             />
           )}
-          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} />}
+          {activeTab === 'reports' && <ReportsTab data={data} loading={loading} token={token} user={user} />}
           {activeTab === 'ai' && <AiTab token={token} data={data} />}
           {activeTab === 'stock-movements' && <StockMovementsTab token={token} products={data.products} canCreate={hasPermission('stock.view')} />}
           {activeTab === 'users' && (isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view')) && (

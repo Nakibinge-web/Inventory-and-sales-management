@@ -455,6 +455,176 @@ curl "http://localhost:8000/api/products?tenant_id=1"
 
 ---
 
+## 📊 Report Export
+
+### List All Generated Reports Available for Export
+```http
+GET /api/reports/generated
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": [
+        {
+            "id": 1,
+            "report_type": "daily_sales",
+            "generated_at": "2026-10-21 10:30:00",
+            "export_urls": {
+                "pdf": "http://localhost:8000/api/reports/generated/1/export?format=pdf",
+                "docx": "http://localhost:8000/api/reports/generated/1/export?format=docx"
+            }
+        }
+    ]
+}
+```
+
+### Export a Stored Generated Report
+```http
+GET /api/reports/generated/{id}/export?format={pdf|docx}
+```
+
+**Parameters:**
+- `format` (required): Either `pdf` or `docx`
+
+**Example:**
+```http
+GET /api/reports/generated/1/export?format=pdf
+```
+
+**Response:** Downloads the report file
+
+---
+
+### Export Overview Report (On-Demand)
+```http
+POST /api/reports/overview/export
+Content-Type: application/json
+
+{
+    "format": "pdf"
+}
+```
+
+**Parameters:**
+- `format` (required): Either `pdf` or `docx`
+
+**Response:** Downloads the business overview report in the specified format
+
+---
+
+### Export Sales Report (On-Demand)
+
+#### Export Daily Sales Report
+```http
+POST /api/reports/sales/export
+Content-Type: application/json
+
+{
+    "report_type": "daily",
+    "format": "pdf",
+    "date": "2026-10-21"
+}
+```
+
+#### Export Weekly Sales Report
+```http
+POST /api/reports/sales/export
+Content-Type: application/json
+
+{
+    "report_type": "weekly",
+    "format": "docx",
+    "date": "2026-10-21"
+}
+```
+
+#### Export Monthly Sales Report
+```http
+POST /api/reports/sales/export
+Content-Type: application/json
+
+{
+    "report_type": "monthly",
+    "format": "pdf",
+    "month": "2026-10"
+}
+```
+
+#### Export Yearly Sales Report
+```http
+POST /api/reports/sales/export
+Content-Type: application/json
+
+{
+    "report_type": "yearly",
+    "format": "docx",
+    "year": 2026
+}
+```
+
+**Response:** Downloads the report file in the specified format
+
+---
+
+### Export Purchases Report (On-Demand)
+
+#### Export Daily Purchases Report
+```http
+POST /api/reports/purchases/export
+Content-Type: application/json
+
+{
+    "report_type": "daily",
+    "format": "pdf",
+    "date": "2026-10-21"
+}
+```
+
+#### Export Monthly Purchases Report
+```http
+POST /api/reports/purchases/export
+Content-Type: application/json
+
+{
+    "report_type": "monthly",
+    "format": "docx",
+    "month": "2026-10"
+}
+```
+
+**Response:** Downloads the report file in the specified format
+
+---
+
+## 📝 Report Export Features
+
+### Supported Formats
+- **PDF**: Professional PDF documents with formatted tables and charts
+- **Word (DOCX)**: Microsoft Word documents that can be edited
+
+### Report Types Available for Export
+- Daily Sales Reports
+- Weekly Sales Reports
+- Monthly Sales Reports
+- Yearly Sales Reports
+- Daily Purchase Reports
+- Monthly Purchase Reports
+
+### Export Methods
+1. **Export Stored Reports**: Export previously generated automated reports from the database
+2. **On-Demand Export**: Generate and export reports instantly without storing them
+
+### What's Included in Exports
+- Summary metrics (total sales, profit, cost, transactions)
+- Breakdown tables (by day, month, quarter, payment method, supplier)
+- Professional formatting with headers and footers
+- Timestamp of generation
+- Company branding support
+
+---
+
 ## 📋 Status Codes
 
 - **200 OK** - Successful GET, PUT requests
@@ -465,6 +635,6 @@ curl "http://localhost:8000/api/products?tenant_id=1"
 
 ---
 
-**Total Endpoints:** 35+
+**Total Endpoints:** 43+
 **Status:** Ready for testing
 **Next Steps:** Add authentication middleware, test all endpoints

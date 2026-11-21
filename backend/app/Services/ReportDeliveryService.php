@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\GeneratedReport;
 use App\Models\ReportPreference;
+use App\Jobs\SendAutomatedReportEmailJob;
 use App\Mail\AutomatedReportMailable;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
@@ -21,7 +22,8 @@ class ReportDeliveryService
         array $reportData,
         string $periodStart,
         string $periodEnd,
-        string $source = 'automated'
+        string $source = 'automated',
+        bool $queueEmail = false
     ): GeneratedReport {
         // Human-friendly title
         $typeNames = [
@@ -53,12 +55,22 @@ class ReportDeliveryService
         // If email delivery requested and recipient email set
         if (in_array($preference->delivery_method, ['email', 'both']) && !empty($preference->recipient_email)) {
             try {
-                Mail::to($preference->recipient_email)->send(new AutomatedReportMailable(
-                    $reportData,
-                    $preference->report_type,
-                    $periodStart,
-                    $periodEnd
-                ));
+                if ($queueEmail) {
+                    SendAutomatedReportEmailJob::dispatch(
+                        $preference->recipient_email,
+                        $reportData,
+                        $preference->report_type,
+                        $periodStart,
+                        $periodEnd
+                    );
+                } else {
+                    Mail::to($preference->recipient_email)->send(new AutomatedReportMailable(
+                        $reportData,
+                        $preference->report_type,
+                        $periodStart,
+                        $periodEnd
+                    ));
+                }
             } catch (\Exception $e) {
                 Log::warning("Could not send automated report email: " . $e->getMessage());
             }

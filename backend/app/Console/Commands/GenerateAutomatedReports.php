@@ -93,6 +93,9 @@ class GenerateAutomatedReports extends Command
                 }
                 return $isTargetDay && $lastSent->isBefore($now->startOfDay());
 
+            case 'scheduled_once':
+                return false;
+
             default:
                 return false;
         }
@@ -100,6 +103,9 @@ class GenerateAutomatedReports extends Command
 
     private function matchesTimeCriteria(ReportPreference $preference, Carbon $now): bool
     {
+        if ($preference->frequency === 'scheduled_once') {
+            return false;
+        }
         if (in_array($preference->frequency, [
             'every_5_minutes', 'every_10_minutes', 'every_15_minutes', 'every_30_minutes',
             'hourly', 'every_2_hours', 'every_6_hours', 'custom_minutes'

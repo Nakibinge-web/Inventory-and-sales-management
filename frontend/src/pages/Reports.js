@@ -3,6 +3,94 @@ import Button from '../components/ui/Button';
 import styles, { supS } from '../styles/dashboardStyles';
 import { API_URL } from '../config/api';
 
+function ReportExportBar({ title, onExportPdf, onExportWord, isPdfLoading, isWordLoading, extraActions }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      background: '#ffffff',
+      border: '1px solid #e2e8f0',
+      borderRadius: 12,
+      padding: '12px 20px',
+      marginBottom: 20,
+      flexWrap: 'wrap',
+      gap: 12,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          background: '#eef2ff',
+          color: '#4f46e5',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 18
+        }}>
+          📊
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{title || 'Export Report'}</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>Download this report in professional PDF or Microsoft Word (.docx) format</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {extraActions}
+        <button
+          type="button"
+          onClick={onExportPdf}
+          disabled={isPdfLoading}
+          style={{
+            padding: '8px 16px',
+            background: isPdfLoading ? '#94a3b8' : '#dc2626',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: isPdfLoading ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'background 0.15s ease',
+            boxShadow: '0 1px 2px rgba(220,38,38,0.2)'
+          }}
+          onMouseEnter={e => { if (!isPdfLoading) e.currentTarget.style.background = '#b91c1c'; }}
+          onMouseLeave={e => { if (!isPdfLoading) e.currentTarget.style.background = '#dc2626'; }}
+        >
+          {isPdfLoading ? '⏳ Generating PDF...' : '📄 Export as PDF'}
+        </button>
+        <button
+          type="button"
+          onClick={onExportWord}
+          disabled={isWordLoading}
+          style={{
+            padding: '8px 16px',
+            background: isWordLoading ? '#94a3b8' : '#2563eb',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: isWordLoading ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'background 0.15s ease',
+            boxShadow: '0 1px 2px rgba(37,99,235,0.2)'
+          }}
+          onMouseEnter={e => { if (!isWordLoading) e.currentTarget.style.background = '#1d4ed8'; }}
+          onMouseLeave={e => { if (!isWordLoading) e.currentTarget.style.background = '#2563eb'; }}
+        >
+          {isWordLoading ? '⏳ Generating Word...' : '📝 Export as Word'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ReportsTab({ data, loading, token }) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
@@ -25,10 +113,22 @@ function ReportsTab({ data, loading, token }) {
   const [triggeringRun, setTriggeringRun] = useState(false);
   const [automationAlert, setAutomationAlert] = useState(null);
 
+  const formatLocalDateInput = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const formatLocalTimeInput = (d) =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
   // Automation Form fields
   const [autoFrequency, setAutoFrequency] = useState('every_5_minutes');
   const [autoIntervalMinutes, setAutoIntervalMinutes] = useState(5);
   const [customMinutesInput, setCustomMinutesInput] = useState('5');
+  const [autoLoopUnit, setAutoLoopUnit] = useState('minutes');
+  const [autoScheduledDate, setAutoScheduledDate] = useState(() =>
+    formatLocalDateInput(new Date(Date.now() + 5 * 60000))
+  );
+  const [autoScheduledTime, setAutoScheduledTime] = useState(() =>
+    formatLocalTimeInput(new Date(Date.now() + 5 * 60000))
+  );
   const [autoTimeOfDay, setAutoTimeOfDay] = useState('18:00');
   const [autoDayOfWeek, setAutoDayOfWeek] = useState('monday');
   const [autoDayOfMonth, setAutoDayOfMonth] = useState(1);
@@ -48,6 +148,9 @@ function ReportsTab({ data, loading, token }) {
 
   // Report Preview Modal
   const [viewingReport, setViewingReport] = useState(null);
+
+  // PDF / Word export loading key
+  const [exportingKey, setExportingKey] = useState(null);
 
   // Expanded sold-items dropdown state keyed by sale row key
   const [expandedSales, setExpandedSales] = useState({});
@@ -435,19 +538,179 @@ function ReportsTab({ data, loading, token }) {
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const LOOP_FREQUENCIES = [
+    'every_5_minutes',
+    'every_10_minutes',
+    'every_15_minutes',
+    'every_30_minutes',
+    'hourly',
+    'every_2_hours',
+    'every_6_hours',
+    'custom_minutes',
+  ];
+
   const handleSelectPresetMinutes = (minutes, freqId) => {
     setAutoFrequency(freqId);
     setAutoIntervalMinutes(minutes);
+    setAutoLoopUnit('minutes');
     setCustomMinutesInput(String(minutes));
   };
 
-  const handleCustomMinutesChange = (val) => {
+  const handleCustomMinutesChange = (val, unitOverride = null) => {
+    const unit = unitOverride || autoLoopUnit;
     setCustomMinutesInput(val);
-    const parsed = parseInt(val, 10);
+    const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed > 0) {
+      const minutes = unit === 'hours' ? Math.round(parsed * 60) : Math.round(parsed);
       setAutoFrequency('custom_minutes');
-      setAutoIntervalMinutes(parsed);
+      setAutoIntervalMinutes(Math.max(1, Math.min(10080, minutes)));
     }
+  };
+
+  const handleLoopUnitChange = (nextUnit) => {
+    if (nextUnit === autoLoopUnit) return;
+    const currentParsed = parseFloat(customMinutesInput);
+    const currentMinutes =
+      !isNaN(currentParsed) && currentParsed > 0
+        ? autoLoopUnit === 'hours'
+          ? Math.round(currentParsed * 60)
+          : Math.round(currentParsed)
+        : autoIntervalMinutes || 5;
+
+    setAutoLoopUnit(nextUnit);
+    if (nextUnit === 'hours') {
+      const hrs = Math.max(0.25, Number((currentMinutes / 60).toFixed(2)));
+      setCustomMinutesInput(String(hrs));
+      setAutoIntervalMinutes(Math.max(1, Math.min(10080, Math.round(hrs * 60))));
+    } else {
+      const mins = Math.max(1, Math.min(10080, currentMinutes));
+      setCustomMinutesInput(String(mins));
+      setAutoIntervalMinutes(mins);
+    }
+    setAutoFrequency('custom_minutes');
+  };
+
+  const handleSelectQuickFutureOffset = (minutesFromNow) => {
+    const target = new Date(Date.now() + minutesFromNow * 60000);
+    setAutoFrequency('scheduled_once');
+    setAutoScheduledDate(formatLocalDateInput(target));
+    setAutoScheduledTime(formatLocalTimeInput(target));
+    setAutoIsEnabled(true);
+  };
+
+  const computeNextCalendarUtcIso = (freq, timeOfDay, dayOfWeek, dayOfMonth) => {
+    const [rawH, rawM] = (timeOfDay || '18:00').split(':');
+    const hh = parseInt(rawH, 10) || 0;
+    const mm = parseInt(rawM, 10) || 0;
+    const now = new Date();
+
+    if (freq === 'daily') {
+      const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
+      if (candidate.getTime() <= now.getTime()) {
+        candidate.setDate(candidate.getDate() + 1);
+      }
+      return candidate.toISOString();
+    }
+
+    if (freq === 'weekly') {
+      const dayMap = {
+        sunday: 0,
+        monday: 1,
+        tuesday: 2,
+        wednesday: 3,
+        thursday: 4,
+        friday: 5,
+        saturday: 6,
+      };
+      const targetDay = dayMap[(dayOfWeek || 'monday').toLowerCase()] ?? 1;
+      const diffDays = (targetDay - now.getDay() + 7) % 7;
+      const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffDays, hh, mm, 0, 0);
+      if (candidate.getTime() <= now.getTime()) {
+        candidate.setDate(candidate.getDate() + 7);
+      }
+      return candidate.toISOString();
+    }
+
+    if (freq === 'monthly') {
+      const desiredDay = Math.max(1, Math.min(31, parseInt(dayOfMonth, 10) || 1));
+      const buildMonthDate = (year, monthIndex) => {
+        const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+        return new Date(year, monthIndex, Math.min(desiredDay, lastDay), hh, mm, 0, 0);
+      };
+      let candidate = buildMonthDate(now.getFullYear(), now.getMonth());
+      if (candidate.getTime() <= now.getTime()) {
+        candidate = buildMonthDate(now.getFullYear(), now.getMonth() + 1);
+      }
+      return candidate.toISOString();
+    }
+
+    return null;
+  };
+
+  const buildAutomationPayload = ({ allowPastOnceForRunNow = false } = {}) => {
+    const isLoop = LOOP_FREQUENCIES.includes(autoFrequency);
+    const isOnce = autoFrequency === 'scheduled_once';
+    const isCalendar = ['daily', 'weekly', 'monthly'].includes(autoFrequency);
+
+    let finalInterval = null;
+    if (isLoop) {
+      if (autoFrequency === 'custom_minutes') {
+        const parsed = parseFloat(customMinutesInput);
+        if (isNaN(parsed) || parsed <= 0) {
+          return { error: 'Please enter a positive loop period (at least 1 minute).' };
+        }
+        const rawMinutes = autoLoopUnit === 'hours' ? Math.round(parsed * 60) : Math.round(parsed);
+        if (rawMinutes < 1 || rawMinutes > 10080) {
+          return { error: 'Loop period must be between 1 minute and 7 days (10,080 minutes).' };
+        }
+        finalInterval = rawMinutes;
+      } else {
+        finalInterval = autoIntervalMinutes || 5;
+      }
+    }
+
+    let scheduledAtUtc = null;
+    if (isOnce) {
+      if (!autoScheduledDate || !autoScheduledTime) {
+        return { error: 'Please pick both a date and time for the scheduled report.' };
+      }
+      const [yy, mo, dd] = autoScheduledDate.split('-').map(Number);
+      const [hh, mm] = autoScheduledTime.split(':').map(Number);
+      const localTarget = new Date(yy, (mo || 1) - 1, dd || 1, hh || 0, mm || 0, 0, 0);
+      if (isNaN(localTarget.getTime())) {
+        return { error: 'Invalid date or time selected.' };
+      }
+      if (localTarget.getTime() <= Date.now()) {
+        if (allowPastOnceForRunNow) {
+          scheduledAtUtc = new Date(Date.now() + 60000).toISOString();
+        } else if (autoIsEnabled) {
+          return { error: 'Scheduled future date & time must be in the future.' };
+        } else {
+          scheduledAtUtc = localTarget.toISOString();
+        }
+      } else {
+        scheduledAtUtc = localTarget.toISOString();
+      }
+    } else if (isCalendar) {
+      scheduledAtUtc = computeNextCalendarUtcIso(autoFrequency, autoTimeOfDay, autoDayOfWeek, autoDayOfMonth);
+    }
+
+    const payload = {
+      report_type: automationType,
+      frequency: autoFrequency,
+      time_of_day: isCalendar ? autoTimeOfDay : null,
+      day_of_week: autoFrequency === 'weekly' ? autoDayOfWeek : null,
+      day_of_month: autoFrequency === 'monthly' ? parseInt(autoDayOfMonth, 10) : null,
+      interval_minutes: isLoop ? finalInterval : null,
+      scheduled_at: scheduledAtUtc,
+      timezone_offset: new Date().getTimezoneOffset(),
+      is_enabled: autoIsEnabled,
+      delivery_method: autoDeliveryMethod,
+      recipient_email:
+        autoDeliveryMethod === 'email' || autoDeliveryMethod === 'both' ? autoRecipientEmail : null,
+    };
+
+    return { payload, finalInterval, scheduledAtUtc, isLoop, isOnce, isCalendar };
   };
 
   const fetchAutomationPreferences = async (type = 'daily_sales') => {
@@ -459,10 +722,24 @@ function ReportsTab({ data, loading, token }) {
         const pref = (json.data || []).find(p => p.report_type === type);
         if (pref) {
           setAutomationPref(pref);
-          setAutoFrequency(pref.frequency || 'every_5_minutes');
+          const freq = pref.frequency || 'every_5_minutes';
+          setAutoFrequency(freq);
           const interval = pref.interval_minutes || 5;
           setAutoIntervalMinutes(interval);
-          setCustomMinutesInput(String(interval));
+          if (freq === 'custom_minutes' && interval >= 60 && interval % 60 === 0) {
+            setAutoLoopUnit('hours');
+            setCustomMinutesInput(String(interval / 60));
+          } else {
+            setAutoLoopUnit('minutes');
+            setCustomMinutesInput(String(interval));
+          }
+          if (freq === 'scheduled_once' && pref.next_run_at) {
+            const targetDate = new Date(pref.next_run_at);
+            if (!isNaN(targetDate.getTime())) {
+              setAutoScheduledDate(formatLocalDateInput(targetDate));
+              setAutoScheduledTime(formatLocalTimeInput(targetDate));
+            }
+          }
           setAutoTimeOfDay(pref.time_of_day || '18:00');
           setAutoDayOfWeek(pref.day_of_week || 'monday');
           setAutoDayOfMonth(pref.day_of_month || 1);
@@ -471,16 +748,20 @@ function ReportsTab({ data, loading, token }) {
           setAutoRecipientEmail(pref.recipient_email || '');
 
           if (pref.is_enabled && pref.next_run_at) {
-            const diff = Math.max(0, Math.floor((new Date(pref.next_run_at).getTime() - Date.now()) / 1000));
+            const diff = Math.max(0, Math.ceil((new Date(pref.next_run_at).getTime() - Date.now()) / 1000));
             setCountdownSeconds(diff);
           } else {
             setCountdownSeconds(null);
           }
         } else {
+          const fallbackTarget = new Date(Date.now() + 5 * 60000);
           setAutomationPref(null);
           setAutoFrequency('every_5_minutes');
           setAutoIntervalMinutes(5);
+          setAutoLoopUnit('minutes');
           setCustomMinutesInput('5');
+          setAutoScheduledDate(formatLocalDateInput(fallbackTarget));
+          setAutoScheduledTime(formatLocalTimeInput(fallbackTarget));
           setAutoTimeOfDay('18:00');
           setAutoDayOfWeek('monday');
           setAutoDayOfMonth(1);
@@ -497,7 +778,7 @@ function ReportsTab({ data, loading, token }) {
     }
   };
 
-  // Continuous auto-execution when countdown finishes
+  // Continuous / scheduled auto-execution when countdown finishes
   const triggerExecuteDue = async () => {
     if (!automationPref?.id || isExecutingDue) return;
     setIsExecutingDue(true);
@@ -510,17 +791,22 @@ function ReportsTab({ data, loading, token }) {
       if (res.ok && json.success) {
         if (json.preference) {
           setAutomationPref(json.preference);
-          if (json.preference.next_run_at) {
-            const diff = Math.max(0, Math.floor((new Date(json.preference.next_run_at).getTime() - Date.now()) / 1000));
+          setAutoIsEnabled(json.preference.is_enabled !== false);
+          if (json.preference.is_enabled && json.preference.next_run_at) {
+            const diff = Math.max(0, Math.ceil((new Date(json.preference.next_run_at).getTime() - Date.now()) / 1000));
             setCountdownSeconds(diff);
+          } else {
+            setCountdownSeconds(null);
           }
         }
+        window.dispatchEvent(new CustomEvent('report_preferences_updated'));
         fetchSavedReports(automationType);
-        setTimeout(() => fetchSavedReports(automationType), 2000);
-        setTimeout(() => fetchSavedReports(automationType), 4500);
+        const completedOnce = json.preference?.frequency === 'scheduled_once' && json.preference?.is_enabled === false;
         setAutomationAlert({
           type: 'success',
-          text: `⚡ Automated report job queued & saving to database at ${new Date().toLocaleTimeString()}! Countdown restarted for next report.`,
+          text: completedOnce
+            ? `✅ Scheduled report "${json.data?.title || automationType.replace(/_/g, ' ')}" was generated at ${new Date().toLocaleTimeString()} and saved to Saved Reports!`
+            : `⚡ Automated report generated & saved to database at ${new Date().toLocaleTimeString()}! Countdown restarted for next run.`,
         });
       }
     } catch (err) {
@@ -537,19 +823,22 @@ function ReportsTab({ data, loading, token }) {
       return;
     }
 
-    const intervalTimer = setInterval(() => {
+    const updateTimer = () => {
       const targetTime = new Date(automationPref.next_run_at).getTime();
-      const diffSec = Math.floor((targetTime - Date.now()) / 1000);
+      const msRemaining = targetTime - Date.now();
 
-      if (diffSec <= 0) {
+      if (msRemaining <= 0) {
         setCountdownSeconds(0);
         if (!isExecutingDue) {
           triggerExecuteDue();
         }
       } else {
-        setCountdownSeconds(diffSec);
+        setCountdownSeconds(Math.ceil(msRemaining / 1000));
       }
-    }, 1000);
+    };
+
+    updateTimer();
+    const intervalTimer = setInterval(updateTimer, 1000);
 
     return () => clearInterval(intervalTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -560,6 +849,54 @@ function ReportsTab({ data, loading, token }) {
     fetchAutomationPreferences('daily_sales');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Listen for background automated report completions dispatched by Dashboard
+  useEffect(() => {
+    const handleGlobalGenerated = (event) => {
+      const items = Array.isArray(event?.detail) ? event.detail : [];
+      if (items.length === 0) return;
+
+      if (activeReport === 'saved-reports') {
+        fetchSavedReports(savedFilterType, savedFilterDate);
+      } else {
+        fetchSavedReports(automationType);
+      }
+
+      const matched = items.find((item) => item.report_type === automationType);
+      if (matched) {
+        setAutomationPref((prev) =>
+          prev
+            ? {
+                ...prev,
+                last_sent_at: new Date().toISOString(),
+                next_run_at: matched.next_run_at ?? null,
+                is_enabled: matched.is_enabled !== undefined ? matched.is_enabled : prev.is_enabled,
+              }
+            : prev
+        );
+        if (matched.is_enabled === false || !matched.next_run_at) {
+          setCountdownSeconds(null);
+          if (matched.is_enabled === false) {
+            setAutoIsEnabled(false);
+          }
+        } else {
+          const diff = Math.max(0, Math.ceil((new Date(matched.next_run_at).getTime() - Date.now()) / 1000));
+          setCountdownSeconds(diff);
+        }
+        setAutomationAlert({
+          type: 'success',
+          text:
+            matched.is_enabled === false
+              ? `✅ Scheduled report "${matched.saved_report?.title || automationType.replace(/_/g, ' ')}" generated and saved to Saved Reports!`
+              : `⚡ Automated report saved to Saved Reports at ${new Date().toLocaleTimeString()}! Countdown restarted.`,
+        });
+      }
+    };
+
+    window.addEventListener('automated_reports_generated', handleGlobalGenerated);
+    return () => window.removeEventListener('automated_reports_generated', handleGlobalGenerated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReport, automationType, savedFilterType, savedFilterDate]);
 
   const fetchSavedReports = async (type = 'all', date = '') => {
     setSavedReportsLoading(true);
@@ -595,30 +932,16 @@ function ReportsTab({ data, loading, token }) {
     setPrefSaving(true);
     setAutomationAlert(null);
     try {
-      let finalInterval = autoIntervalMinutes;
-      if (autoFrequency === 'custom_minutes') {
-        const parsed = parseInt(customMinutesInput, 10);
-        finalInterval = !isNaN(parsed) && parsed > 0 ? parsed : 5;
+      const built = buildAutomationPayload();
+      if (built.error) {
+        setAutomationAlert({ type: 'error', text: built.error });
+        return;
       }
-
-      const payload = {
-        report_type: automationType,
-        frequency: autoFrequency,
-        time_of_day: ['daily', 'weekly', 'monthly'].includes(autoFrequency) ? autoTimeOfDay : null,
-        day_of_week: autoFrequency === 'weekly' ? autoDayOfWeek : null,
-        day_of_month: autoFrequency === 'monthly' ? parseInt(autoDayOfMonth, 10) : null,
-        interval_minutes: ['every_5_minutes', 'every_10_minutes', 'every_15_minutes', 'every_30_minutes', 'hourly', 'every_2_hours', 'every_6_hours', 'custom_minutes'].includes(autoFrequency)
-          ? finalInterval
-          : null,
-        is_enabled: autoIsEnabled,
-        delivery_method: autoDeliveryMethod,
-        recipient_email: (autoDeliveryMethod === 'email' || autoDeliveryMethod === 'both') ? autoRecipientEmail : null,
-      };
 
       const res = await fetch(`${API_URL}/report-preferences`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(built.payload),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -628,14 +951,25 @@ function ReportsTab({ data, loading, token }) {
 
       // Immediately overwrite existing preference with new next_run_at countdown
       setAutomationPref(json.data);
-      if (json.data?.next_run_at) {
-        const diff = Math.max(0, Math.floor((new Date(json.data.next_run_at).getTime() - Date.now()) / 1000));
+      if (json.data?.is_enabled && json.data?.next_run_at) {
+        const diff = Math.max(0, Math.ceil((new Date(json.data.next_run_at).getTime() - Date.now()) / 1000));
         setCountdownSeconds(diff);
+      } else {
+        setCountdownSeconds(null);
       }
-      setAutomationAlert({
-        type: 'success',
-        text: `Automation schedule saved! Countdown started for ${finalInterval} minutes. Report will automatically compile and save to database upon completion.`
-      });
+      window.dispatchEvent(new CustomEvent('report_preferences_updated'));
+
+      let alertMsg = 'Automation schedule saved!';
+      if (!autoIsEnabled) {
+        alertMsg = 'Automation schedule saved (currently paused).';
+      } else if (built.isOnce && json.data?.next_run_at) {
+        alertMsg = `One-time report scheduled for ${new Date(json.data.next_run_at).toLocaleString()}. When reached, it will be saved to Saved Reports automatically.`;
+      } else if (built.isLoop) {
+        alertMsg = `Loop automation started (every ${built.finalInterval} minute${built.finalInterval === 1 ? '' : 's'}). Reports will compile and appear in Saved Reports continuously.`;
+      } else if (built.isCalendar && json.data?.next_run_at) {
+        alertMsg = `Recurring schedule saved! Next run at ${new Date(json.data.next_run_at).toLocaleString()}.`;
+      }
+      setAutomationAlert({ type: 'success', text: alertMsg });
     } catch {
       setAutomationAlert({ type: 'error', text: 'Network error: could not connect to server.' });
     } finally {
@@ -649,35 +983,23 @@ function ReportsTab({ data, loading, token }) {
     try {
       let prefId = automationPref?.id;
       if (!prefId) {
-        let finalInterval = autoIntervalMinutes;
-        if (autoFrequency === 'custom_minutes') {
-          const parsed = parseInt(customMinutesInput, 10);
-          finalInterval = !isNaN(parsed) && parsed > 0 ? parsed : 5;
+        const built = buildAutomationPayload({ allowPastOnceForRunNow: true });
+        if (built.error) {
+          setAutomationAlert({ type: 'error', text: built.error });
+          setTriggeringRun(false);
+          return;
         }
-
-        const payload = {
-          report_type: automationType,
-          frequency: autoFrequency,
-          time_of_day: ['daily', 'weekly', 'monthly'].includes(autoFrequency) ? autoTimeOfDay : null,
-          day_of_week: autoFrequency === 'weekly' ? autoDayOfWeek : null,
-          day_of_month: autoFrequency === 'monthly' ? parseInt(autoDayOfMonth, 10) : null,
-          interval_minutes: ['every_5_minutes', 'every_10_minutes', 'every_15_minutes', 'every_30_minutes', 'hourly', 'every_2_hours', 'every_6_hours', 'custom_minutes'].includes(autoFrequency)
-            ? finalInterval
-            : null,
-          is_enabled: autoIsEnabled,
-          delivery_method: autoDeliveryMethod,
-          recipient_email: (autoDeliveryMethod === 'email' || autoDeliveryMethod === 'both') ? autoRecipientEmail : null,
-        };
 
         const saveRes = await fetch(`${API_URL}/report-preferences`, {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(built.payload),
         });
         const saveJson = await saveRes.json();
         if (saveRes.ok && saveJson.data) {
           prefId = saveJson.data.id;
           setAutomationPref(saveJson.data);
+          window.dispatchEvent(new CustomEvent('report_preferences_updated'));
         } else {
           setAutomationAlert({ type: 'error', text: saveJson?.message || 'Could not initialize preference.' });
           setTriggeringRun(false);
@@ -695,17 +1017,21 @@ function ReportsTab({ data, loading, token }) {
         return;
       }
 
-      setAutomationAlert({ type: 'success', text: 'Report generation job queued! Once completed, it is automatically saved to the database.' });
+      setAutomationAlert({
+        type: 'success',
+        text: 'Report generated immediately and saved to Saved Reports in the database!',
+      });
       if (json.preference) {
         setAutomationPref(json.preference);
-        if (json.preference.next_run_at) {
-          const diff = Math.max(0, Math.floor((new Date(json.preference.next_run_at).getTime() - Date.now()) / 1000));
+        if (json.preference.is_enabled && json.preference.next_run_at) {
+          const diff = Math.max(0, Math.ceil((new Date(json.preference.next_run_at).getTime() - Date.now()) / 1000));
           setCountdownSeconds(diff);
+        } else {
+          setCountdownSeconds(null);
         }
       }
+      window.dispatchEvent(new CustomEvent('report_preferences_updated'));
       fetchSavedReports(automationType);
-      setTimeout(() => fetchSavedReports(automationType), 2000);
-      setTimeout(() => fetchSavedReports(automationType), 4500);
       if (json.data) {
         setViewingReport(json.data);
       }
@@ -746,6 +1072,57 @@ function ReportsTab({ data, loading, token }) {
   const totalRevenue = data.stats.totalSales - data.stats.totalPurchases;
 
   // ── Export Functions ──────────────────────────────────────────────────────
+  const handleExport = async (endpoint, payload, fallbackFileName, format = 'pdf') => {
+    const key = `${endpoint}_${format}`;
+    setExportingKey(key);
+    try {
+      const res = await fetch(`${API_URL}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...payload, format }),
+      });
+
+      if (!res.ok) {
+        let errMessage = 'Export failed.';
+        try {
+          const errData = await res.json();
+          errMessage = errData.message || (errData.errors ? Object.values(errData.errors).flat().join(', ') : errMessage);
+        } catch {
+          // ignore non-JSON error body
+        }
+        alert(`Export failed: ${errMessage}`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition');
+      let filename = `${fallbackFileName}.${format}`;
+      if (disposition && disposition.includes('filename=')) {
+        const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '').trim();
+        }
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Network error while exporting document. Please try again.');
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
   const exportToCSV = (data, filename) => {
     if (!data || data.length === 0) {
       alert('No data to export');
@@ -914,7 +1291,53 @@ function ReportsTab({ data, loading, token }) {
         </div>
         
         {/* Export Buttons */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'pdf')}
+            disabled={exportingKey === 'reports/overview/export_pdf'}
+            style={{
+              padding: '10px 16px',
+              background: exportingKey === 'reports/overview/export_pdf' ? '#94a3b8' : '#dc2626',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: exportingKey === 'reports/overview/export_pdf' ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s',
+              boxShadow: '0 2px 6px rgba(220,38,38,0.2)'
+            }}
+            onMouseEnter={e => { if (exportingKey !== 'reports/overview/export_pdf') e.currentTarget.style.background = '#b91c1c'; }}
+            onMouseLeave={e => { if (exportingKey !== 'reports/overview/export_pdf') e.currentTarget.style.background = '#dc2626'; }}
+          >
+            {exportingKey === 'reports/overview/export_pdf' ? '⏳ Generating...' : '📄 Overview PDF'}
+          </button>
+          <button
+            onClick={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'docx')}
+            disabled={exportingKey === 'reports/overview/export_docx'}
+            style={{
+              padding: '10px 16px',
+              background: exportingKey === 'reports/overview/export_docx' ? '#94a3b8' : '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: exportingKey === 'reports/overview/export_docx' ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 0.15s',
+              boxShadow: '0 2px 6px rgba(37,99,235,0.2)'
+            }}
+            onMouseEnter={e => { if (exportingKey !== 'reports/overview/export_docx') e.currentTarget.style.background = '#1d4ed8'; }}
+            onMouseLeave={e => { if (exportingKey !== 'reports/overview/export_docx') e.currentTarget.style.background = '#2563eb'; }}
+          >
+            {exportingKey === 'reports/overview/export_docx' ? '⏳ Generating...' : '📝 Overview Word'}
+          </button>
           <button
             onClick={exportOverviewToCSV}
             style={{
@@ -1018,6 +1441,34 @@ function ReportsTab({ data, loading, token }) {
       {/* ── OVERVIEW ── */}
       {activeReport === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <ReportExportBar
+            title="Business Overview Report"
+            onExportPdf={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'pdf')}
+            onExportWord={() => handleExport('reports/overview/export', {}, 'business_overview_report', 'docx')}
+            isPdfLoading={exportingKey === 'reports/overview/export_pdf'}
+            isWordLoading={exportingKey === 'reports/overview/export_docx'}
+            extraActions={
+              <button
+                type="button"
+                onClick={exportOverviewToCSV}
+                style={{
+                  padding: '8px 14px',
+                  background: '#f8fafc',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                📊 Export CSV
+              </button>
+            }
+          />
 
           {/* KPI row */}
           <div className="reports-kpi-grid">
@@ -1190,6 +1641,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Daily Sales Report (${reportData.date})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'daily', date: dailyDate }, `sales_daily_${dailyDate}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'daily', date: dailyDate }, `sales_daily_${dailyDate}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Date', value: reportData.date },
@@ -1306,6 +1764,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Weekly Sales Report (${reportData.week_start} to ${reportData.week_end})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'weekly', date: weeklyDate }, `sales_weekly_${weeklyDate}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'weekly', date: weeklyDate }, `sales_weekly_${weeklyDate}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
               {/* KPI cards */}
               <div className="reports-kpi-grid">
                 {[
@@ -1466,6 +1931,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Monthly Sales Report (${reportData.month})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'monthly', month: monthlyMonth }, `sales_monthly_${monthlyMonth}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'monthly', month: monthlyMonth }, `sales_monthly_${monthlyMonth}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
               {/* KPI cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {[
@@ -1634,6 +2106,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Yearly Sales Report (${reportData.year})`}
+                onExportPdf={() => handleExport('reports/sales/export', { report_type: 'yearly', year: parseInt(yearlyYear, 10) }, `sales_yearly_${yearlyYear}`, 'pdf')}
+                onExportWord={() => handleExport('reports/sales/export', { report_type: 'yearly', year: parseInt(yearlyYear, 10) }, `sales_yearly_${yearlyYear}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/sales/export_pdf'}
+                isWordLoading={exportingKey === 'reports/sales/export_docx'}
+              />
 
               {/* ── KPI row ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
@@ -1862,6 +2341,13 @@ function ReportsTab({ data, loading, token }) {
 
           {reportData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <ReportExportBar
+                title={`Daily Purchases Report (${reportData.date})`}
+                onExportPdf={() => handleExport('reports/purchases/export', { report_type: 'daily', date: dailyPurchasesDate }, `purchases_daily_${dailyPurchasesDate}`, 'pdf')}
+                onExportWord={() => handleExport('reports/purchases/export', { report_type: 'daily', date: dailyPurchasesDate }, `purchases_daily_${dailyPurchasesDate}`, 'docx')}
+                isPdfLoading={exportingKey === 'reports/purchases/export_pdf'}
+                isWordLoading={exportingKey === 'reports/purchases/export_docx'}
+              />
 
               {/* KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
@@ -2051,6 +2537,47 @@ function ReportsTab({ data, loading, token }) {
             </div>
           </div>
 
+          {/* Report Type Switcher for Automation */}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 12,
+            padding: '10px 14px',
+          }}>
+            {[
+              { id: 'daily_sales', label: 'Daily Sales' },
+              { id: 'weekly_sales', label: 'Weekly Sales' },
+              { id: 'monthly_sales', label: 'Monthly Sales' },
+              { id: 'yearly_sales', label: 'Yearly Sales' },
+              { id: 'daily_purchases', label: 'Daily Purchases' },
+              { id: 'monthly_purchases', label: 'Monthly Purchases' },
+            ].map((rt) => {
+              const active = automationType === rt.id;
+              return (
+                <button
+                  key={rt.id}
+                  type="button"
+                  onClick={() => openAutomationDetails(rt.id)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 8,
+                    border: active ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
+                    background: active ? '#eff6ff' : '#f8fafc',
+                    color: active ? '#1d4ed8' : '#475569',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {rt.label}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Hero Banner */}
           <div style={{
             background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
@@ -2068,11 +2595,18 @@ function ReportsTab({ data, loading, token }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <span style={{ fontSize: 24 }}>⚙️</span>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#ffffff' }}>
-                  Automate {automationType === 'weekly_sales' ? 'Weekly' : automationType === 'monthly_sales' ? 'Monthly' : 'Daily'} Sales Report Generation
+                  Automate {({
+                    daily_sales: 'Daily Sales',
+                    weekly_sales: 'Weekly Sales',
+                    monthly_sales: 'Monthly Sales',
+                    yearly_sales: 'Yearly Sales',
+                    daily_purchases: 'Daily Purchases',
+                    monthly_purchases: 'Monthly Purchases',
+                  }[automationType] || 'Sales')} Report Generation
                 </h2>
               </div>
               <p style={{ margin: 0, fontSize: 13, color: '#dbeafe', maxWidth: 680, lineHeight: 1.5 }}>
-                Configure your preferred schedule and interval. Reports are automatically compiled in the background, saved directly into your database, and can be previewed or exported anytime from this Reports module.
+                Set a continuous loop period or pick a specific future date &amp; time. Reports generate automatically on schedule, save directly to the database, and appear in Saved Reports.
               </p>
             </div>
 
@@ -2129,7 +2663,7 @@ function ReportsTab({ data, loading, token }) {
             </div>
           )}
 
-          {/* Live Continuous Countdown Banner */}
+          {/* Live Countdown Banner */}
           {autoIsEnabled && countdownSeconds !== null && (
             <div style={{
               background: 'linear-gradient(135deg, #065f46 0%, #047857 100%)',
@@ -2161,12 +2695,28 @@ function ReportsTab({ data, loading, token }) {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 800, color: '#a7f3d0' }}>
-                      Continuous Automated Generation Active
+                      {(automationPref?.frequency || autoFrequency) === 'scheduled_once'
+                        ? 'Scheduled Near-Future Report Active'
+                        : ['daily', 'weekly', 'monthly'].includes(automationPref?.frequency || autoFrequency)
+                          ? 'Recurring Calendar Schedule Active'
+                          : 'Continuous Loop Automation Active'}
                     </span>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
                   </div>
                   <div style={{ fontSize: 14, color: '#f0fdf4', marginTop: 4, fontWeight: 500 }}>
-                    Auto-generating every <strong>{autoIntervalMinutes} minute{autoIntervalMinutes !== 1 ? 's' : ''}</strong> for your tenant. Upon countdown completion, the report is saved to the database and the countdown loops automatically.
+                    {(automationPref?.frequency || autoFrequency) === 'scheduled_once' ? (
+                      <>
+                        Scheduled to run once at <strong>{automationPref?.next_run_at ? new Date(automationPref.next_run_at).toLocaleString() : `${autoScheduledDate} ${autoScheduledTime}`}</strong>. Upon completion, it is automatically saved to Saved Reports.
+                      </>
+                    ) : ['daily', 'weekly', 'monthly'].includes(automationPref?.frequency || autoFrequency) ? (
+                      <>
+                        Scheduled <strong>{automationPref?.frequency || autoFrequency}</strong>. Next run at <strong>{automationPref?.next_run_at ? new Date(automationPref.next_run_at).toLocaleString() : autoTimeOfDay}</strong> and saved automatically to Saved Reports.
+                      </>
+                    ) : (
+                      <>
+                        Auto-generating in a loop every <strong>{automationPref?.interval_minutes || autoIntervalMinutes} minute{(automationPref?.interval_minutes || autoIntervalMinutes) !== 1 ? 's' : ''}</strong>. Upon countdown completion, the report is saved to Saved Reports and restarts automatically.
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2174,7 +2724,7 @@ function ReportsTab({ data, loading, token }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 11, color: '#a7f3d0', textTransform: 'uppercase', fontWeight: 700 }}>
-                    Next Report In
+                    {(automationPref?.frequency || autoFrequency) === 'scheduled_once' ? 'Triggers In' : 'Next Report In'}
                   </div>
                   <div style={{ fontSize: 32, fontWeight: 900, fontFamily: 'monospace', color: '#ffffff', letterSpacing: '1px' }}>
                     {formatCountdown(countdownSeconds)}
@@ -2285,7 +2835,7 @@ function ReportsTab({ data, loading, token }) {
                   </div>
                 </div>
 
-                {/* Custom Minutes Input */}
+                {/* Custom Loop Period Input */}
                 <div style={{
                   padding: '16px 18px',
                   background: autoFrequency === 'custom_minutes' ? '#eff6ff' : '#f8fafc',
@@ -2295,41 +2845,72 @@ function ReportsTab({ data, loading, token }) {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label style={{ ...supS.label, marginBottom: 0, color: autoFrequency === 'custom_minutes' ? '#1d4ed8' : '#374151' }}>
-                      ⏱️ Or Enter Custom Minutes
+                      🔁 Or Enter Custom Loop Period
                     </label>
                     {autoFrequency === 'custom_minutes' && (
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '2px 8px', borderRadius: 10 }}>
-                        Custom Minutes Active
+                        Custom Loop Active
                       </span>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                     <input
                       type="number"
+                      aria-label="Custom loop period"
                       min="1"
-                      max="10080"
-                      placeholder="e.g. 7"
+                      max={autoLoopUnit === 'hours' ? 168 : 10080}
+                      step={autoLoopUnit === 'hours' ? '0.5' : '1'}
+                      placeholder="e.g. 5"
                       value={customMinutesInput}
                       onChange={e => handleCustomMinutesChange(e.target.value)}
                       onFocus={() => {
                         setAutoFrequency('custom_minutes');
-                        const parsed = parseInt(customMinutesInput, 10);
-                        if (!isNaN(parsed) && parsed > 0) setAutoIntervalMinutes(parsed);
+                        const parsed = parseFloat(customMinutesInput);
+                        if (!isNaN(parsed) && parsed > 0) {
+                          const mins = autoLoopUnit === 'hours' ? Math.round(parsed * 60) : Math.round(parsed);
+                          setAutoIntervalMinutes(Math.max(1, Math.min(10080, mins)));
+                        }
                       }}
-                      style={{ ...supS.input, width: 140, background: '#ffffff', fontWeight: 800, fontSize: 16, color: '#0f172a' }}
+                      style={{ ...supS.input, width: 120, background: '#ffffff', fontWeight: 800, fontSize: 16, color: '#0f172a' }}
                     />
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#334155' }}>minutes per report</span>
+                    <div style={{ display: 'inline-flex', border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden', background: '#ffffff' }}>
+                      {[
+                        { id: 'minutes', label: 'Minutes' },
+                        { id: 'hours', label: 'Hours' },
+                      ].map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => handleLoopUnitChange(u.id)}
+                          style={{
+                            border: 'none',
+                            padding: '8px 12px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: autoLoopUnit === u.id ? '#2563eb' : '#ffffff',
+                            color: autoLoopUnit === u.id ? '#ffffff' : '#475569',
+                          }}
+                        >
+                          {u.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
+                      ({autoIntervalMinutes} min loop)
+                    </span>
                   </div>
                   <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>
-                    Type any minute interval (e.g. 1, 2, 5, 7, 12, 45). The system will continuously generate and archive your report every {customMinutesInput || autoIntervalMinutes} minutes.
+                    Enter any loop duration (from 1 minute up to 7 days). The system will continuously generate and archive your report every {autoIntervalMinutes} minute{autoIntervalMinutes !== 1 ? 's' : ''}.
                   </p>
                 </div>
 
-                {/* Calendar Schedules */}
+                {/* Specific Future Date/Time & Calendar Schedules */}
                 <div>
-                  <label style={supS.label}>Or Choose Calendar Schedule</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 6 }}>
+                  <label style={supS.label}>Or Schedule Specific Future Time / Calendar Cycle</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginTop: 6 }}>
                     {[
+                      { id: 'scheduled_once', title: '📅 Specific Time', desc: 'One-time near future' },
                       { id: 'daily', title: 'Daily', desc: 'At specific time of day' },
                       { id: 'weekly', title: 'Weekly', desc: 'Day of week & time' },
                       { id: 'monthly', title: 'Monthly', desc: 'Day of month & time' },
@@ -2359,6 +2940,78 @@ function ReportsTab({ data, loading, token }) {
                     })}
                   </div>
                 </div>
+
+                {/* Near-Future Specific Date & Time Picker */}
+                {autoFrequency === 'scheduled_once' && (
+                  <div style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>
+                        📅 Specific Future Date &amp; Time
+                      </h4>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#1e40af' }}>
+                        Pick the exact date and time in the near future. When that time arrives, the report generates automatically and appears in Saved Reports.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 160 }}>
+                        <label style={supS.label}>Target Date</label>
+                        <input
+                          type="date"
+                          aria-label="Scheduled future date"
+                          min={formatLocalDateInput(new Date())}
+                          value={autoScheduledDate}
+                          onChange={e => setAutoScheduledDate(e.target.value)}
+                          style={{ ...supS.input, background: '#ffffff' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 140 }}>
+                        <label style={supS.label}>Target Time (Local)</label>
+                        <input
+                          type="time"
+                          aria-label="Scheduled future time"
+                          value={autoScheduledTime}
+                          onChange={e => setAutoScheduledTime(e.target.value)}
+                          style={{ ...supS.input, background: '#ffffff' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#1e40af', marginBottom: 6 }}>
+                        Quick Near-Future Shortcuts:
+                      </span>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {[
+                          { label: '+1 min', mins: 1 },
+                          { label: '+2 mins', mins: 2 },
+                          { label: '+5 mins', mins: 5 },
+                          { label: '+15 mins', mins: 15 },
+                          { label: '+30 mins', mins: 30 },
+                          { label: '+1 hour', mins: 60 },
+                        ].map((q) => (
+                          <button
+                            key={q.mins}
+                            type="button"
+                            onClick={() => handleSelectQuickFutureOffset(q.mins)}
+                            style={{
+                              border: '1px solid #93c5fd',
+                              borderRadius: 6,
+                              background: '#ffffff',
+                              color: '#1d4ed8',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '5px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {q.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Conditional Timing Details */}
                 {['daily', 'weekly', 'monthly'].includes(autoFrequency) && (
@@ -2446,12 +3099,19 @@ function ReportsTab({ data, loading, token }) {
                   </div>
                 )}
 
-                {/* Sub-day Interval explanation */}
-                {!['daily', 'weekly', 'monthly'].includes(autoFrequency) && (
+                {/* Schedule Mode Summary */}
+                {autoFrequency === 'scheduled_once' ? (
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 14 }}>
+                    <p style={{ margin: 0, fontSize: 13, color: '#1e40af', lineHeight: 1.4 }}>
+                      📅 <strong>Scheduled One-Time Generation:</strong> Your report is set for{' '}
+                      <strong>{autoScheduledDate} at {autoScheduledTime}</strong>. When that time is reached, it will be saved directly to Saved Reports.
+                    </p>
+                  </div>
+                ) : !['daily', 'weekly', 'monthly'].includes(autoFrequency) && (
                   <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 14 }}>
                     <p style={{ margin: 0, fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
-                      ⚡ <strong>Continuous Automation:</strong> A report will automatically compile and save to the database 
-                      <strong> every {customMinutesInput || autoIntervalMinutes} minutes</strong> containing the current day's up-to-the-minute sales.
+                      ⚡ <strong>Continuous Loop Automation:</strong> A report will automatically compile and save to Saved Reports{' '}
+                      <strong>every {autoIntervalMinutes} minute{autoIntervalMinutes !== 1 ? 's' : ''}</strong> in a repeating loop.
                     </p>
                   </div>
                 )}
@@ -2806,7 +3466,26 @@ function ReportsTab({ data, loading, token }) {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => openAutomationDetails(savedFilterType !== 'all' ? savedFilterType : 'daily_sales')}
+                style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: 8,
+                  padding: '9px 16px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#1d4ed8',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                ⚙️ Automate Reports
+              </button>
               <button
                 onClick={() => fetchSavedReports(savedFilterType, savedFilterDate)}
                 style={{

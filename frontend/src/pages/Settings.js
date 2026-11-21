@@ -6,6 +6,7 @@ import {
   computeExtendedSubscriptionExpiry,
   getRemainingSubscriptionDays,
 } from '../utils/subscription';
+import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 
 const SYSTEM_MODULES = [
   {
@@ -120,6 +121,7 @@ export default function Settings({
     signature_url: '',
     signature_path: '',
     enabled_modules: {},
+    receipt_color: 'rose'
   });
 
   const [loading, setLoading] = useState(true);
@@ -154,6 +156,7 @@ export default function Settings({
     signature: null,
     remove_signature: false,
     enabled_modules: {},
+    receipt_color: 'rose'
   });
 
   // Keep active tab in sync if initialTab prop changes
@@ -205,6 +208,7 @@ export default function Settings({
           payment_terms: result.data.payment_terms || '',
           invoice_notes: result.data.invoice_notes || '',
           enabled_modules: result.data.enabled_modules || fallbackEnabledModules || {},
+          receipt_color: result.data.receipt_color || 'rose'
         };
         setBusinessInfo(prev => ({
           ...prev,
