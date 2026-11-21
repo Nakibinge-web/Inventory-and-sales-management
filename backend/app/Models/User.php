@@ -81,6 +81,11 @@ class User extends Authenticatable
             ->exists();
     }
 
+    public function isDeveloper(): bool
+    {
+        return $this->hasPermission('developer.portal.access');
+    }
+
     public function sales()
     {
         return $this->hasMany(Sale::class);

@@ -164,13 +164,13 @@ class PermissionController extends Controller
         return response()->json(['success' => true, 'message' => 'Permission revoked successfully.']);
     }
 
-    // Ensure the permission is either a default or belongs to the current tenant
+    // Ensure the permission is either a default (non-developer) or belongs to the current tenant
     private function authorizePermission(Permission $permission): void
     {
         $tenantId = Auth::user()->tenant_id;
 
-        if (!$permission->is_default && $permission->tenant_id !== $tenantId) {
-            abort(403, 'This permission does not belong to your tenant.');
+        if ($permission->group === 'developer' || (!$permission->is_default && $permission->tenant_id !== $tenantId)) {
+            abort(403, 'This permission is not accessible or does not belong to your tenant.');
         }
     }
 }

@@ -12,6 +12,8 @@ import EditProductForm from './components/EditProductForm';
 import { ToastContainer, useToast } from './components/ui/Toast';
 import Settings from './pages/Settings';
 import SaleReceipt from './components/SaleReceipt';
+import DeveloperPortal from './developer/DeveloperPortal';
+import { isDeveloper } from './developer/developerPermissions';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
@@ -19,6 +21,14 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [settingsInitialTab, setSettingsInitialTab] = useState('branding');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isPureDeveloper = Boolean(
+    user?.roles &&
+    user.roles.some(r => r.name === 'developer') &&
+    !user.roles.some(r => ['owner', 'admin', 'manager', 'cashier'].includes(r.name))
+  );
+  const [viewDevPortal, setViewDevPortal] = useState(
+    isPureDeveloper || isDeveloper(user)
+  );
   const { toasts, toast, remove } = useToast();
 
   // Lock body scroll when mobile nav drawer is open
@@ -175,6 +185,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   };
 
   useEffect(() => {
+    if (viewDevPortal) return;
     fetchData();
     
     // Lightweight auto-refresh for notifications every 30 seconds
@@ -184,7 +195,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     }, 30000); // 30 seconds
     
     return () => clearInterval(notificationRefreshInterval);
-  }, [fetchData, refreshNotifications]);
+  }, [fetchData, refreshNotifications, viewDevPortal]);
 
   // ── Global search ──────────────────────────────────────────────────────────
   const handleSearch = (q) => {
@@ -269,6 +280,17 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
     ...(isModuleEnabled('ai') ? [{ id: 'ai', label: 'AI Assistant', icon: '🤖', color: 'primary' }] : []),
     ...(isOwnerOrAdmin || hasPermission('users.view') || hasPermission('roles.view') ? [{ id: 'users', label: 'Users', icon: '🔑', color: 'primary' }] : []),
   ];
+
+  if (viewDevPortal) {
+    return (
+      <DeveloperPortal
+        user={user}
+        token={token}
+        onLogout={onLogout}
+        onSwitchToApp={isPureDeveloper ? null : () => setViewDevPortal(false)}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -661,6 +683,16 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               </span>
             </div>
           </div>
+          {isDeveloper(user) && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setViewDevPortal(true)}
+              style={{ backgroundColor: '#4338ca', borderColor: '#4338ca' }}
+            >
+              ⚡ Developer Portal
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={onLogout}>
             <span className="logout-text-long">Logout</span>
             <span className="logout-text-short">✕</span>
@@ -809,6 +841,22 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   <span style={styles.menuLabel}>Settings</span>
                   {activeTab === 'settings' && settingsInitialTab !== 'modules' && <div style={styles.activeIndicator} />}
                 </button>
+                {isDeveloper(user) && (
+                  <button
+                    style={{
+                      ...styles.menuItem,
+                      backgroundColor: '#eef2ff',
+                      color: '#4338ca',
+                      border: '1px solid #c7d2fe',
+                      fontWeight: 600,
+                      marginTop: '6px',
+                    }}
+                    onClick={() => { setViewDevPortal(true); setMobileNavOpen(false); }}
+                  >
+                    <span style={styles.menuIcon}>⚡</span>
+                    <span style={styles.menuLabel}>Developer Portal</span>
+                  </button>
+                )}
                 <div style={{ height: 16 }} />
               </div>
             )}

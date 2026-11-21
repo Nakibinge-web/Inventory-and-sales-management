@@ -7,13 +7,17 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Alter the ENUM to include ADJUSTMENT
-        DB::statement("ALTER TABLE stock_movements MODIFY COLUMN type ENUM('IN', 'OUT', 'ADJUSTMENT') NOT NULL");
+        // Alter the ENUM to include ADJUSTMENT (MySQL specific)
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE stock_movements MODIFY COLUMN type ENUM('IN', 'OUT', 'ADJUSTMENT') NOT NULL");
+        }
     }
 
     public function down(): void
     {
         // Revert — any existing ADJUSTMENT rows will be truncated back to ''
-        DB::statement("ALTER TABLE stock_movements MODIFY COLUMN type ENUM('IN', 'OUT') NOT NULL");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE stock_movements MODIFY COLUMN type ENUM('IN', 'OUT') NOT NULL");
+        }
     }
 };

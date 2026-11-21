@@ -206,3 +206,51 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::match(['put', 'post'], '/modules', [\App\Http\Controllers\SettingsController::class, 'updateModules']);
     });
 });
+
+// Developer Portal Routes — guarded by Sanctum and EnsureDeveloper (bypasses EnsureTenantMiddleware)
+Route::prefix('developer')->middleware(['auth:sanctum', 'developer'])->group(function () {
+    Route::get('/ping', function () {
+        return response()->json(['success' => true, 'message' => 'Developer portal authorized.']);
+    });
+
+    // Aggregated Dashboard Metrics
+    Route::get('/dashboard/stats', [\App\Http\Controllers\Developer\DeveloperDashboardController::class, 'stats']);
+
+    // Request Telemetry Logs (requires developer.telemetry.view)
+    Route::middleware('developer:developer.telemetry.view')->group(function () {
+        Route::get('/requests', [\App\Http\Controllers\Developer\DeveloperTelemetryController::class, 'index']);
+        Route::get('/requests/{id}', [\App\Http\Controllers\Developer\DeveloperTelemetryController::class, 'show']);
+    });
+
+    // Activity & Audit Logs (requires developer.activity.view)
+    Route::middleware('developer:developer.activity.view')->group(function () {
+        Route::get('/activity', [\App\Http\Controllers\Developer\DeveloperActivityController::class, 'index']);
+        Route::get('/activity/{id}', [\App\Http\Controllers\Developer\DeveloperActivityController::class, 'show']);
+    });
+
+    // Tenant Directory & Details (requires developer.tenants.view)
+    Route::middleware('developer:developer.tenants.view')->group(function () {
+        Route::get('/tenants', [\App\Http\Controllers\Developer\DeveloperTenantController::class, 'index']);
+        Route::get('/tenants/{id}', [\App\Http\Controllers\Developer\DeveloperTenantController::class, 'show']);
+    });
+
+    // Tenant Status Management (requires developer.tenants.manage)
+    Route::middleware('developer:developer.tenants.manage')->group(function () {
+        Route::patch('/tenants/{id}/status', [\App\Http\Controllers\Developer\DeveloperTenantController::class, 'updateStatus']);
+    });
+
+    // Tenant Subscriptions & History (requires developer.subscriptions.view)
+    Route::middleware('developer:developer.subscriptions.view')->group(function () {
+        Route::get('/subscriptions', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'index']);
+        Route::get('/subscriptions/{id}', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'show']);
+        Route::get('/tenants/{id}/subscription', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'tenantSubscription']);
+    });
+
+    // Subscription Mutations: Trial Extension & Plan Change (requires developer.subscriptions.manage)
+    Route::middleware('developer:developer.subscriptions.manage')->group(function () {
+        Route::post('/tenants/{id}/subscription/extend-trial', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'extendTrial']);
+        Route::post('/subscriptions/{id}/extend-trial', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'extendTrial']);
+        Route::post('/tenants/{id}/subscription/change-plan', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'changePlan']);
+        Route::post('/subscriptions/{id}/change-plan', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'changePlan']);
+    });
+});

@@ -28,6 +28,7 @@ class Tenant extends Model
         'payment_terms',
         'invoice_notes',
         'enabled_modules',
+        'status',
     ];
 
     public const DEFAULT_MODULES = [
@@ -138,5 +139,20 @@ class Tenant extends Model
     public function stockMovements()
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function subscription()
+    {
+        return $this->hasOne(TenantSubscription::class);
+    }
+
+    public function subscriptionHistory()
+    {
+        return $this->hasMany(SubscriptionHistory::class)->orderByDesc('created_at');
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === 'suspended';
     }
 }
