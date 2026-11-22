@@ -102,14 +102,14 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
   const [mode, setMode] = useState(() => initialMode || getPathMode());
   const [form, setForm] = useState({
     name: '',
+    login: '',
     email: '',
+    username: '',
     password: '',
     password_confirmation: '',
     business_name: '',
     phone: '',
     address: '',
-    username: '',
-    login: '',
   });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -159,24 +159,30 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
     setLoading(true);
     setError(null);
 
-    if (mode === 'register') {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const loginIdentifier = (form.login || form.email || '').trim();
+    const trimmedEmail = (form.email || '').trim();
+    const trimmedUsername = (form.username || '').trim();
+
+    if (mode === 'login') {
+      if (!loginIdentifier) {
+        setError('Please enter your email or username');
+        setLoading(false);
+        return;
+      }
+      if (loginIdentifier.includes('@') && !emailRegex.test(loginIdentifier)) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+    } else {
       if (!form.name.trim()) {
         setError('Full name is required');
         setLoading(false);
         return;
       }
-      if (!form.business_name.trim()) {
-        setError('Business name is required');
-        setLoading(false);
-        return;
-      }
-      if (!form.username.trim()) {
-        setError('Username is required');
-        setLoading(false);
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]{3,30}$/.test(form.username.trim())) {
-        setError('Username must be 3–30 characters and contain only letters, numbers, and underscores');
+      if (!emailRegex.test(trimmedEmail)) {
+        setError('Please enter a valid email address');
         setLoading(false);
         return;
       }
@@ -190,25 +196,13 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
         setLoading(false);
         return;
       }
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (mode === 'login') {
-      const loginVal = (form.login || form.email || '').trim();
-      if (!loginVal) {
-        setError('Email or username is required');
+      if (!trimmedUsername || trimmedUsername.length < 3 || trimmedUsername.length > 30 || !/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
+        setError('Username must be 3-30 characters (letters, numbers, underscores)');
         setLoading(false);
         return;
       }
-      if (loginVal.includes('@') && !emailRegex.test(loginVal)) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
-    } else {
-      if (!emailRegex.test(form.email)) {
-        setError('Please enter a valid email address');
+      if (!form.business_name.trim()) {
+        setError('Business name is required');
         setLoading(false);
         return;
       }
@@ -225,17 +219,17 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
         res = await fetch(`${API}/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ login: form.login || form.email, password: form.password }),
+          body: JSON.stringify({ login: loginIdentifier, password: form.password }),
         });
       } else {
         // Use FormData to support file upload
         const fd = new FormData();
-        fd.append('name', form.name);
-        fd.append('email', form.email);
-        fd.append('username', form.username.trim().toLowerCase());
+        fd.append('name', form.name.trim());
+        fd.append('email', trimmedEmail);
+        fd.append('username', trimmedUsername);
         fd.append('password', form.password);
         fd.append('password_confirmation', form.password_confirmation);
-        fd.append('business_name', form.business_name);
+        fd.append('business_name', form.business_name.trim());
         if (form.phone) fd.append('phone', form.phone);
         if (form.address) fd.append('address', form.address);
         if (logoFile) fd.append('logo', logoFile);
@@ -290,14 +284,14 @@ export default function AuthPage({ initialMode, onAuthSuccess, onLogout }) {
     setError(null);
     setForm({
       name: '',
+      login: '',
       email: '',
+      username: '',
       password: '',
       password_confirmation: '',
       business_name: '',
       phone: '',
       address: '',
-      username: '',
-      login: '',
     });
     setLogoFile(null);
     setLogoPreview(null);

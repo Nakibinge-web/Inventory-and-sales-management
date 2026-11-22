@@ -36,7 +36,14 @@ return [
     ],
 
     'mistral' => [
-        'key' => env('MISTRAL_API_KEY'),
+        'key'       => env('MISTRAL_API_KEY'),
+        'model'     => env('MISTRAL_MODEL', 'open-mistral-7b'),
+        'ca_bundle' => env('CURL_CA_BUNDLE'),
+    ],
+
+    'gemini' => [
+        'key'       => env('GEMINI_API_KEY'),
+        'model'     => env('GEMINI_MODEL', 'gemini-3-flash-preview'),
         'ca_bundle' => env('CURL_CA_BUNDLE'),
     ],
 

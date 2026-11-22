@@ -50,6 +50,9 @@ class SettingsController extends Controller
                 'payment_terms' => $tenant->payment_terms,
                 'invoice_notes' => $tenant->invoice_notes,
                 'enabled_modules' => $tenant->enabled_modules,
+                'subscription_plan' => $tenant->subscription_plan ?? 'trial',
+                'subscription_status' => $tenant->subscription_status ?? 'trial',
+                'subscription_expires_at' => $tenant->subscription_expires_at,
                 'created_at' => $tenant->created_at,
                 'updated_at' => $tenant->updated_at,
             ]
@@ -88,6 +91,22 @@ class SettingsController extends Controller
             'address' => 'nullable|string',
             'receipt_color' => 'nullable|string|max:30',
             'logo' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
+            'tagline' => 'nullable|string|max:255',
+            'tin' => 'nullable|string|max:100',
+            'website' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'account_name' => 'nullable|string|max:255',
+            'account_number' => 'nullable|string|max:255',
+            'mobile_money_number' => 'nullable|string|max:100',
+            'mobile_money_name' => 'nullable|string|max:255',
+            'payment_terms' => 'nullable|string|max:255',
+            'invoice_notes' => 'nullable|string',
+            'enabled_modules' => 'nullable|array',
+            'receipt_color' => 'nullable|string|max:30',
+            'logo' => $logoRule,
+            'signature' => 'nullable',
+            'remove_logo' => 'nullable|boolean',
+            'remove_signature' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -102,7 +121,7 @@ class SettingsController extends Controller
             'name', 'email', 'phone', 'address', 'tagline', 'tin', 'website',
             'bank_name', 'account_name', 'account_number',
             'mobile_money_number', 'mobile_money_name',
-            'payment_terms', 'invoice_notes', 'enabled_modules'
+            'payment_terms', 'invoice_notes', 'enabled_modules', 'receipt_color'
         ];
 
         $updateData = [];
@@ -203,6 +222,9 @@ class SettingsController extends Controller
                 'payment_terms' => $tenant->payment_terms,
                 'invoice_notes' => $tenant->invoice_notes,
                 'enabled_modules' => $tenant->enabled_modules,
+                'subscription_plan' => $tenant->subscription_plan ?? 'trial',
+                'subscription_status' => $tenant->subscription_status ?? 'trial',
+                'subscription_expires_at' => $tenant->subscription_expires_at,
                 'updated_at' => $tenant->updated_at,
             ]
         ]);

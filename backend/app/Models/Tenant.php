@@ -35,6 +35,7 @@ class Tenant extends Model
         'payment_terms',
         'invoice_notes',
         'enabled_modules',
+        'ai_provider',
         'subscription_plan',
         'subscription_status',
         'subscription_expires_at',

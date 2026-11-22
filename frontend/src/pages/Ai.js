@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import styles from '../styles/dashboardStyles';
 import { API_URL } from '../config/api';
 
-function AiTab({ token, data }) {
+function AiTab({ token, data, user }) {
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' };
 
   const [messages, setMessages] = useState([
@@ -13,9 +13,16 @@ function AiTab({ token, data }) {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-    const [cooldown, setCooldown] = useState(0); // seconds remaining
+  const [cooldown, setCooldown] = useState(0); // seconds remaining
+  const [aiStatus, setAiStatus] = useState(null);
+  const [switchingProvider, setSwitchingProvider] = useState(false);
+  const [providerNotice, setProviderNotice] = useState(null);
   const bottomRef = useRef(null);
   const cooldownRef = useRef(null);
+
+  const isPrivilegedOwner = (user?.roles || []).some(
+    (r) => r.name === 'owner' || r.name === 'admin'
+  );
 
   const QUICK_PROMPTS = [
     { label: 'Sales performance', icon: '📊', text: 'How did my sales perform this month compared to last month?' },
@@ -25,6 +32,24 @@ function AiTab({ token, data }) {
     { label: 'Profit analysis', icon: '💰', text: 'What is my estimated gross profit this month and how can I improve it?' },
     { label: 'Busiest days', icon: '📅', text: 'What are my busiest sales days and peak revenue periods?' },
   ];
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/ai/status`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.success && json.data) {
+          setAiStatus(json.data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      clearInterval(cooldownRef.current);
+    };
+  }, [token]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,26 +66,71 @@ function AiTab({ token, data }) {
     }, 1000);
   };
 
+  const handleSwitchProvider = async (nextProvider) => {
+    if (switchingProvider) return;
+    setSwitchingProvider(true);
+    setProviderNotice(null);
+    try {
+      const res = await fetch(`${API_URL}/ai/provider`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ provider: nextProvider }),
+      });
+      const json = await res.json();
+      if (res.ok && json?.success && json.data) {
+        setAiStatus(json.data);
+        setProviderNotice({
+          type: 'success',
+          text: json.message || `Switched to ${json.data.active_label}.`,
+        });
+      } else {
+        setProviderNotice({
+          type: 'error',
+          text: json?.message || 'Could not switch AI provider.',
+        });
+      }
+    } catch {
+      setProviderNotice({
+        type: 'error',
+        text: 'Network error while switching AI provider.',
+      });
+    } finally {
+      setSwitchingProvider(false);
+    }
+  };
+
   const send = async (questionText) => {
     const q = (questionText ?? input).trim();
     if (!q || loading || cooldown > 0) return;
     setInput('');
-        setMessages(prev => [...prev, { role: 'user', text: q }]);
+    setMessages(prev => [...prev, { role: 'user', text: q }]);
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/ai/chat`, { method: 'POST', headers, body: JSON.stringify({ question: q }) });
       const json = await res.json();
       if (!res.ok || !json.success) {
         const msg = res.status === 429
-          ? '⏳ The AI service is rate-limited right now. Please wait 30 seconds and try again.'
-          : json.message || 'The AI service returned an error.';
-                setMessages(prev => [...prev, { role: 'assistant', text: msg }]);
+          ? '⏳ The AI service is rate-limited right now. Please wait 30 seconds or switch providers.'
+          : json.security_blocked
+            ? `🛡️ ${json.message}`
+            : json.message || 'The AI service returned an error.';
+        setMessages(prev => [...prev, { role: 'assistant', text: msg }]);
         if (res.status === 429) startCooldown(30);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', text: json.answer }]);
+        if (json.provider_label) {
+          setAiStatus((prev) =>
+            prev
+              ? { ...prev, active_provider: json.provider, active_label: json.provider_label }
+              : prev
+          );
+        }
+        const answerText = json.failover_used
+          ? `${json.answer}\n\n_(Automatically failed over to ${json.provider_label || json.provider} after primary API limit.)_`
+          : json.answer;
+        setMessages(prev => [...prev, { role: 'assistant', text: answerText }]);
       }
     } catch {
-            setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Could not reach the server. Please check your connection.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ Could not reach the server. Please check your connection.' }]);
     } finally {
       setLoading(false);
     }
@@ -81,53 +151,80 @@ function AiTab({ token, data }) {
     });
   };
 
+  const activeProviderLabel = aiStatus?.active_label || 'Mistral AI / Google Gemini';
+  const currentSelection = aiStatus?.tenant_override || 'auto';
+
   return (
     <div style={styles.pageContainer}>
       {/* Header */}
-      <div className="section-hero" style={{ background: '#ffffff', borderRadius: 14, padding: '24px 28px', marginBottom: 24, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.03)' }}>
+      <div className="section-hero" style={{ background: '#ffffff', borderRadius: 14, padding: '24px 28px', marginBottom: 24, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 44, height: 44, borderRadius: 10, background: '#eef2ff', border: '1px solid #c7d2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🤖</div>
           <div>
-            <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Powered by Mistral AI</p>
+            <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Powered by {activeProviderLabel}
+            </p>
             <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>AI Business Assistant</h1>
-            <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Analyse your financial data, spot trends, and forecast business performance</p>
+            <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+              Analyse your financial data, spot trends, and forecast business performance
+            </p>
           </div>
         </div>
+
+        {/* Owner/Admin Switchable AI Provider Control */}
+        {isPrivilegedOwner && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              AI Provider {aiStatus?.auto_fallback ? '(Auto-Failover On)' : ''}
+            </span>
+            <div style={{ display: 'inline-flex', gap: 6, background: '#f1f5f9', padding: 4, borderRadius: 10 }}>
+              {[
+                { id: 'mistral', label: 'Mistral AI' },
+                { id: 'gemini', label: 'Google Gemini' },
+                { id: 'auto', label: 'Auto (.env)' },
+              ].map((opt) => {
+                const isSelected = currentSelection === opt.id;
+                const providerCfg = aiStatus?.providers?.[opt.id];
+                const isReady = opt.id === 'auto' || providerCfg?.configured !== false;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={switchingProvider}
+                    onClick={() => handleSwitchProvider(opt.id)}
+                    title={!isReady ? `${opt.label} API key is not configured in backend/.env` : `Switch AI Assistant to ${opt.label}`}
+                    style={{
+                      border: 'none',
+                      borderRadius: 7,
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: switchingProvider ? 'not-allowed' : 'pointer',
+                      background: isSelected ? '#4f46e5' : 'transparent',
+                      color: isSelected ? '#ffffff' : isReady ? '#334155' : '#94a3b8',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {providerNotice && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: providerNotice.type === 'error' ? '#dc2626' : '#16a34a' }}>
+                {providerNotice.text}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="ai-layout">
-        {/* ── Chat panel ── */}
-        <div className="ai-chat-panel" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
 
-          {/* Quick chips bar — visible on mobile for 1-tap questions */}
-          <div className="ai-chips-scroll" style={{ padding: '12px 14px 4px', borderBottom: '1px solid #f1f5f9', background: '#fafbff' }}>
-            {QUICK_PROMPTS.map(p => (
-              <button
-                key={p.label}
-                onClick={() => send(p.text)}
-                disabled={loading || cooldown > 0}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 12px',
-                  borderRadius: 20,
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: '#334155',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                <span>{p.icon}</span>
-                <span>{p.label}</span>
-              </button>
-            ))}
-          </div>
+        {/* ── Chat panel ── */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
 
           {/* Messages */}
-          <div className="ai-messages-container" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 420, maxHeight: 560 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, minHeight: 420, maxHeight: 560 }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
                 {/* Avatar */}
@@ -140,13 +237,12 @@ function AiTab({ token, data }) {
                   {msg.role === 'user' ? '👤' : '🤖'}
                 </div>
                 {/* Bubble */}
-                <div className="ai-bubble" style={{
+                <div style={{
                   maxWidth: '78%', padding: '12px 16px', borderRadius: msg.role === 'user' ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
                   background: msg.role === 'user' ? '#4f46e5' : '#f8fafc',
                   border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0',
                   color: msg.role === 'user' ? '#fff' : '#0f172a',
                   fontSize: 14, lineHeight: '1.6',
-                  wordBreak: 'break-word',
                 }}>
                   {renderText(msg.text)}
                 </div>
@@ -156,7 +252,7 @@ function AiTab({ token, data }) {
             {/* Typing indicator */}
             {loading && (
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>🤖</div>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🤖</div>
                 <div style={{ padding: '12px 18px', borderRadius: '4px 14px 14px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', gap: 5, alignItems: 'center' }}>
                   {[0, 1, 2].map(d => (
                     <div key={d} style={{ width: 7, height: 7, borderRadius: '50%', background: '#94a3b8', animation: `aiPulse 1.2s ease-in-out ${d * 0.2}s infinite` }} />
@@ -181,22 +277,22 @@ function AiTab({ token, data }) {
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder="Ask anything about your business… (Enter to send, Shift+Enter for new line)"
                 rows={2}
-                style={{ flex: 1, padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', resize: 'none', outline: 'none', background: '#fff', color: '#0f172a', lineHeight: '1.5', minWidth: 0 }}
+                style={{ flex: 1, padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontFamily: 'inherit', resize: 'none', outline: 'none', background: '#fff', color: '#0f172a', lineHeight: '1.5' }}
               />
               <button
                 onClick={() => send()}
                 disabled={!input.trim() || loading || cooldown > 0}
-                style={{ minHeight: 44, minWidth: 44, padding: '10px 16px', borderRadius: 10, border: 'none', background: input.trim() && !loading && !cooldown ? '#4f46e5' : '#e2e8f0', color: input.trim() && !loading && !cooldown ? '#fff' : '#94a3b8', cursor: input.trim() && !loading && !cooldown ? 'pointer' : 'not-allowed', fontSize: 18, transition: 'all 0.15s', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: input.trim() && !loading && !cooldown ? '#4f46e5' : '#e2e8f0', color: input.trim() && !loading && !cooldown ? '#fff' : '#94a3b8', cursor: input.trim() && !loading && !cooldown ? 'pointer' : 'not-allowed', fontSize: 18, transition: 'all 0.15s', flexShrink: 0, lineHeight: 1 }}
               >
                 {cooldown > 0 ? `${cooldown}s` : '➤'}
               </button>
             </div>
-            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Your live business data is sent as context. No data is stored by the AI.</p>
+            <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>Your live business data is sent as context. Protected against prompt injection.</p>
           </div>
         </div>
 
         {/* ── Right panel: quick prompts + data snapshot ── */}
-        <div className="ai-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Quick prompts */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>

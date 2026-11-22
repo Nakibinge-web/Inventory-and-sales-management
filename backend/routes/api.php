@@ -188,11 +188,13 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     // (sales.create, sales.view, sales.report).
     Route::prefix('sales')->group(function () {
         // Report routes must be declared before /{sale} wildcard
-        Route::get('/daily-report',   [SaleController::class, 'getDailyReport']);
-        Route::get('/weekly-report',  [SaleController::class, 'getWeeklyReport']);
-        Route::get('/monthly-report', [SaleController::class, 'getMonthlySalesReport']);
-        Route::get('/yearly-report',  [SaleController::class, 'getYearlyReport']);
+        Route::get('/daily-report',    [SaleController::class, 'getDailyReport']);
+        Route::get('/weekly-report',   [SaleController::class, 'getWeeklyReport']);
+        Route::get('/monthly-report',  [SaleController::class, 'getMonthlySalesReport']);
+        Route::get('/yearly-report',   [SaleController::class, 'getYearlyReport']);
+        Route::get('/revenue-profit',  [SaleController::class, 'getRevenueProfitAnalytics']);
 
+        Route::post('/bulk',   [SaleController::class, 'bulkStore']);
         Route::get('/',        [SaleController::class, 'index']);
         Route::post('/',       [SaleController::class, 'store']);
         Route::get('/{sale}',  [SaleController::class, 'show']);
@@ -232,7 +234,9 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
     });
 
     // AI Assistant
-    Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'chat']);
+    Route::get('/ai/status',    [\App\Http\Controllers\AiController::class, 'status']);
+    Route::put('/ai/provider',  [\App\Http\Controllers\AiController::class, 'updateProvider']);
+    Route::post('/ai/chat',     [\App\Http\Controllers\AiController::class, 'chat']);
 
     // Stock Movements
     Route::prefix('stock-movements')->group(function () {
@@ -259,6 +263,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
 
     // Report Exports
     Route::prefix('reports')->group(function () {
+        Route::get('/revenue-profit', [SaleController::class, 'getRevenueProfitAnalytics']);
         Route::get('/generated', [\App\Http\Controllers\ReportExportController::class, 'listGeneratedReports']);
         Route::get('/generated/{id}/export', [\App\Http\Controllers\ReportExportController::class, 'exportGeneratedReport'])->name('reports.export-generated');
         Route::match(['get', 'post'], '/overview/export', [\App\Http\Controllers\ReportExportController::class, 'exportOverviewReport']);

@@ -1,0 +1,48 @@
+# AI Agent Context & Prompt-Injection Protection Rules
+# Files and patterns below are excluded from AI agent context and blocked
+# from being read, summarized, or disclosed by the AI Assistant.
+
+# Environment & Secrets
+.env
+.env.*
+*.env
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+
+# Keys, Certificates & Credentials
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+auth.json
+secrets/
+credentials*
+
+# Databases & Backups
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.bak
+backend/database/database.sqlite
+
+# Runtime Logs, Cache, Sessions & Uploaded User Content (untrusted input)
+backend/storage/
+storage/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Sensitive Configuration Keys (never disclose)
+MISTRAL_API_KEY
+GEMINI_API_KEY
+APP_KEY
+DB_PASSWORD
+NEXUMPAY_AUTH_TOKEN
+MOMO_API_KEY
+MOMO_COLLECTION_SUBSCRIPTION_KEY
+AWS_SECRET_ACCESS_KEY
+CURL_CA_BUNDLE

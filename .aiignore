@@ -1,0 +1,35 @@
+# AI Assistant Ignore Rules (Workspace-wide)
+# Prevents AI agents from reading or leaking sensitive configs, secrets,
+# databases, logs, and untrusted runtime files.
+
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+*.key
+*.pem
+*.crt
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.log
+*.bak
+auth.json
+backend/storage/
+storage/
+.git/
+node_modules/
+vendor/
+
+# Protected Environment & Secret Tokens
+MISTRAL_API_KEY
+GEMINI_API_KEY
+APP_KEY
+DB_PASSWORD
+NEXUMPAY_AUTH_TOKEN
+MOMO_API_KEY
+MOMO_COLLECTION_SUBSCRIPTION_KEY
+AWS_SECRET_ACCESS_KEY

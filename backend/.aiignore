@@ -1,0 +1,28 @@
+# Backend AI Assistant Runtime Ignore Rules
+# Parsed by App\Services\Ai\PromptSecurityService to reject prompt-injection
+# probes targeting environment files, keys, logs, or internal code.
+
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.sqlite
+*.sqlite3
+*.log
+storage/
+database/database.sqlite
+config/ai.php
+config/services.php
+config/database.php
+
+# Protected Credential Identifiers
+MISTRAL_API_KEY
+GEMINI_API_KEY
+APP_KEY
+DB_PASSWORD
+NEXUMPAY_AUTH_TOKEN
+MOMO_API_KEY
+MOMO_COLLECTION_SUBSCRIPTION_KEY
+AWS_SECRET_ACCESS_KEY
+CURL_CA_BUNDLE

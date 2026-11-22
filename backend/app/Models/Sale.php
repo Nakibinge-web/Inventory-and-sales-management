@@ -51,7 +51,7 @@ class Sale extends Model
     public function products()
     {
         return $this->belongsToMany(Product::class, 'sale_items')
-                    ->withPivot('id', 'tenant_id', 'quantity', 'price', 'subtotal')
+                    ->withPivot('id', 'tenant_id', 'quantity', 'price', 'cost_price', 'subtotal')
                     ->withTimestamps();
     }
 }
