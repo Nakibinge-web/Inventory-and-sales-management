@@ -39,6 +39,7 @@ class Tenant extends Model
         'subscription_plan',
         'subscription_status',
         'subscription_expires_at',
+        'status',
     ];
 
     public const DEFAULT_MODULES = [
@@ -147,6 +148,16 @@ class Tenant extends Model
             'subscription_status'     => 'active',
             'subscription_expires_at' => $expiresAt,
         ]);
+
+        try {
+            app(\App\Services\SubscriptionService::class)->syncFromTenant(
+                $this,
+                $billingCycle,
+                "Tenant subscribed to {$targetPlan} ({$billingCycle})"
+            );
+        } catch (\Throwable $e) {
+            // Keep checkout resilient if developer subscription tables are absent
+        }
 
         return $expiresAt;
     }
@@ -289,5 +300,20 @@ class Tenant extends Model
     public function stockMovements()
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function subscription()
+    {
+        return $this->hasOne(TenantSubscription::class);
+    }
+
+    public function subscriptionHistory()
+    {
+        return $this->hasMany(SubscriptionHistory::class)->orderByDesc('created_at');
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === 'suspended';
     }
 }

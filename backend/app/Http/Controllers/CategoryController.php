@@ -10,7 +10,7 @@ class CategoryController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(['success' => true, 'data' => Category::all()]);
+        return response()->json(['success' => true, 'data' => Category::withCount('products')->get()]);
     }
 
     public function store(Request $request): JsonResponse
@@ -21,12 +21,16 @@ class CategoryController extends Controller
         ]);
 
         $category = Category::create($validated);
+        $category->loadCount('products');
 
         return response()->json(['success' => true, 'message' => 'Category created successfully', 'data' => $category], 201);
     }
 
     public function show(Category $category): JsonResponse
     {
+        $category->loadCount('products')
+                 ->load(['products' => fn ($query) => $query->with('supplier')->orderBy('name')]);
+
         return response()->json(['success' => true, 'data' => $category]);
     }
 
@@ -38,6 +42,7 @@ class CategoryController extends Controller
         ]);
 
         $category->update($validated);
+        $category->loadCount('products');
 
         return response()->json(['success' => true, 'message' => 'Category updated successfully', 'data' => $category]);
     }

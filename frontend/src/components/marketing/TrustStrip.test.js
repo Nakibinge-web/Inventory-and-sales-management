@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import TrustStrip from './TrustStrip';
 import HowItWorksPage from '../../pages/marketing/HowItWorksPage';
+import LandingPage from '../../pages/marketing/LandingPage';
 
 function simulateAosInit(container) {
   container.querySelectorAll('[data-aos]').forEach((el) => {
@@ -163,5 +164,63 @@ describe('TrustStrip feature navigation', () => {
     expect(movementItems[0].textContent).toContain('"Stock In" means that products are being added to the business(Purchase).');
     expect(movementItems[1].textContent).toContain('"Stock Out" means that stock is going out of business(sale).');
     expect(movementItems[2].textContent).toContain('"Stock Adjustment" means setting the level of available stock to a new level.');
+  });
+});
+
+describe('LandingPage Built for businesses section', () => {
+  test('renders all 12 features from How It Works and shows real tenant screenshots per feature', () => {
+    window.scrollTo = vi.fn();
+    Element.prototype.scrollIntoView = vi.fn();
+
+    const { container } = render(<LandingPage />);
+    simulateAosInit(container);
+
+    const rows = container.querySelectorAll('.sp-spec-bar');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].classList.contains('sp-spec-bar-secondary')).toBe(true);
+
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(12);
+
+    const expectedFeatures = [
+      { index: 0, title: 'Products', eyebrow: '01 / Products' },
+      { index: 1, title: 'Point of Sale', eyebrow: '02 / Point of Sale' },
+      { index: 2, title: 'Categories', eyebrow: '03 / Categories' },
+      { index: 3, title: 'Sales', eyebrow: '04 / Sales' },
+      { index: 4, title: 'Purchases', eyebrow: '05 / Purchases' },
+      { index: 5, title: 'Users Control', eyebrow: '06 / Users Control' },
+      { index: 6, title: 'Stock Movements', eyebrow: '07 / Stock Movements' },
+      { index: 7, title: 'Reports & Analytics', eyebrow: '08 / Reports & Analytics' },
+      { index: 8, title: 'Customers', eyebrow: '09 / Customers' },
+      { index: 9, title: 'Suppliers', eyebrow: '10 / Suppliers' },
+      { index: 10, title: 'AI Assistant', eyebrow: '11 / AI Assistant' },
+      { index: 11, title: 'System Settings', eyebrow: '12 / System Settings' },
+    ];
+
+    expectedFeatures.forEach(({ index, title, eyebrow }) => {
+      const tab = tabs[index];
+      expect(tab.querySelector('.sp-spec-title').textContent).toBe(title);
+
+      fireEvent.click(tab);
+
+      expect(tab.getAttribute('aria-selected')).toBe('true');
+      const panel = container.querySelector('#features .sp-capability-panel');
+      expect(panel).not.toBeNull();
+      expect(panel.querySelector('.sp-editorial-eyebrow').textContent).toContain(eyebrow);
+
+      const screenshotImg = panel.querySelector('.sp-editorial-visual img.sp-feature-screenshot-img');
+      expect(screenshotImg).not.toBeNull();
+      expect(screenshotImg.getAttribute('src')).toBeTruthy();
+      expect(screenshotImg.getAttribute('alt')).toBeTruthy();
+    });
+  });
+
+  test('sticky hero elements do not use data-aos so scrolling and tab switches never hide the hero', () => {
+    const { container } = render(<LandingPage />);
+    const heroSection = container.querySelector('.sp-hero');
+    expect(heroSection).not.toBeNull();
+    expect(heroSection.querySelectorAll('[data-aos]')).toHaveLength(0);
+    expect(heroSection.querySelector('#hero-heading').classList.contains('sp-hero-enter')).toBe(true);
+    expect(heroSection.querySelector('.sp-hero-image-wrap').classList.contains('sp-hero-enter')).toBe(true);
   });
 });

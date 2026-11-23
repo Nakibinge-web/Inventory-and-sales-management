@@ -255,6 +255,18 @@ class AuthController extends Controller
             ]);
         }
 
+        try {
+            if (!empty($tenant->subscription_plan) || in_array(strtolower((string) $tenant->subscription_status), ['active', 'trial', 'trialing'], true)) {
+                app(\App\Services\SubscriptionService::class)->syncFromTenant(
+                    $tenant,
+                    $paidSub['billing_cycle'] ?? 'monthly',
+                    'Subscribed during business registration'
+                );
+            }
+        } catch (\Throwable $e) {
+            // Do not fail registration if subscription tables are not migrated yet
+        }
+
         $user = User::create([
             'tenant_id' => $tenant->id,
             'name'      => $request->name,

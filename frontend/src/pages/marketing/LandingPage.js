@@ -92,9 +92,7 @@ export default function LandingPage() {
                 <div className="sp-hero-content">
                   <h1
                     id="hero-heading"
-                    className="sp-hero-title"
-                    data-aos="fade-up"
-                    data-aos-duration="750"
+                    className="sp-hero-title sp-hero-enter sp-hero-enter-up"
                   >
                     <span className="sp-hero-title-nowrap">Manage Your Business</span>
                     <br className="sp-hero-title-br" />
@@ -102,19 +100,13 @@ export default function LandingPage() {
                   </h1>
 
                   <p
-                    className="sp-hero-desc"
-                    data-aos="fade-up"
-                    data-aos-delay="100"
-                    data-aos-duration="750"
+                    className="sp-hero-desc sp-hero-enter sp-hero-enter-up sp-hero-enter-delay-1"
                   >
                     The all in one software for managing your business. Sell faster, manage stock, sales, purchases, and your business staff from one reliable system. Prevent stockouts and know your true daily performance.
                   </p>
 
                   <div
-                    className="sp-hero-ctas"
-                    data-aos="fade-up"
-                    data-aos-delay="200"
-                    data-aos-duration="750"
+                    className="sp-hero-ctas sp-hero-enter sp-hero-enter-up sp-hero-enter-delay-2"
                   >
                     <MarketingLink href="/register" className="sp-btn sp-btn-primary sp-btn-lg">
                       <span>Get Started</span>
@@ -126,10 +118,7 @@ export default function LandingPage() {
                   </div>
 
                   <div
-                    className="sp-hero-reassurances"
-                    data-aos="fade-up"
-                    data-aos-delay="300"
-                    data-aos-duration="750"
+                    className="sp-hero-reassurances sp-hero-enter sp-hero-enter-up sp-hero-enter-delay-3"
                   >
                     <span className="sp-reassurance-item">
                       <span className="sp-reassurance-icon"><FaCheckIcon size={13} /></span>
@@ -148,10 +137,7 @@ export default function LandingPage() {
 
                 {/* Right Column: Store Owner Image */}
                 <div
-                  className="sp-hero-image-wrap"
-                  data-aos="fade-left"
-                  data-aos-delay="180"
-                  data-aos-duration="900"
+                  className="sp-hero-image-wrap sp-hero-enter sp-hero-enter-left"
                 >
                   <img
                     src={heroCutoutImg}
@@ -171,7 +157,11 @@ export default function LandingPage() {
           <ProductStatement />
 
           {/* Horizontal Capability Specification Strip */}
-          <TrustStrip activeId={activeCapability} onSelect={setActiveCapability} />
+          <TrustStrip
+            activeId={activeCapability}
+            onSelect={setActiveCapability}
+            showExtendedRow
+          />
 
           {/* Dynamic Capability Information (Features) */}
           <FeatureShowcase activeId={activeCapability} />

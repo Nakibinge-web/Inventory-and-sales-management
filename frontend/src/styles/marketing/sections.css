@@ -193,6 +193,64 @@
   color: var(--sp-navy-950, #071629);
 }
 
+@keyframes sp-hero-enter-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes sp-hero-enter-left {
+  from {
+    opacity: 0;
+    transform: translate3d(32px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.sp-hero-enter {
+  animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  animation-fill-mode: both;
+}
+
+.sp-hero-enter-up {
+  animation-name: sp-hero-enter-up;
+  animation-duration: 0.75s;
+}
+
+.sp-hero-enter-left {
+  animation-name: sp-hero-enter-left;
+  animation-duration: 0.9s;
+  animation-delay: 0.18s;
+}
+
+.sp-hero-enter-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.sp-hero-enter-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.sp-hero-enter-delay-3 {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-hero-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* Scroll-down visual affordance */
 .sp-hero-cue-wrap {
   display: flex;
@@ -2389,6 +2447,43 @@
   border-radius: 0;
   box-shadow: var(--sp-shadow-md);
   overflow: hidden;
+}
+
+.sp-feature-screenshot-bar {
+  background-color: var(--sp-navy-900);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--sp-navy-800);
+}
+
+.sp-feature-screenshot-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.02em;
+}
+
+.sp-feature-screenshot-badge {
+  font-size: 11px;
+  color: #93C5FD;
+  white-space: nowrap;
+}
+
+.sp-feature-screenshot-frame {
+  background-color: var(--sp-off-white);
+  overflow: hidden;
+  line-height: 0;
+}
+
+.sp-feature-screenshot-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  object-position: top left;
 }
 
 /* 11.5 Strategic Dark Navy Section */

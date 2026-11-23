@@ -14,8 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
         $middleware->alias([
-            'tenant' => \App\Http\Middleware\EnsureTenantMiddleware::class,
-            'role'   => \App\Http\Middleware\RequireRole::class,
+            'tenant'    => \App\Http\Middleware\EnsureTenantMiddleware::class,
+            'role'      => \App\Http\Middleware\RequireRole::class,
+            'developer' => \App\Http\Middleware\EnsureDeveloper::class,
+        ]);
+        $middleware->api(prepend: [
+            \App\Http\Middleware\LogApiRequests::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

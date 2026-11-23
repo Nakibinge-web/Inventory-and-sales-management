@@ -187,13 +187,13 @@ class RoleController extends Controller
         return response()->json(['success' => true, 'message' => 'Role revoked successfully.']);
     }
 
-    // Ensure the role is either a default or belongs to the current tenant
+    // Ensure the role is either a default (non-developer) or belongs to the current tenant
     private function authorizeRole(Role $role): void
     {
         $tenantId = Auth::user()->tenant_id;
 
-        if (!$role->is_default && $role->tenant_id !== $tenantId) {
-            abort(403, 'This role does not belong to your tenant.');
+        if ($role->name === 'developer' || (!$role->is_default && $role->tenant_id !== $tenantId)) {
+            abort(403, 'This role is not accessible or does not belong to your tenant.');
         }
     }
 }

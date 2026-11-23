@@ -89,6 +89,21 @@ class User extends Authenticatable
             ->exists();
     }
 
+    public function hasDeveloperPermission(string $permission): bool
+    {
+        return $this->roles()
+            ->where('name', 'developer')
+            ->whereHas('permissions', function ($q) use ($permission) {
+                $q->where('name', $permission);
+            })
+            ->exists();
+    }
+
+    public function isDeveloper(): bool
+    {
+        return $this->hasDeveloperPermission('developer.portal.access');
+    }
+
     public function sales()
     {
         return $this->hasMany(Sale::class);

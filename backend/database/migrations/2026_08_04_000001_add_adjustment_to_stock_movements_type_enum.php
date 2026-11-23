@@ -25,6 +25,8 @@ return new class extends Migration
         }
 
         // Revert — any existing ADJUSTMENT rows will be truncated back to ''
-        DB::statement("ALTER TABLE stock_movements MODIFY COLUMN type ENUM('IN', 'OUT') NOT NULL");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE stock_movements MODIFY COLUMN type ENUM('IN', 'OUT') NOT NULL");
+        }
     }
 };

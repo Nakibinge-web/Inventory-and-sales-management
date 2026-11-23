@@ -22,12 +22,13 @@ class Permission extends Model
         'is_default' => 'boolean',
     ];
 
-    // Permissions visible to a tenant = default + their own custom ones
+    // Permissions visible to a tenant = default (excluding developer group) + their own custom ones
     public function scopeVisibleTo(Builder $query, int $tenantId): Builder
     {
         return $query->where(function ($q) use ($tenantId) {
-            $q->whereNull('tenant_id')
-              ->orWhere('tenant_id', $tenantId);
+            $q->where(function ($sq) {
+                $sq->whereNull('tenant_id')->where('group', '!=', 'developer');
+            })->orWhere('tenant_id', $tenantId);
         });
     }
 

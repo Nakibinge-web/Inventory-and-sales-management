@@ -22,6 +22,8 @@ import StockMovementsTab from './StockMovements';
 import InvoicesTab from './Invoices';
 import QuotationsTab from './Quotations';
 import Settings from './Settings';
+import DeveloperPortal from '../developer/DeveloperPortal';
+import { isDeveloper } from '../developer/developerPermissions';
 import { API_URL as API } from '../config/api';
 import SubscriptionExpiredScreen from '../components/SubscriptionExpiredScreen';
 import {
@@ -205,9 +207,18 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [activeTab, setActiveTabState] = useState(getTabFromPath);
   const [settingsInitialTab, setSettingsInitialTab] = useState('branding');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [viewDevPortal, setViewDevPortal] = useState(false);
   const [subscriptionBlock, setSubscriptionBlock] = useState(null);
   const [, setExpiryCheckTick] = useState(0);
   const { toasts, toast, remove } = useToast();
+
+  const canAccessDeveloperPortal = isDeveloper(user);
+
+  useEffect(() => {
+    if (viewDevPortal && !canAccessDeveloperPortal) {
+      setViewDevPortal(false);
+    }
+  }, [viewDevPortal, canAccessDeveloperPortal]);
 
   // Subscription info & pill colors computed from current tenant state
   const isSubscriptionBlocked = isTenantSubscriptionExpired(user?.tenant, subscriptionBlock);
@@ -503,14 +514,21 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
   }, [user.tenant_id, token]);
 
   const handleAddProduct = (newProduct) => {
-    setData(prev => ({
-      ...prev,
-      products: [...prev.products, newProduct],
-      stats: {
-        ...prev.stats,
-        totalProducts: prev.stats.totalProducts + 1
-      }
-    }));
+    setData(prev => {
+      const nextCategories =
+        newProduct?.category && !prev.categories.some(c => String(c.id) === String(newProduct.category.id))
+          ? [...prev.categories, newProduct.category]
+          : prev.categories;
+      return {
+        ...prev,
+        products: [...prev.products, newProduct],
+        categories: nextCategories,
+        stats: {
+          ...prev.stats,
+          totalProducts: prev.stats.totalProducts + 1
+        }
+      };
+    });
     setShowAddProduct(false);
   };
 
@@ -802,6 +820,17 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
       ]
     }
   ];
+
+  if (viewDevPortal && canAccessDeveloperPortal) {
+    return (
+      <DeveloperPortal
+        user={user}
+        token={token}
+        onLogout={onLogout}
+        onSwitchToApp={() => setViewDevPortal(false)}
+      />
+    );
+  }
 
   if (isSubscriptionBlocked) {
     return (
@@ -1247,6 +1276,16 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
               </span>
             </div>
           </div>
+          {canAccessDeveloperPortal && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setViewDevPortal(true)}
+              style={{ backgroundColor: '#4338ca', borderColor: '#4338ca', whiteSpace: 'nowrap' }}
+            >
+              ⚡ Developer Portal
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={onLogout}>
             <span className="logout-text-long">Logout</span>
             <span className="logout-text-short">✕</span>
@@ -1466,6 +1505,7 @@ export default function Dashboard({ user, token, onLogout, onUserUpdate }) {
           {activeTab === 'categories' && (
             <CategoriesTab
               categories={data.categories}
+              products={data.products}
               loading={loading}
               token={token}
               canCreate={hasPermission('categories.create')}

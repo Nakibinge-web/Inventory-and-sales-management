@@ -21,12 +21,13 @@ class Role extends Model
         'is_default' => 'boolean',
     ];
 
-    // Roles visible to a tenant = default roles + their own custom roles
-    public function scopeVisibleTo(Builder $query, int $tenantId)
+    // Roles visible to a tenant = default roles (excluding system developer role) + tenant's own custom roles
+    public function scopeVisibleTo(Builder $query, int $tenantId): Builder
     {
         return $query->where(function ($q) use ($tenantId) {
-            $q->whereNull('tenant_id')         // default roles
-              ->orWhere('tenant_id', $tenantId); // tenant's custom roles
+            $q->where(function ($sq) {
+                $sq->whereNull('tenant_id')->where('name', '!=', 'developer');
+            })->orWhere('tenant_id', $tenantId);
         });
     }
 

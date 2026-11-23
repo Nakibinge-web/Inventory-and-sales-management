@@ -38,6 +38,13 @@ class EnsureTenantMiddleware
             );
         }
 
+        if ($tenant->status === 'suspended') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your business account has been suspended. Please contact platform administration.',
+            ], 403);
+        }
+
         // Store tenant on the request for controllers to access
         $request->merge(['_tenant_id' => $tenant->id]);
         app()->instance('current_tenant', $tenant);
