@@ -73,6 +73,52 @@ class ProductController extends Controller
         return response()->json(['success' => true, 'data' => $products]);
     }
 
+    /**
+     * Look up product(s) in the database matching a scanned barcode, QR code, or SKU.
+     */
+    public function lookupByCode(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'code'      => 'required|string|max:500',
+            'code_type' => 'nullable|in:barcode,qr_code',
+        ]);
+
+        $rawCode = preg_replace('/[\x00-\x1F\x7F]/u', '', $validated['code']) ?? '';
+        $code    = trim($rawCode);
+        $codeType = $validated['code_type'] ?? null;
+
+        if ($code === '') {
+            return response()->json([
+                'success'   => true,
+                'code'      => '',
+                'code_type' => $codeType,
+                'count'     => 0,
+                'data'      => [],
+            ]);
+        }
+
+        $orderSql = $codeType === 'qr_code'
+            ? 'CASE WHEN qr_code = ? THEN 0 WHEN barcode = ? THEN 1 ELSE 2 END, id ASC'
+            : 'CASE WHEN barcode = ? THEN 0 WHEN qr_code = ? THEN 1 ELSE 2 END, id ASC';
+
+        $matches = Product::with(['category', 'supplier'])
+            ->where(function ($q) use ($code) {
+                $q->where('barcode', $code)
+                  ->orWhere('qr_code', $code)
+                  ->orWhereRaw('LOWER(sku) = ?', [mb_strtolower($code)]);
+            })
+            ->orderByRaw($orderSql, [$code, $code])
+            ->get();
+
+        return response()->json([
+            'success'   => true,
+            'code'      => $code,
+            'code_type' => $codeType,
+            'count'     => $matches->count(),
+            'data'      => $matches,
+        ]);
+    }
+
     public function bulkStore(Request $request): JsonResponse
     {
         $request->validate([
@@ -80,6 +126,8 @@ class ProductController extends Controller
             'products.*.name'             => 'required|string|max:255',
             'products.*.sku'              => 'nullable|string|max:100',
             'products.*.barcode'          => 'nullable|string|max:100',
+            'products.*.qr_code'          => 'nullable|string|max:500',
+            'products.*.code_type'        => 'nullable|in:barcode,qr_code',
             'products.*.unit'             => 'nullable|string|max:50',
             'products.*.category_id'      => 'nullable|exists:categories,id',
             'products.*.new_category'     => 'nullable|string|max:255',
@@ -127,6 +175,8 @@ class ProductController extends Controller
                         'name'             => $data['name'],
                         'sku'              => $sku,
                         'barcode'          => $data['barcode']          ?? null,
+                        'qr_code'          => $data['qr_code']          ?? null,
+                        'code_type'        => $data['code_type']        ?? (!empty($data['qr_code']) && empty($data['barcode']) ? 'qr_code' : 'barcode'),
                         'unit'             => $data['unit']             ?? null,
                         'category_id'      => $categoryId,
                         'supplier_id'      => $data['supplier_id']      ?? null,
@@ -174,6 +224,8 @@ class ProductController extends Controller
             'name'             => 'required|string|max:255',
             'sku'              => 'nullable|string|max:100',
             'barcode'          => 'nullable|string|max:100',
+            'qr_code'          => 'nullable|string|max:500',
+            'code_type'        => 'nullable|in:barcode,qr_code',
             'unit'             => 'nullable|string|max:50',
             'category_id'      => 'nullable|exists:categories,id',
             'new_category'     => 'nullable|string|max:255',
@@ -204,11 +256,17 @@ class ProductController extends Controller
             $imagePath = $request->file('image')->store('products', 'public');
         }
 
+        $barcode  = !empty($validated['barcode']) ? $validated['barcode'] : null;
+        $qrCode   = !empty($validated['qr_code']) ? $validated['qr_code'] : null;
+        $codeType = $validated['code_type'] ?? ($qrCode && !$barcode ? 'qr_code' : 'barcode');
+
         $product = Product::create([
             'tenant_id'        => auth()->user()->tenant_id,
             'name'             => $validated['name'],
             'sku'              => $validated['sku'] ?? $this->nextSku($this->skuPrefix($validated['name']), auth()->user()->tenant_id),
-            'barcode'          => $validated['barcode'] ?? null,
+            'barcode'          => $barcode,
+            'qr_code'          => $qrCode,
+            'code_type'        => $codeType,
             'unit'             => $validated['unit'] ?? null,
             'category_id'      => !empty($validated['category_id']) ? $validated['category_id'] : null,
             'supplier_id'      => !empty($validated['supplier_id']) ? $validated['supplier_id'] : null,
@@ -241,6 +299,8 @@ class ProductController extends Controller
             'name'             => 'sometimes|required|string|max:255',
             'sku'              => 'nullable|string|max:100',
             'barcode'          => 'nullable|string|max:100',
+            'qr_code'          => 'nullable|string|max:500',
+            'code_type'        => 'nullable|in:barcode,qr_code',
             'unit'             => 'nullable|string|max:50',
             'category_id'      => 'nullable|exists:categories,id',
             'supplier_id'      => 'nullable|exists:suppliers,id',
@@ -263,6 +323,12 @@ class ProductController extends Controller
         }
 
         unset($validated['image']);
+        if (array_key_exists('barcode', $validated)) {
+            $validated['barcode'] = !empty($validated['barcode']) ? $validated['barcode'] : null;
+        }
+        if (array_key_exists('qr_code', $validated)) {
+            $validated['qr_code'] = !empty($validated['qr_code']) ? $validated['qr_code'] : null;
+        }
         if (array_key_exists('category_id', $validated)) {
             $validated['category_id'] = !empty($validated['category_id']) ? $validated['category_id'] : null;
         }

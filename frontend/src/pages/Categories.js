@@ -143,7 +143,8 @@ function CategoriesTab({ categories, products, loading, token, canCreate = true,
     return activeCategoryProducts.filter((p) =>
       p.name?.toLowerCase().includes(q) ||
       p.sku?.toLowerCase().includes(q) ||
-      p.barcode?.toLowerCase().includes(q)
+      p.barcode?.toLowerCase().includes(q) ||
+      p.qr_code?.toLowerCase().includes(q)
     );
   }, [activeCategoryProducts, productSearch]);
 

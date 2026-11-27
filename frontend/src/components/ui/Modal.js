@@ -116,7 +116,13 @@ export default function Modal({
 
   return (
     <div style={overlayStyles} className="modal-overlay-responsive" onClick={handleOverlayClick}>
-      <div style={modalStyles} className={`modal-responsive ${className}`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+        style={modalStyles}
+        className={`modal-responsive ${className}`}
+      >
         {title && (
           <div style={headerStyles} className="modal-header-responsive">
             <h2 style={titleStyles}>{title}</h2>

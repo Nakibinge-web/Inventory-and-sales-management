@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import Button from './ui/Button';
+import ProductCodeField from './ProductCodeField';
 import { formatCurrencyInput, cleanCurrency, parseCurrency } from '../utils/currency';
 import { API_URL as API, API_BASE_URL as API_BASE } from '../config/api';
 
@@ -10,10 +11,18 @@ const UNITS = [
 ];
 
 export default function EditProductForm({ token, product, categories, suppliers, onSuccess, onCancel }) {
+  const initialCodeType = product.code_type === 'qr_code' || (!product.barcode && product.qr_code)
+    ? 'qr_code'
+    : 'barcode';
+  const initialCodeValue = initialCodeType === 'qr_code'
+    ? (product.qr_code || '')
+    : (product.barcode || '');
+
   const [form, setForm] = useState({
     name:             product.name || '',
     sku:              product.sku || '',
-    barcode:          product.barcode || '',
+    code_type:        initialCodeType,
+    code_value:       initialCodeValue,
     unit:             product.unit || '',
     category_id:      product.category_id || '',
     supplier_id:      product.supplier_id || '',
@@ -56,6 +65,12 @@ export default function EditProductForm({ token, product, categories, suppliers,
       errors.name = 'Product name must be at least 2 characters';
     }
     
+    if (form.code_type === 'barcode' && form.code_value.trim().length > 100) {
+      errors.code_value = 'Barcode must not exceed 100 characters';
+    } else if (form.code_type === 'qr_code' && form.code_value.trim().length > 500) {
+      errors.code_value = 'QR code must not exceed 500 characters';
+    }
+
     if (!form.unit) {
       errors.unit = 'Please select a unit of measure';
     }
@@ -107,11 +122,14 @@ export default function EditProductForm({ token, product, categories, suppliers,
     setError(null);
     setFieldErrors({});
 
+    const trimmedCode = form.code_value.trim();
     const fd = new FormData();
     fd.append('_method',       'PUT');
     fd.append('name',          form.name);
     fd.append('sku',           form.sku);
-    fd.append('barcode',       form.barcode);
+    fd.append('code_type',     form.code_type);
+    fd.append('barcode',       form.code_type === 'barcode' ? trimmedCode : '');
+    fd.append('qr_code',       form.code_type === 'qr_code' ? trimmedCode : '');
     fd.append('unit',          form.unit);
     fd.append('category_id',   form.category_id);
     fd.append('supplier_id',   form.supplier_id);
@@ -177,18 +195,21 @@ export default function EditProductForm({ token, product, categories, suppliers,
         </Field>
       </div>
 
-      {/* Row 2: Barcode + Unit */}
+      {/* Row 2: Product Code (Barcode / QR Code) + Unit */}
       <div className="product-form-row" style={s.row}>
-        <Field label="Product Barcode" optional>
-          <input
-            className="product-modal-input"
-            style={s.input}
-            name="barcode"
-            placeholder="Scan or manually enter barcode"
-            value={form.barcode}
-            onChange={handle}
-          />
-        </Field>
+        <ProductCodeField
+          codeType={form.code_type}
+          value={form.code_value}
+          error={fieldErrors.code_value}
+          onCodeTypeChange={(nextType) => {
+            setForm(f => ({ ...f, code_type: nextType }));
+            if (fieldErrors.code_value) setFieldErrors(prev => ({ ...prev, code_value: null }));
+          }}
+          onValueChange={(nextVal) => {
+            setForm(f => ({ ...f, code_value: nextVal }));
+            if (fieldErrors.code_value) setFieldErrors(prev => ({ ...prev, code_value: null }));
+          }}
+        />
         <Field label="Unit of Measure" required error={fieldErrors.unit}>
           <select
             className="product-modal-input"

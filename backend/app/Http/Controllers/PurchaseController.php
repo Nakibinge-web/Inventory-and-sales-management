@@ -39,6 +39,8 @@ class PurchaseController extends Controller
             'items.*.new_product.price'         => 'required_with:items.*.new_product|numeric|min:0',
             'items.*.new_product.sku'           => 'nullable|string|max:100',
             'items.*.new_product.barcode'       => 'nullable|string|max:100',
+            'items.*.new_product.qr_code'       => 'nullable|string|max:500',
+            'items.*.new_product.code_type'     => 'nullable|in:barcode,qr_code',
             'items.*.new_product.unit'          => 'nullable|string|max:50',
             'items.*.new_product.category_id'   => 'nullable|exists:categories,id',
             'items.*.new_product.new_category'  => 'nullable|string|max:255',
@@ -98,6 +100,8 @@ class PurchaseController extends Controller
                                 return $prefix . '-' . uniqid();
                             })(),
                         'barcode'          => $np['barcode']          ?? null,
+                        'qr_code'          => $np['qr_code']          ?? null,
+                        'code_type'        => $np['code_type']        ?? (!empty($np['qr_code']) && empty($np['barcode']) ? 'qr_code' : 'barcode'),
                         'unit'             => $np['unit']             ?? null,
                         'category_id'      => $categoryId,
                         'supplier_id'      => $supplierId,

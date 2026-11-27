@@ -2,10 +2,18 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import SaleReceipt from '../components/SaleReceipt';
+import CodeScannerModal from '../components/CodeScannerModal';
+import CodeTypeSwitcher, { BarcodeGlyph, QrCodeGlyph, ScanFrameGlyph } from '../components/CodeTypeSwitcher';
 import { getReceiptTheme, THEME_OPTIONS } from '../styles/receiptThemes';
 import styles, { posS } from '../styles/dashboardStyles';
 import { formatCurrencyInput, parseCurrency } from '../utils/currency';
 import { API_URL as API } from '../config/api';
+import {
+  lookupProductsByCodeInDb,
+  matchProductByCode,
+  sanitizeScannedCode,
+  useHardwareScanner,
+} from '../utils/hardwareScanner';
 
 const isPriceInvalid = (item) => {
   if (!item) return false;
@@ -229,31 +237,20 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
     return Math.max(0, Number(product.stock || 0) - reserved);
   };
 
-  // ── Barcode scanner state ────────────────────────────────
+  // ── Barcode / QR scanner state ───────────────────────────
   const barcodeInputRef = useRef(null);
+  const [scanMode, setScanMode] = useState('barcode'); // 'barcode' | 'qr_code'
   const [barcodeValue, setBarcodeValue] = useState('');
   const [barcodeFlash, setBarcodeFlash] = useState(null); // 'success' | 'error' | null
   const [barcodeMsg, setBarcodeMsg] = useState('');
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
+  const [codeMatchResults, setCodeMatchResults] = useState(null); // { code, products } when DB returns > 1 match
   const barcodeTimerRef = useRef(null);
-  const barcodeLastKeyTime = useRef(0);
 
-  // Auto-focus barcode input when the POS mounts
+  // Auto-focus scanner input when the POS mounts & clear flash timer on unmount
   useEffect(() => {
     barcodeInputRef.current?.focus();
-  }, []);
-
-  // Global keydown listener: redirect keystrokes to barcode field
-  useEffect(() => {
-    const handleGlobalKey = (e) => {
-      const tag = document.activeElement?.tagName?.toLowerCase();
-      const isOtherInput = ['input', 'textarea', 'select'].includes(tag) &&
-        document.activeElement !== barcodeInputRef.current;
-      if (isOtherInput) return;
-      if (e.key === 'Tab' || e.key === 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return;
-      barcodeInputRef.current?.focus();
-    };
-    window.addEventListener('keydown', handleGlobalKey);
-    return () => window.removeEventListener('keydown', handleGlobalKey);
+    return () => clearTimeout(barcodeTimerRef.current);
   }, []);
 
   const flashBarcode = (type, msg) => {
@@ -263,24 +260,11 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
     barcodeTimerRef.current = setTimeout(() => {
       setBarcodeFlash(null);
       setBarcodeMsg('');
-      setBarcodeValue('');
     }, 2200);
   };
 
-  const handleBarcodeScan = (rawValue) => {
-    const code = rawValue.trim();
-    if (!code) return;
-
-    // Match against barcode field first, then SKU as fallback
-    const product = products.find(
-      p => (p.barcode && p.barcode.trim() === code) ||
-        (p.sku && p.sku.trim().toLowerCase() === code.toLowerCase())
-    );
-
-    if (!product) {
-      flashBarcode('error', `No product found for "${code}"`);
-      return;
-    }
+  const addMatchedProductToCart = (product) => {
+    if (!product) return false;
 
     const availableStock = getAvailableStockForActive(product);
     if (availableStock <= 0) {
@@ -290,34 +274,71 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
       } else {
         flashBarcode('error', `"${product.name}" is out of stock`);
       }
-      return;
+      return false;
     }
 
     const inActiveCart = cart.find(i => i.product_id === product.id)?.quantity || 0;
     if (inActiveCart >= availableStock) {
       flashBarcode('error', `Cannot add more "${product.name}" (${availableStock} max available)`);
-      return;
+      return false;
     }
 
     addToCart(product);
     flashBarcode('success', `✓ Added: ${product.name}`);
+    return true;
   };
 
-  const handleBarcodeKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleBarcodeScan(barcodeValue);
+  const handleBarcodeScan = async (rawValue) => {
+    const code = sanitizeScannedCode(rawValue);
+    if (!code) return;
+
+    setBarcodeValue('');
+
+    // Query database for all products matching the scanned barcode / QR code / SKU
+    const { products: matches } = await lookupProductsByCodeInDb({
+      apiUrl: API,
+      token,
+      code,
+      codeType: scanMode,
+      fallbackProducts: products,
+    });
+
+    if (matches.length === 0) {
+      flashBarcode('error', `No product found for "${code}"`);
       return;
     }
-    const now = Date.now();
-    barcodeLastKeyTime.current = now;
+
+    if (matches.length === 1) {
+      setCodeMatchResults(null);
+      addMatchedProductToCart(matches[0]);
+      return;
+    }
+
+    setCodeMatchResults({ code, products: matches });
+    flashBarcode('success', `Found ${matches.length} products for "${code}"`);
   };
+
+  const {
+    handleInputChange: handleHardwareInputChange,
+    handleInputKeyDown: handleHardwareKeyDown,
+    handleInputPaste: handleHardwarePaste,
+  } = useHardwareScanner({
+    inputRef: barcodeInputRef,
+    value: barcodeValue,
+    onValueChange: setBarcodeValue,
+    onScan: (code) => handleBarcodeScan(code),
+    canAutoMatch: (code) => Boolean(matchProductByCode(products, code, scanMode)),
+    disabled: cameraScannerOpen || Boolean(viewingBatchSales) || Boolean(codeMatchResults),
+  });
 
   const inStockProducts = products.filter(p => Number(p.stock) > 0);
 
   const filtered = inStockProducts.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.sku || '').toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase();
+    const matchesSearch = p.name.toLowerCase().includes(q) ||
+      (p.sku || '').toLowerCase().includes(q) ||
+      (p.barcode || '').toLowerCase().includes(q) ||
+      (p.qr_code || '').toLowerCase().includes(q);
     const matchesCategory = selectedCategory === null || p.category_id === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -794,25 +815,40 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
         {/* Left column — product search & grid */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* ── Barcode scanner input ── */}
+          {/* ── Barcode / QR scanner input ── */}
           <div style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                📷 Barcode Scanner
+                {scanMode === 'qr_code' ? 'QR Code Scanner' : 'Barcode Scanner'}
               </span>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>— scan barcode to add directly to {activeDraft.label}</span>
+              <CodeTypeSwitcher
+                value={scanMode}
+                onChange={(nextMode) => {
+                  setScanMode(nextMode);
+                  barcodeInputRef.current?.focus();
+                }}
+                ariaLabel="POS scanner mode"
+              />
             </div>
+
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
                 ref={barcodeInputRef}
+                data-testid="pos-scanner-input"
                 type="text"
                 value={barcodeValue}
-                onChange={e => setBarcodeValue(e.target.value)}
-                onKeyDown={handleBarcodeKeyDown}
-                placeholder="Scan barcode or type SKU…"
+                onChange={e => handleHardwareInputChange(e.target.value)}
+                onKeyDown={handleHardwareKeyDown}
+                onPaste={handleHardwarePaste}
+                placeholder={
+                  scanMode === 'qr_code'
+                    ? 'Scan QR code or type SKU…'
+                    : 'Scan barcode or type SKU…'
+                }
                 style={{
                   width: '100%',
-                  padding: '10px 14px 10px 42px',
+                  boxSizing: 'border-box',
+                  padding: '10px 52px 10px 42px',
                   border: `2px solid ${barcodeFlash === 'success' ? '#16a34a' : barcodeFlash === 'error' ? '#dc2626' : '#e2e8f0'}`,
                   borderRadius: 10,
                   fontSize: 14,
@@ -824,11 +860,106 @@ function POSTab({ products = [], categories = [], customers = [], token, user, o
                   letterSpacing: '0.03em',
                 }}
               />
-              <svg style={{ position: 'absolute', left: 12, pointerEvents: 'none', opacity: 0.4 }}
-                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 5v14M7 5v14M11 5v14M15 5v10M19 5v14M15 18v1" />
-              </svg>
+              <span style={{ position: 'absolute', left: 12, pointerEvents: 'none', opacity: 0.45, display: 'inline-flex', alignItems: 'center', color: '#0f172a' }}>
+                {scanMode === 'qr_code' ? <QrCodeGlyph size={18} /> : <BarcodeGlyph size={18} />}
+              </span>
+              <button
+                type="button"
+                data-testid="pos-code-scan-btn"
+                onClick={() => setCameraScannerOpen(true)}
+                aria-label={scanMode === 'qr_code' ? 'Scan QR code with camera' : 'Scan barcode with camera'}
+                title={scanMode === 'qr_code' ? 'Open QR code camera scanner' : 'Open barcode camera scanner'}
+                style={{
+                  position: 'absolute',
+                  right: 7,
+                  width: 34,
+                  height: 32,
+                  borderRadius: 7,
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  color: '#475569',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                <ScanFrameGlyph isQr={scanMode === 'qr_code'} />
+              </button>
             </div>
+            <CodeScannerModal
+              isOpen={cameraScannerOpen}
+              mode={scanMode}
+              onScan={(code) => {
+                setCameraScannerOpen(false);
+                handleBarcodeScan(code);
+              }}
+              onClose={() => setCameraScannerOpen(false)}
+            />
+            <Modal
+              isOpen={Boolean(codeMatchResults)}
+              onClose={() => setCodeMatchResults(null)}
+              title={codeMatchResults ? `Matching Products (${codeMatchResults.products.length})` : 'Matching Products'}
+              size="md"
+              footer={
+                <Button type="button" variant="secondary" size="sm" onClick={() => setCodeMatchResults(null)}>
+                  Close
+                </Button>
+              }
+            >
+              {codeMatchResults && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#475569' }}>
+                    Multiple products in the database match code <strong>{codeMatchResults.code}</strong>. Select one to add to {activeDraft.label}:
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto' }}>
+                    {codeMatchResults.products.map((prod) => {
+                      const available = getAvailableStockForActive(prod);
+                      const inCart = cart.find(i => i.product_id === prod.id)?.quantity || 0;
+                      const canAdd = available > 0 && inCart < available;
+                      return (
+                        <div
+                          key={prod.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            padding: '10px 12px',
+                            borderRadius: 10,
+                            border: '1px solid #e2e8f0',
+                            background: '#f8fafc',
+                          }}
+                        >
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{prod.name}</div>
+                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                              {prod.sku ? `SKU: ${prod.sku} · ` : ''}
+                              {prod.category?.name ? `${prod.category.name} · ` : ''}
+                              UGX {Number(prod.price || 0).toLocaleString()} · Stock: {available}
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            disabled={!canAdd}
+                            onClick={() => {
+                              if (addMatchedProductToCart(prod)) {
+                                setCodeMatchResults(null);
+                              }
+                            }}
+                          >
+                            {available <= 0 ? 'Out of stock' : 'Add to Sale'}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </Modal>
             {barcodeFlash && (
               <div style={{
                 marginTop: 6, padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,

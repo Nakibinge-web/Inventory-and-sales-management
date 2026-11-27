@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import DataTable from '../components/ui/DataTable';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -6,6 +6,12 @@ import Modal from '../components/ui/Modal';
 import EditProductForm from '../components/EditProductForm';
 import styles, { fS, exS } from '../styles/dashboardStyles';
 import { API_URL as API, API_BASE_URL as API_BASE } from '../config/api';
+import {
+  lookupProductsByCodeInDb,
+  matchProductByCode,
+  sanitizeScannedCode,
+  useHardwareScanner,
+} from '../utils/hardwareScanner';
 
 function ProductsTab({ products, onAddProduct, loading, token, user, onProductDeleted, categories, suppliers, onProductUpdated, toast, canCreate = true, canEdit = true, canDelete = true }) {
   const [editingProduct, setEditingProduct] = useState(null);
@@ -14,8 +20,42 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
   const [deleteError, setDeleteError] = useState(null);
   const [showExpiry, setShowExpiry] = useState(false);
   const [filters, setFilters] = useState({ search: '', category: '', status: '' });
+  const [dbLookup, setDbLookup] = useState(null); // { code, products }
+  const searchInputRef = useRef(null);
 
   const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value }));
+
+  const handleCodeLookup = async (rawCode) => {
+    const clean = sanitizeScannedCode(rawCode);
+    if (!clean) {
+      setDbLookup(null);
+      return;
+    }
+    setFilter('search', clean);
+    const { products: matches } = await lookupProductsByCodeInDb({
+      apiUrl: API,
+      token,
+      code: clean,
+      fallbackProducts: products,
+    });
+    setDbLookup({ code: clean, products: matches });
+  };
+
+  const {
+    handleInputChange: handleSearchInputChange,
+    handleInputKeyDown: handleSearchKeyDown,
+    handleInputPaste: handleSearchPaste,
+  } = useHardwareScanner({
+    inputRef: searchInputRef,
+    value: filters.search,
+    onValueChange: (val) => {
+      if (dbLookup) setDbLookup(null);
+      setFilter('search', val);
+    },
+    onScan: (code) => handleCodeLookup(code),
+    canAutoMatch: (code) => Boolean(matchProductByCode(products, code)),
+    disabled: Boolean(editingProduct || deletingProduct),
+  });
 
   const getStockStatus = (stock, reorder) => {
     const s = Number(stock ?? 0), r = Number(reorder ?? 0);
@@ -24,9 +64,18 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
     return 'in';
   };
 
-  const filteredProducts = products.filter(p => {
+  const activeList = dbLookup ? dbLookup.products : products;
+
+  const filteredProducts = activeList.filter(p => {
     const search = filters.search.toLowerCase();
-    if (search && !p.name?.toLowerCase().includes(search) && !p.sku?.toLowerCase().includes(search)) return false;
+    if (
+      !dbLookup &&
+      search &&
+      !p.name?.toLowerCase().includes(search) &&
+      !p.sku?.toLowerCase().includes(search) &&
+      !p.barcode?.toLowerCase().includes(search) &&
+      !p.qr_code?.toLowerCase().includes(search)
+    ) return false;
     if (filters.category && String(p.category_id) !== String(filters.category)) return false;
     if (filters.status && getStockStatus(p.stock, p.reorder_level) !== filters.status) return false;
     return true;
@@ -243,10 +292,14 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
         {/* Filter bar */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
           <input
+            ref={searchInputRef}
+            data-testid="products-search-input"
             style={{ ...fS.input, flex: '1 1 220px' }}
-            placeholder="Search by name or SKU…"
+            placeholder="Search or scan name, SKU, barcode, or QR code…"
             value={filters.search}
-            onChange={e => setFilter('search', e.target.value)}
+            onChange={e => handleSearchInputChange(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            onPaste={handleSearchPaste}
           />
           <select style={fS.select} value={filters.category} onChange={e => setFilter('category', e.target.value)}>
             <option value="">All Categories</option>
@@ -258,8 +311,8 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
             <option value="low">Low Stock</option>
             <option value="out">Out of Stock</option>
           </select>
-          {(filters.search || filters.category || filters.status) && (
-            <button style={fS.clear} onClick={() => setFilters({ search: '', category: '', status: '' })}>
+          {(filters.search || filters.category || filters.status || dbLookup) && (
+            <button style={fS.clear} onClick={() => { setDbLookup(null); setFilters({ search: '', category: '', status: '' }); }}>
               Clear filters
             </button>
           )}
@@ -270,10 +323,16 @@ function ProductsTab({ products, onAddProduct, loading, token, user, onProductDe
           data={filteredProducts}
           loading={loading}
           emptyStateProps={{
-            title: filters.search || filters.category || filters.status ? 'No products match your filters' : 'No products yet',
-            description: filters.search || filters.category || filters.status ? 'Try adjusting or clearing your filters.' : 'Start building your inventory by adding your first product.',
-            actionLabel: filters.search || filters.category || filters.status ? 'Clear Filters' : 'Add First Product',
-            onAction: filters.search || filters.category || filters.status ? () => setFilters({ search: '', category: '', status: '' }) : onAddProduct
+            title: dbLookup
+              ? `No products found for "${dbLookup.code}"`
+              : (filters.search || filters.category || filters.status ? 'No products match your filters' : 'No products yet'),
+            description: dbLookup
+              ? 'Check the database barcode, QR code, or SKU and try again.'
+              : (filters.search || filters.category || filters.status ? 'Try adjusting or clearing your filters.' : 'Start building your inventory by adding your first product.'),
+            actionLabel: (filters.search || filters.category || filters.status || dbLookup) ? 'Clear Filters' : 'Add First Product',
+            onAction: (filters.search || filters.category || filters.status || dbLookup)
+              ? () => { setDbLookup(null); setFilters({ search: '', category: '', status: '' }); }
+              : onAddProduct
           }}
         />
       </div>
